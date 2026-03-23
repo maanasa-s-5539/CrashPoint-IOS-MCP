@@ -110,6 +110,62 @@ async function cmdNotify(flags: Record<string, string | boolean>): Promise<void>
   }
 }
 
+async function cmdNotifyUnfixed(flags: Record<string, string | boolean>): Promise<void> {
+  const config = getConfig();
+  const crashDir = (flags["crash-dir"] as string) ?? getSymbolicatedDir(config);
+  const dryRun = flags["dry-run"] === true;
+  const outputFile = (flags["o"] as string) ?? undefined;
+
+  const tracker = new FixTracker(config.CRASH_ANALYSIS_PARENT);
+  const fixStatuses: Record<string, { fixed: boolean; note?: string }> = {};
+  for (const entry of tracker.getAll()) {
+    fixStatuses[entry.signature] = { fixed: entry.fixed, note: entry.note };
+  }
+
+  const fullReport = analyzeDirectory(crashDir, fixStatuses);
+
+  const fixedGroups = fullReport.crash_groups.filter((g) => g.fix_status?.fixed === true);
+  const unfixedGroups = fullReport.crash_groups.filter(
+    (g) => !g.fix_status || g.fix_status.fixed === false
+  );
+
+  const unfixedReport = {
+    ...fullReport,
+    report_type: "unfixed-only",
+    crash_groups: unfixedGroups.map((g, idx) => ({ ...g, rank: idx + 1 })),
+    total_crashes: unfixedGroups.reduce((sum, g) => sum + g.count, 0),
+    unique_crash_types: unfixedGroups.length,
+  };
+
+  if (outputFile) {
+    fs.writeFileSync(outputFile, JSON.stringify(unfixedReport, null, 2), "utf-8");
+    console.log(`Filtered report written to ${path.resolve(outputFile)}`);
+  }
+
+  console.log(
+    `Unfixed: ${unfixedGroups.length} type(s), Fixed: ${fixedGroups.length} type(s)`
+  );
+
+  if (dryRun) {
+    if (!outputFile) {
+      console.log(JSON.stringify(unfixedReport, null, 2));
+    }
+    console.log("Dry-run: no notification sent.");
+    return;
+  }
+
+  if (unfixedGroups.length === 0) {
+    console.log("No unfixed crashes to report. Skipping Cliq notification.");
+    return;
+  }
+
+  const result = await sendCrashReportToCliq(unfixedReport, config);
+  console.log(JSON.stringify(result, null, 2));
+  if (!result.success) {
+    process.exit(1);
+  }
+}
+
 function printUsage(): void {
   console.log(`
 CrashPoint iOS CLI — node dist/cli.js <command> [options]
@@ -122,6 +178,10 @@ Commands:
     -o <output.json>    Write report JSON to file (default: stdout)
   notify                Send a crash report JSON to Zoho Cliq
     --report <file>     Path to crash report JSON file
+  notify-unfixed        Analyze crashes, filter to unfixed only, and send filtered report to Cliq
+    --crash-dir <dir>   Directory of symbolicated crash files (default: SymbolicatedCrashLogsFolder)
+    --dry-run           Analyze and filter but don't send to Cliq
+    -o <output.json>    Write the filtered report JSON to a file
 
 Environment variables: see .env.example
 `);
@@ -143,6 +203,9 @@ Environment variables: see .env.example
         break;
       case "notify":
         await cmdNotify(flags);
+        break;
+      case "notify-unfixed":
+        await cmdNotifyUnfixed(flags);
         break;
       default:
         printUsage();

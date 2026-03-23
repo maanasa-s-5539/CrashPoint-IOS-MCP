@@ -52,4 +52,12 @@ else
   echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] No Cliq webhook configured — skipping notification"
 fi
 
+# Step 4b: Send unfixed-only report to Cliq
+if [[ -n "${ZOHO_CLIQ_BOT_WEBHOOK_URL:-}" ]] || [[ -n "${ZOHO_CLIQ_WEBHOOK_URL:-}" ]]; then
+  echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] Sending unfixed crashes report to Zoho Cliq..."
+  node "$PROJECT_DIR/dist/cli.js" notify-unfixed
+else
+  echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] No Cliq webhook configured — skipping unfixed notification"
+fi
+
 echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] Done. Report saved to: $REPORT_FILE"

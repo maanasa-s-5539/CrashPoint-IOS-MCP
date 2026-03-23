@@ -556,6 +556,91 @@ server.registerTool(
   }
 );
 
+// ── Tool 14: notify_unfixed_cliq ─────────────────────────────────────────────
+server.registerTool(
+  "notify_unfixed_cliq",
+  {
+    description:
+      "Analyze symbolicated crashes, filter to only UNFIXED crash types, and send the filtered report to Zoho Cliq. Crashes marked as 'fixed in development' via set_fix_status are excluded.",
+    inputSchema: z.object({
+      crashDir: z.string().optional().describe("Directory of symbolicated crash files (default: SymbolicatedCrashLogsFolder)"),
+      notify: z.boolean().optional().describe("Actually send to Cliq (default: true). Set false for dry-run."),
+    }),
+    outputSchema: z.object({
+      success: z.boolean(),
+      message: z.string(),
+      totalUnfixed: z.number(),
+      totalFixed: z.number(),
+      reportSent: z.boolean(),
+      unfixedReport: z.any().optional(),
+    }),
+  },
+  async (input) => {
+    const config = getConfig();
+    const crashDir = input.crashDir ?? getSymbolicatedDir(config);
+    const shouldNotify = input.notify !== false;
+
+    // Load fix statuses
+    const tracker = new FixTracker(config.CRASH_ANALYSIS_PARENT);
+    const fixStatuses: Record<string, { fixed: boolean; note?: string }> = {};
+    for (const entry of tracker.getAll()) {
+      fixStatuses[entry.signature] = { fixed: entry.fixed, note: entry.note };
+    }
+
+    // Analyze directory with fix statuses
+    const fullReport = analyzeDirectory(crashDir, fixStatuses);
+
+    // Separate fixed vs unfixed
+    const fixedGroups = fullReport.crash_groups.filter(
+      (g) => g.fix_status?.fixed === true
+    );
+    const unfixedGroups = fullReport.crash_groups.filter(
+      (g) => !g.fix_status || g.fix_status.fixed === false
+    );
+
+    // Rebuild report with only unfixed groups
+    const unfixedReport = {
+      ...fullReport,
+      report_type: "unfixed-only",
+      crash_groups: unfixedGroups.map((g, idx) => ({ ...g, rank: idx + 1 })),
+      total_crashes: unfixedGroups.reduce((sum, g) => sum + g.count, 0),
+      unique_crash_types: unfixedGroups.length,
+    };
+
+    if (!shouldNotify) {
+      return {
+        success: true,
+        message: `Dry-run: ${unfixedGroups.length} unfixed crash type(s), ${fixedGroups.length} fixed. No notification sent.`,
+        totalUnfixed: unfixedGroups.length,
+        totalFixed: fixedGroups.length,
+        reportSent: false,
+        unfixedReport,
+      };
+    }
+
+    if (unfixedGroups.length === 0) {
+      return {
+        success: true,
+        message: "No unfixed crashes to report.",
+        totalUnfixed: 0,
+        totalFixed: fixedGroups.length,
+        reportSent: false,
+        unfixedReport,
+      };
+    }
+
+    const result = await sendCrashReportToCliq(unfixedReport, config);
+    return {
+      success: result.success,
+      message: result.message,
+      totalUnfixed: unfixedGroups.length,
+      totalFixed: fixedGroups.length,
+      reportSent: result.success,
+      unfixedReport,
+    };
+  }
+);
+
 // ── Bootstrap ────────────────────────────────────────────────────────────────
 const transport = new StdioServerTransport();
 (async () => {
