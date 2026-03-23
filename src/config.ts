@@ -2,7 +2,7 @@ import dotenv from "dotenv";
 import { z } from "zod";
 import path from "path";
 
-dotenv.config({ quiet: true });
+dotenv.config({ path: path.resolve(__dirname, "..", ".env"), quiet: true });
 
 const envSchema = z.object({
   CRASH_ANALYSIS_PARENT: z.string().min(1).describe("Path to ParentHolderFolder"),
