@@ -341,8 +341,8 @@ Source breakdowns appear in both the MCP analysis output and Zoho Cliq reports (
 
 When crashes are analyzed, each group shows its fix status if one has been set:
 
-- `✅ Fixed in dev — Fixed in PR #42`
-- `❌ Not yet fixed`
+- `[FIXED] Fixed in dev — Fixed in PR #42`
+- `[NOT FIXED] Not yet fixed`
 
 Fix statuses are stored in `{CRASH_ANALYSIS_PARENT}/fix_status.json` (local only, gitignored).
 
