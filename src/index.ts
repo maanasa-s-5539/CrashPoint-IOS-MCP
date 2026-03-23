@@ -63,6 +63,8 @@ server.registerTool(
       outputDir: z.string().optional().describe("Destination directory for crash logs"),
       versions: z.string().optional().describe("Comma-separated version filter"),
       recursive: z.boolean().optional().describe("Search subdirectories recursively"),
+      startDate: z.string().optional().describe("ISO date string to filter crashes from (e.g. 2026-03-01)"),
+      endDate: z.string().optional().describe("ISO date string to filter crashes until (e.g. 2026-03-20)"),
     }),
     outputSchema: z.object({
       would_export: z.number(),
@@ -85,7 +87,7 @@ server.registerTool(
     const versions = input.versions?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
     const recursive = input.recursive ?? false;
 
-    const result = exportCrashLogs(inputDir, outputDir, versions, recursive, true);
+    const result = exportCrashLogs(inputDir, outputDir, versions, recursive, true, input.startDate, input.endDate);
     const structured = {
       would_export: result.exported,
       would_skip: result.skipped,
@@ -109,6 +111,8 @@ server.registerTool(
       outputDir: z.string().optional().describe("Destination directory for crash logs"),
       versions: z.string().optional().describe("Comma-separated version filter"),
       recursive: z.boolean().optional().describe("Search subdirectories recursively"),
+      startDate: z.string().optional().describe("ISO date string to filter crashes from (e.g. 2026-03-01)"),
+      endDate: z.string().optional().describe("ISO date string to filter crashes until (e.g. 2026-03-20)"),
     }),
     outputSchema: z.object({
       exported: z.number(),
@@ -132,7 +136,7 @@ server.registerTool(
     const versions = input.versions?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
     const recursive = input.recursive ?? false;
 
-    const result = exportCrashLogs(inputDir, outputDir, versions, recursive, false);
+    const result = exportCrashLogs(inputDir, outputDir, versions, recursive, false, input.startDate, input.endDate);
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
       structuredContent: result,
@@ -464,6 +468,8 @@ server.registerTool(
     inputSchema: z.object({
       notify: z.boolean().optional().describe("Send report to Cliq after analysis"),
       versions: z.string().optional().describe("Comma-separated version filter for export"),
+      startDate: z.string().optional().describe("ISO date string to filter crashes from (e.g. 2026-03-01)"),
+      endDate: z.string().optional().describe("ISO date string to filter crashes until (e.g. 2026-03-20)"),
     }),
     outputSchema: z.object({
       export_result: z.any(),
@@ -481,7 +487,7 @@ server.registerTool(
       input.versions?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
 
     // Step 1: Export
-    const exportResult = exportCrashLogs(inputDir, basicDir, versions, false, false);
+    const exportResult = exportCrashLogs(inputDir, basicDir, versions, false, false, input.startDate, input.endDate);
 
     // Step 2: Symbolicate
     const dsymPath = config.DSYM_PATH;

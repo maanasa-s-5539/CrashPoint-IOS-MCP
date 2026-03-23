@@ -18,6 +18,26 @@ export interface ExportResult {
 
 const VERSION_REGEX = /^Version:\s+(.+)/;
 const SHORT_VERSION_REGEX = /^(.+?)\s+\((\d+)\)$/;
+const DATE_TIME_REGEX = /^Date\/Time:\s+(.+)/;
+
+export function extractCrashDate(crashFilePath: string): Date | null {
+  try {
+    const content = fs.readFileSync(crashFilePath, "utf-8");
+    const lines = content.split("\n").slice(0, 120);
+    for (const line of lines) {
+      const match = DATE_TIME_REGEX.exec(line);
+      if (match) {
+        const parsed = new Date(match[1].trim());
+        if (!isNaN(parsed.getTime())) {
+          return parsed;
+        }
+      }
+    }
+  } catch {
+    // ignore read errors
+  }
+  return null;
+}
 
 export function extractVersion(crashFilePath: string): string {
   try {
@@ -129,7 +149,9 @@ export function exportCrashLogs(
   outputDir: string,
   versions: string[] = [],
   recursive = false,
-  dryRun = false
+  dryRun = false,
+  startDate?: string,
+  endDate?: string
 ): ExportResult {
   const result: ExportResult = { exported: 0, skipped: 0, errors: [], files: [] };
 
@@ -161,6 +183,43 @@ export function exportCrashLogs(
           reason: "version filtered",
         });
         continue;
+      }
+
+      // Date filter
+      if (startDate !== undefined || endDate !== undefined) {
+        const crashDate = extractCrashDate(crashPath);
+        if (crashDate !== null) {
+          if (startDate !== undefined) {
+            const start = new Date(startDate);
+            start.setHours(0, 0, 0, 0);
+            if (crashDate < start) {
+              result.skipped++;
+              result.files.push({
+                source: crashPath,
+                destination: "",
+                version: fileVersion,
+                skipped: true,
+                reason: "date filtered (before startDate)",
+              });
+              continue;
+            }
+          }
+          if (endDate !== undefined) {
+            const end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
+            if (crashDate > end) {
+              result.skipped++;
+              result.files.push({
+                source: crashPath,
+                destination: "",
+                version: fileVersion,
+                skipped: true,
+                reason: "date filtered (after endDate)",
+              });
+              continue;
+            }
+          }
+        }
       }
 
       const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
