@@ -128,6 +128,8 @@ ParentHolderFolder/                   ← CRASH_ANALYSIS_PARENT
 ├── SymbolicatedCrashLogsFolder/      ← Symbolicated .crash files
 ├── CurrentMasterLiveBranch -> ...    ← Symlink to master branch (optional)
 ├── CurrentDevelopmentBranch -> ...   ← Symlink to dev branch (optional)
+├── dSYM_File -> ...                  ← Symlink to .dSYM bundle (optional)
+├── app_File -> ...                   ← Symlink to .app bundle (optional)
 └── fix_status.json                   ← Local fix tracking database
 ```
 
@@ -139,6 +141,8 @@ Run `setup_folders` (MCP tool) or `scripts/setup_symlinks.sh` to create this str
 CRASH_ANALYSIS_PARENT=/path/to/ParentHolderFolder \
 MASTER_BRANCH_PATH=/path/to/app-ios-master \
 DEV_BRANCH_PATH=/path/to/app-ios-dev \
+DSYM_PATH=/path/to/MyApp.dSYM \
+APP_PATH=/path/to/MyApp.app \
 bash scripts/setup_symlinks.sh
 ```
 
@@ -169,6 +173,8 @@ bash scripts/setup_symlinks.sh
 |---|---|
 | `masterBranchPath` | Path to master branch checkout → creates `CurrentMasterLiveBranch` symlink |
 | `devBranchPath` | Path to dev branch checkout → creates `CurrentDevelopmentBranch` symlink |
+| `dsymPath` | Path to .dSYM bundle → creates `dSYM_File` symlink |
+| `appPath` | Path to .app bundle → creates `app_File` symlink |
 | `existingCrashLogsDir` | Copy `.crash` and `.ips` files from this directory into `BasicCrashLogsFolder` |
 
 ---
@@ -201,6 +207,33 @@ node dist/cli.js notify-unfixed --dry-run
 
 # Analyze unfixed crashes and save the filtered report to a file
 node dist/cli.js notify-unfixed -o unfixed_report.json
+
+# Create folder structure with symlinks
+node dist/cli.js setup --master-branch /path/to/master --dev-branch /path/to/dev --dsym /path/to/MyApp.dSYM --app /path/to/MyApp.app
+
+# Symbolicate a single crash file
+node dist/cli.js symbolicate-one --crash /path/to/crash.crash
+
+# Frame-by-frame symbolication quality check
+node dist/cli.js diagnose --crash /path/to/original.crash --symbolicated /path/to/symbolicated.crash
+
+# List versions in .xccrashpoint files
+node dist/cli.js list-versions
+
+# Run full pipeline
+node dist/cli.js pipeline --notify
+
+# Mark a crash signature as fixed
+node dist/cli.js set-fix "EXC_BAD_ACCESS SIGSEGV" --note "Fixed in PR #42"
+
+# Mark as unfixed
+node dist/cli.js unset-fix "EXC_BAD_ACCESS SIGSEGV"
+
+# List all fix statuses
+node dist/cli.js list-fixes
+
+# Remove fix tracking
+node dist/cli.js remove-fix "EXC_BAD_ACCESS SIGSEGV"
 ```
 
 If installed globally, you can also use:
