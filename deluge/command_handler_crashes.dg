@@ -1,0 +1,40 @@
+// Zoho Cliq Bot — /crashes command handler
+// Returns help information about CrashReportBot commands and usage.
+
+string message = "";
+message = message + "🤖 *CrashReportBot — iOS Crash Analysis* 🍎\n\n";
+
+message = message + "*What this bot does:*\n";
+message = message + "CrashReportBot automates iOS crash log collection, symbolication, grouping, and reporting.\n";
+message = message + "It connects to your CrashPoint iOS MCP server and sends daily crash summaries here.\n\n";
+
+message = message + "*Crash Source Types:*\n";
+message = message + "  • *Xcode Organizer* — Crashes exported from Xcode `.xccrashpoint` bundles\n";
+message = message + "  • *Apptics* — Crash reports collected via Apptics SDK\n";
+message = message + "  • *.ips file* — Raw Apple crash report files\n";
+message = message + "  • *Manual* — Crash files placed manually in the analysis folder\n\n";
+
+message = message + "*Fix Tracking:*\n";
+message = message + "Each crash group in the report shows its fix status:\n";
+message = message + "  ✅ *FIXED in dev* — marked fixed with optional PR/note reference\n";
+message = message + "  ❌ *NOT YET FIXED* — still open\n";
+message = message + "Fix statuses are tracked locally in `fix_status.json` via the MCP `set_fix_status` tool.\n\n";
+
+message = message + "*Manual Trigger Commands* (run on your Mac):\n";
+message = message + "```\n";
+message = message + "# Export crash logs from Xcode Organizer\n";
+message = message + "node dist/cli.js export\n\n";
+message = message + "# Symbolicate all crash files\n";
+message = message + "node dist/cli.js batch\n\n";
+message = message + "# Analyze crashes and save report\n";
+message = message + "node dist/cli.js analyze -o report.json\n\n";
+message = message + "# Send report to Cliq\n";
+message = message + "node dist/cli.js notify --report report.json\n";
+message = message + "```\n\n";
+
+message = message + "*Scheduled Runs:*\n";
+message = message + "Use `scripts/scheduled_run.sh` with cron or launchd for automated daily reports.\n\n";
+
+message = message + "*Note:* AI analysis (crash pattern insights, root cause suggestions) is a separate manual step — ask Claude Desktop using the MCP tools.";
+
+return {"text": message};

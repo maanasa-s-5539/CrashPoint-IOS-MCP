@@ -22,6 +22,28 @@ function formatCrashGroup(group: CrashGroup, index: number): string {
     .map(([k, v]) => `${k}(${v})`)
     .join(", ");
   lines.push(`App Versions: ${appVSummary || "N/A"}`);
+
+  // Sources
+  const sourceLabels: Record<string, string> = {
+    "xcode-organizer": "Xcode Organizer",
+    "apptics": "Apptics",
+    "ips-file": ".ips file",
+    "manual": "Manual",
+  };
+  const sourcesSummary = Object.entries(group.sources)
+    .map(([k, v]) => `${sourceLabels[k] ?? k}(${v})`)
+    .join(", ");
+  lines.push(`Sources: ${sourcesSummary || "N/A"}`);
+
+  // Fix status
+  if (group.fix_status) {
+    if (group.fix_status.fixed) {
+      lines.push(`Fix Status: ✅ Fixed in dev${group.fix_status.note ? ` — ${group.fix_status.note}` : ""}`);
+    } else {
+      lines.push(`Fix Status: ❌ Not yet fixed${group.fix_status.note ? ` — ${group.fix_status.note}` : ""}`);
+    }
+  }
+
   lines.push("");
   return lines.join("\n");
 }
