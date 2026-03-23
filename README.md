@@ -13,7 +13,7 @@ CrashPoint iOS MCP gives your AI assistant the ability to:
 1. **Export** `.crash` files from Xcode Organizer `.xccrashpoint` bundles
 2. **Symbolicate** crashes using `atos` and your `.dSYM` bundle
 3. **Analyze & group** symbolicated crashes by unique signature, device, iOS version, and app version
-4. **Report** crash analysis to your Zoho Cliq channel or bot (including fix status and source labels)
+4. **Report** crash analysis to your Zoho Cliq channel (including fix status and source labels)
 5. **Track fixes** locally so your team can mark crash types as resolved
 
 ---
@@ -113,8 +113,7 @@ Create or update `.cursor/mcp.json` in your project:
 | `CRASH_VERSIONS` | Optional | Comma-separated version filter for exports |
 | `MASTER_BRANCH_PATH` | Optional | Path to master/live branch checkout (creates `CurrentMasterLiveBranch` symlink) |
 | `DEV_BRANCH_PATH` | Optional | Path to dev branch checkout (creates `CurrentDevelopmentBranch` symlink) |
-| `ZOHO_CLIQ_WEBHOOK_URL` | Optional | Incoming webhook URL for a Zoho Cliq channel |
-| `ZOHO_CLIQ_BOT_WEBHOOK_URL` | Optional | Bot webhook URL — tried first, falls back to channel webhook |
+| `ZOHO_CLIQ_WEBHOOK_URL` | Optional | Incoming webhook URL for a Zoho Cliq channel — the only Cliq integration method |
 
 ---
 
@@ -284,8 +283,8 @@ Create `~/Library/LaunchAgents/com.yourapp.crashpoint.plist`:
     <string>/path/to/MyApp.dSYM</string>
     <key>APP_PATH</key>
     <string>/path/to/MyApp.app</string>
-    <key>ZOHO_CLIQ_BOT_WEBHOOK_URL</key>
-    <string>https://cliq.zoho.com/...</string>
+    <key>ZOHO_CLIQ_WEBHOOK_URL</key>
+    <string>https://cliq.zoho.in/company/{org_id}/api/v2/channelsbyname/{channel_name}/message</string>
   </dict>
   <key>StandardOutPath</key>
   <string>/path/to/crashpoint.log</string>
@@ -308,17 +307,10 @@ Load it with: `launchctl load ~/Library/LaunchAgents/com.yourapp.crashpoint.plis
 3. Create a webhook and copy the URL
 4. Set it as `ZOHO_CLIQ_WEBHOOK_URL`
 
-### Bot Webhook + Deluge Scripts
+The API endpoint format is:
+`https://cliq.zoho.in/company/{org_id}/api/v2/channelsbyname/{channel_name}/message`
 
-1. Create a Zoho Cliq Bot in your organization (e.g. `CrashReportBot`)
-2. In the bot configuration, add:
-   - **Incoming Webhook Handler**: paste the contents of `deluge/incoming_webhook_handler.dg`
-   - **Command Handler** for `/crashes`: paste the contents of `deluge/command_handler_crashes.dg`
-3. Set `ZOHO_CLIQ_BOT_WEBHOOK_URL` to the bot's incoming webhook URL
-
-The MCP server tries the bot webhook first, then falls back to the channel webhook.
-
-The bot's incoming webhook handler formats the full report (including source labels and fix statuses) into a readable Cliq message. The `/crashes` command returns usage help.
+The MCP server posts `{ "text": formattedReport }` directly to this URL — no bot or Deluge script required.
 
 ---
 

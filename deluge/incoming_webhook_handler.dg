@@ -1,26 +1,8 @@
-// Zoho Cliq Incoming Webhook Handler — CrashReportBot
-// Receives a pre-formatted crash report text via params.get("text")
-// and posts it to a Cliq channel.
-//
-// Configuration:
-//   Set CHANNEL_NAME below to your target Cliq channel name.
+// CrashReportBot -- Post message to Sprints iOS crashes channel
+// This is a reference Deluge script for posting to a Cliq channel.
+// The MCP server now posts directly to the channel webhook URL,
+// so this script is only needed if you want to trigger posts from
+// other Deluge workflows.
 
-CHANNEL_NAME = "ios-crashes";
-
-msg = params.get("text");
-
-if(msg == null || msg == "")
-{
-  response = Map();
-  response.put("text", "No crash report text received.");
-  return response;
-}
-
-channelMsg = Map();
-channelMsg.put("text", msg);
-zoho.cliq.postToChannel(CHANNEL_NAME, channelMsg);
-
-response = Map();
-response.put("text", "Crash report posted to #" + CHANNEL_NAME);
-return response;
-
+// Example usage:
+// zoho.cliq.postToChannel("sprintsiosalllivecrashes", "Here goes your test message.");

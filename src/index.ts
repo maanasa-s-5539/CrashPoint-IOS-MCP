@@ -338,7 +338,7 @@ server.registerTool(
   "notify_cliq",
   {
     description:
-      "Send crash analysis report to configured Zoho Cliq Bot/channel webhook. Requires ZOHO_CLIQ_WEBHOOK_URL or ZOHO_CLIQ_BOT_WEBHOOK_URL in env.",
+      "Send crash analysis report to configured Zoho Cliq channel webhook. Requires ZOHO_CLIQ_WEBHOOK_URL in env.",
     inputSchema: z.object({
       report: z.string().describe("JSON string of the crash analysis report"),
     }),
