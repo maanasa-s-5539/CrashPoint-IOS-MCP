@@ -39,12 +39,14 @@ function parseFlags(argv: string[]): Record<string, string | boolean> {
   return flags;
 }
 
-async function cmdExport(): Promise<void> {
+async function cmdExport(flags: Record<string, string | boolean>): Promise<void> {
   const config = getConfig();
   const inputDir = config.CRASH_INPUT_DIR ?? config.CRASH_ANALYSIS_PARENT;
   const outputDir = getBasicCrashesDir(config);
   const versions = config.CRASH_VERSIONS?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
-  const result = exportCrashLogs(inputDir, outputDir, versions, false, false);
+  const startDate = flags["start-date"] as string | undefined;
+  const endDate = flags["end-date"] as string | undefined;
+  const result = exportCrashLogs(inputDir, outputDir, versions, false, false, startDate, endDate);
   console.log(JSON.stringify(result, null, 2));
 }
 
@@ -296,10 +298,12 @@ async function cmdPipeline(flags: Record<string, string | boolean>): Promise<voi
   const versions = flags["versions"]
     ? (flags["versions"] as string).split(",").map((v) => v.trim()).filter(Boolean)
     : (config.CRASH_VERSIONS?.split(",").map((v) => v.trim()).filter(Boolean) ?? []);
+  const startDate = flags["start-date"] as string | undefined;
+  const endDate = flags["end-date"] as string | undefined;
 
   // Step 1: export
   const { exportCrashLogs } = await import("./crashExporter.js");
-  const exportResult = exportCrashLogs(inputDir, basicDir, versions, false, false);
+  const exportResult = exportCrashLogs(inputDir, basicDir, versions, false, false, startDate, endDate);
   console.log("Export:", JSON.stringify(exportResult));
 
   // Step 2: symbolicate
@@ -364,6 +368,8 @@ CrashPoint iOS CLI — node dist/cli.js <command> [options]
 
 Commands:
   export                Export .crash files from .xccrashpoint packages into BasicCrashLogsFolder
+    --start-date <date> ISO date string to filter crashes from (e.g. 2026-03-01)
+    --end-date <date>   ISO date string to filter crashes until (e.g. 2026-03-20)
   batch                 Symbolicate all crash files in BasicCrashLogsFolder
   analyze               Group and deduplicate crashes into a report
     --crash-dir <dir>   Directory of crash files (default: SymbolicatedCrashLogsFolder)
@@ -396,6 +402,8 @@ Commands:
   pipeline              Full export → symbolicate → analyze → (optionally) notify
     --notify            Send Cliq notification after analysis
     --versions v1,v2    Comma-separated version filter
+    --start-date <date> ISO date string to filter crashes from (e.g. 2026-03-01)
+    --end-date <date>   ISO date string to filter crashes until (e.g. 2026-03-20)
   set-fix <signature>   Mark crash signature as fixed
     --note <text>       Optional note
   unset-fix <signature> Mark crash signature as unfixed
@@ -412,7 +420,7 @@ Environment variables: see .env.example
 
     switch (command) {
       case "export":
-        await cmdExport();
+        await cmdExport(flags);
         break;
       case "batch":
         await cmdBatch();
