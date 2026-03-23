@@ -38,9 +38,9 @@ function formatCrashGroup(group: CrashGroup, index: number): string {
   // Fix status
   if (group.fix_status) {
     if (group.fix_status.fixed) {
-      lines.push(`Fix Status: ✅ Fixed in dev${group.fix_status.note ? ` — ${group.fix_status.note}` : ""}`);
+      lines.push(`Fix Status: [FIXED] Fixed in dev${group.fix_status.note ? ` — ${group.fix_status.note}` : ""}`);
     } else {
-      lines.push(`Fix Status: ❌ Not yet fixed${group.fix_status.note ? ` — ${group.fix_status.note}` : ""}`);
+      lines.push(`Fix Status: [NOT FIXED] Not yet fixed${group.fix_status.note ? ` — ${group.fix_status.note}` : ""}`);
     }
   }
 
@@ -51,8 +51,8 @@ function formatCrashGroup(group: CrashGroup, index: number): string {
 export function formatCrashReportText(report: CrashReport): string {
   const isUnfixedOnly = report.report_type === "unfixed-only";
   const headerLine = isUnfixedOnly
-    ? `⚠️ *Unfixed iOS Crashes — ${report.report_date}*`
-    : `🚨 *iOS Crash Report — ${report.report_date}*`;
+    ? `[WARNING] *Unfixed iOS Crashes — ${report.report_date}*`
+    : `*iOS Crash Report — ${report.report_date}*`;
   const header = [
     headerLine,
     `Total crashes: ${report.total_crashes} | Unique types: ${report.unique_crash_types}`,
@@ -82,10 +82,11 @@ export async function sendToWebhook(webhookUrl: string, report: CrashReport): Pr
 }
 
 export async function sendToBotWebhook(botWebhookUrl: string, report: CrashReport): Promise<void> {
+  const text = formatCrashReportText(report);
   const response = await fetch(botWebhookUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(report),
+    body: JSON.stringify({ text, ...report }),
   });
   if (!response.ok) {
     const body = await response.text();

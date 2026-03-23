@@ -2,7 +2,7 @@
 // Returns help information about CrashReportBot commands and usage.
 
 string message = "";
-message = message + "🤖 *CrashReportBot — iOS Crash Analysis* 🍎\n\n";
+message = message + "*CrashReportBot — iOS Crash Analysis*\n\n";
 
 message = message + "*What this bot does:*\n";
 message = message + "CrashReportBot automates iOS crash log collection, symbolication, grouping, and reporting.\n";
@@ -16,8 +16,8 @@ message = message + "  • *Manual* — Crash files placed manually in the analy
 
 message = message + "*Fix Tracking:*\n";
 message = message + "Each crash group in the report shows its fix status:\n";
-message = message + "  ✅ *FIXED in dev* — marked fixed with optional PR/note reference\n";
-message = message + "  ❌ *NOT YET FIXED* — still open\n";
+message = message + "  [FIXED] *FIXED in dev* — marked fixed with optional PR/note reference\n";
+message = message + "  [NOT FIXED] *NOT YET FIXED* — still open\n";
 message = message + "Fix statuses are tracked locally in `fix_status.json` via the MCP `set_fix_status` tool.\n\n";
 
 message = message + "*Manual Trigger Commands* (run on your Mac):\n";

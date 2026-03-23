@@ -15,8 +15,8 @@ echo "Setting up folder structure under: $PARENT"
 mkdir -p "$PARENT/BasicCrashLogsFolder"
 mkdir -p "$PARENT/SymbolicatedCrashLogsFolder"
 
-echo "  ✅ BasicCrashLogsFolder"
-echo "  ✅ SymbolicatedCrashLogsFolder"
+echo "  [OK] BasicCrashLogsFolder"
+echo "  [OK] SymbolicatedCrashLogsFolder"
 
 # Helper: resolve a path to absolute (uses realpath if target exists, else manual resolution)
 resolve_path() {
@@ -40,12 +40,12 @@ if [[ -n "${MASTER_BRANCH_PATH:-}" ]]; then
     rm -f "$LINK"
   fi
   ln -s "$RESOLVED_MASTER" "$LINK"
-  echo "  ✅ CurrentMasterLiveBranch -> $RESOLVED_MASTER"
+  echo "  [OK] CurrentMasterLiveBranch -> $RESOLVED_MASTER"
   if [[ ! -e "$RESOLVED_MASTER" ]]; then
-    echo "  ⚠️  Warning: MASTER_BRANCH_PATH target does not exist: $RESOLVED_MASTER"
+    echo "  [WARNING] Warning: MASTER_BRANCH_PATH target does not exist: $RESOLVED_MASTER"
   fi
 else
-  echo "  ℹ️  MASTER_BRANCH_PATH not set — skipping CurrentMasterLiveBranch symlink"
+  echo "  [INFO] MASTER_BRANCH_PATH not set — skipping CurrentMasterLiveBranch symlink"
 fi
 
 # CurrentDevelopmentBranch symlink
@@ -56,12 +56,12 @@ if [[ -n "${DEV_BRANCH_PATH:-}" ]]; then
     rm -f "$LINK"
   fi
   ln -s "$RESOLVED_DEV" "$LINK"
-  echo "  ✅ CurrentDevelopmentBranch -> $RESOLVED_DEV"
+  echo "  [OK] CurrentDevelopmentBranch -> $RESOLVED_DEV"
   if [[ ! -e "$RESOLVED_DEV" ]]; then
-    echo "  ⚠️  Warning: DEV_BRANCH_PATH target does not exist: $RESOLVED_DEV"
+    echo "  [WARNING] Warning: DEV_BRANCH_PATH target does not exist: $RESOLVED_DEV"
   fi
 else
-  echo "  ℹ️  DEV_BRANCH_PATH not set — skipping CurrentDevelopmentBranch symlink"
+  echo "  [INFO] DEV_BRANCH_PATH not set — skipping CurrentDevelopmentBranch symlink"
 fi
 
 # dSYM_File symlink
@@ -72,12 +72,12 @@ if [[ -n "${DSYM_PATH:-}" ]]; then
     rm -f "$LINK"
   fi
   ln -s "$RESOLVED_DSYM" "$LINK"
-  echo "  ✅ dSYM_File -> $RESOLVED_DSYM"
+  echo "  [OK] dSYM_File -> $RESOLVED_DSYM"
   if [[ ! -e "$RESOLVED_DSYM" ]]; then
-    echo "  ⚠️  Warning: DSYM_PATH target does not exist: $RESOLVED_DSYM"
+    echo "  [WARNING] Warning: DSYM_PATH target does not exist: $RESOLVED_DSYM"
   fi
 else
-  echo "  ℹ️  DSYM_PATH not set — skipping dSYM_File symlink"
+  echo "  [INFO] DSYM_PATH not set — skipping dSYM_File symlink"
 fi
 
 # app_File symlink
@@ -88,12 +88,12 @@ if [[ -n "${APP_PATH:-}" ]]; then
     rm -f "$LINK"
   fi
   ln -s "$RESOLVED_APP" "$LINK"
-  echo "  ✅ app_File -> $RESOLVED_APP"
+  echo "  [OK] app_File -> $RESOLVED_APP"
   if [[ ! -e "$RESOLVED_APP" ]]; then
-    echo "  ⚠️  Warning: APP_PATH target does not exist: $RESOLVED_APP"
+    echo "  [WARNING] Warning: APP_PATH target does not exist: $RESOLVED_APP"
   fi
 else
-  echo "  ℹ️  APP_PATH not set — skipping app_File symlink"
+  echo "  [INFO] APP_PATH not set — skipping app_File symlink"
 fi
 
 echo ""
