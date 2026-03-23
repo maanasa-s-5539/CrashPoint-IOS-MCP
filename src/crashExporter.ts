@@ -172,17 +172,21 @@ export function exportCrashLogs(
     for (const crashPath of crashes) {
       const fileVersion = extractVersion(crashPath);
 
-      // Version filter
-      if (versions.length > 0 && fileVersion && !versions.includes(fileVersion)) {
-        result.skipped++;
-        result.files.push({
-          source: crashPath,
-          destination: "",
-          version: fileVersion,
-          skipped: true,
-          reason: "version filtered",
-        });
-        continue;
+      // Version filter — match on full version string or short version (before build number in parens)
+      if (versions.length > 0 && fileVersion) {
+        const parenIndex = fileVersion.indexOf(" (");
+        const shortVersion = parenIndex !== -1 ? fileVersion.slice(0, parenIndex) : fileVersion;
+        if (!versions.some((v) => v === fileVersion || v === shortVersion)) {
+          result.skipped++;
+          result.files.push({
+            source: crashPath,
+            destination: "",
+            version: fileVersion,
+            skipped: true,
+            reason: "version filtered",
+          });
+          continue;
+        }
       }
 
       // Date filter
