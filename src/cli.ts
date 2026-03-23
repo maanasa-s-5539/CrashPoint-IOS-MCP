@@ -4,10 +4,11 @@ import fs from "fs";
 import path from "path";
 import { getConfig, getBasicCrashesDir, getSymbolicatedDir } from "./config.js";
 import { exportCrashLogs } from "./crashExporter.js";
-import { runBatch } from "./symbolicator.js";
+import { runBatch, symbolicateOne, diagnoseFrames } from "./symbolicator.js";
 import { analyzeDirectory } from "./crashAnalyzer.js";
 import { sendCrashReportToCliq } from "./cliqNotifier.js";
 import { FixTracker } from "./fixTracker.js";
+import { listAvailableVersions } from "./crashExporter.js";
 
 const [, , command, ...args] = process.argv;
 
@@ -166,6 +167,197 @@ async function cmdNotifyUnfixed(flags: Record<string, string | boolean>): Promis
   }
 }
 
+async function cmdSetup(flags: Record<string, string | boolean>): Promise<void> {
+  const config = getConfig();
+  const parentDir = config.CRASH_ANALYSIS_PARENT;
+  const basicDir = path.join(parentDir, "BasicCrashLogsFolder");
+  const symbolicatedDir = path.join(parentDir, "SymbolicatedCrashLogsFolder");
+
+  const created: string[] = [];
+  const warnings: string[] = [];
+
+  for (const dir of [parentDir, basicDir, symbolicatedDir]) {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+      created.push(dir);
+    }
+  }
+
+  const masterBranchPath = (flags["master-branch"] as string) ?? config.MASTER_BRANCH_PATH;
+  const devBranchPath = (flags["dev-branch"] as string) ?? config.DEV_BRANCH_PATH;
+  const dsymPath = (flags["dsym"] as string) ?? config.DSYM_PATH;
+  const appPath = (flags["app"] as string) ?? config.APP_PATH;
+
+  const symlinkDefs: Array<{ name: string; target: string | undefined }> = [
+    { name: "CurrentMasterLiveBranch", target: masterBranchPath },
+    { name: "CurrentDevelopmentBranch", target: devBranchPath },
+    { name: "dSYM_File", target: dsymPath },
+    { name: "app_File", target: appPath },
+  ];
+
+  const symlinks: Array<{ link: string; target: string; status: string }> = [];
+  for (const { name, target } of symlinkDefs) {
+    if (!target) continue;
+    const linkPath = path.join(parentDir, name);
+    if (!fs.existsSync(target)) {
+      warnings.push(`Target for ${name} does not exist: ${target}`);
+    }
+    try {
+      fs.lstatSync(linkPath);
+      fs.rmSync(linkPath, { force: true });
+    } catch {
+      // Path doesn't exist — nothing to remove
+    }
+    try {
+      fs.symlinkSync(target, linkPath);
+      symlinks.push({ link: linkPath, target, status: "created" });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      warnings.push(`Could not create symlink ${name}: ${msg}`);
+      symlinks.push({ link: linkPath, target, status: `failed: ${msg}` });
+    }
+  }
+
+  const existingCrashLogsDir = flags["crash-logs"] as string | undefined;
+  let copiedFiles: number | undefined;
+  if (existingCrashLogsDir) {
+    copiedFiles = 0;
+    try {
+      const srcFiles = fs.readdirSync(existingCrashLogsDir).filter(
+        (f) => f.endsWith(".crash") || f.endsWith(".ips")
+      );
+      for (const file of srcFiles) {
+        fs.copyFileSync(path.join(existingCrashLogsDir, file), path.join(basicDir, file));
+        copiedFiles++;
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      warnings.push(`Could not copy from crash-logs dir: ${msg}`);
+    }
+  }
+
+  console.log(JSON.stringify({ parentDir, created, symlinks, copiedFiles, warnings }, null, 2));
+}
+
+async function cmdSymbolicateOne(flags: Record<string, string | boolean>): Promise<void> {
+  const crashPath = flags["crash"] as string;
+  if (!crashPath) {
+    console.error("Error: --crash <path> is required for symbolicate-one command.");
+    process.exit(1);
+  }
+  const config = getConfig();
+  const dsymPath = (flags["dsym"] as string) ?? config.DSYM_PATH;
+  const appPath = (flags["app"] as string) ?? config.APP_PATH;
+  const outputPath = (flags["output"] as string) ?? path.join(config.CRASH_ANALYSIS_PARENT, "SymbolicatedCrashLogsFolder", path.basename(crashPath));
+  const allThreads = flags["all-threads"] === true;
+
+  if (!dsymPath) {
+    console.error("Error: --dsym or DSYM_PATH env var is required.");
+    process.exit(1);
+  }
+
+  const result = await symbolicateOne(crashPath, dsymPath, appPath, outputPath, undefined, allThreads);
+  console.log(JSON.stringify(result, null, 2));
+  if (result.success) {
+    console.log(`Symbolicated output written to ${path.resolve(outputPath)}`);
+  }
+}
+
+function cmdDiagnose(flags: Record<string, string | boolean>): void {
+  const crashPath = flags["crash"] as string;
+  const symbolicatedPath = flags["symbolicated"] as string;
+  if (!crashPath || !symbolicatedPath) {
+    console.error("Error: --crash <path> and --symbolicated <path> are required for diagnose command.");
+    process.exit(1);
+  }
+  const config = getConfig();
+  const appName = (flags["app-name"] as string) ?? config.APP_NAME;
+
+  const result = diagnoseFrames(crashPath, symbolicatedPath, appName);
+  console.log(JSON.stringify(result, null, 2));
+}
+
+function cmdListVersions(flags: Record<string, string | boolean>): void {
+  const config = getConfig();
+  const inputDir = (flags["input-dir"] as string) ?? config.CRASH_INPUT_DIR ?? config.CRASH_ANALYSIS_PARENT;
+  const recursive = flags["recursive"] === true;
+  const versions = listAvailableVersions(inputDir, recursive);
+  console.log(JSON.stringify(versions, null, 2));
+}
+
+async function cmdPipeline(flags: Record<string, string | boolean>): Promise<void> {
+  const config = getConfig();
+  const inputDir = config.CRASH_INPUT_DIR ?? config.CRASH_ANALYSIS_PARENT;
+  const basicDir = path.join(config.CRASH_ANALYSIS_PARENT, "BasicCrashLogsFolder");
+  const symbolicatedDir = path.join(config.CRASH_ANALYSIS_PARENT, "SymbolicatedCrashLogsFolder");
+  const dsymPath = config.DSYM_PATH;
+  const appPath = config.APP_PATH;
+  const notify = flags["notify"] === true;
+  const versions = flags["versions"]
+    ? (flags["versions"] as string).split(",").map((v) => v.trim()).filter(Boolean)
+    : (config.CRASH_VERSIONS?.split(",").map((v) => v.trim()).filter(Boolean) ?? []);
+
+  // Step 1: export
+  const { exportCrashLogs } = await import("./crashExporter.js");
+  const exportResult = exportCrashLogs(inputDir, basicDir, versions, false, false);
+  console.log("Export:", JSON.stringify(exportResult));
+
+  // Step 2: symbolicate
+  let symbolicationResult: unknown = null;
+  if (dsymPath) {
+    symbolicationResult = await runBatch(basicDir, dsymPath, appPath, symbolicatedDir);
+    console.log("Symbolication:", JSON.stringify(symbolicationResult));
+  } else {
+    console.log("Symbolication: skipped (DSYM_PATH not set)");
+  }
+
+  // Step 3: analyze
+  const tracker = new FixTracker(config.CRASH_ANALYSIS_PARENT);
+  const fixStatuses: Record<string, { fixed: boolean; note?: string }> = {};
+  for (const entry of tracker.getAll()) {
+    fixStatuses[entry.signature] = { fixed: entry.fixed, note: entry.note };
+  }
+  const report = analyzeDirectory(symbolicatedDir, fixStatuses);
+  console.log("Analysis:", JSON.stringify(report));
+
+  // Step 4: notify
+  if (notify) {
+    const result = await sendCrashReportToCliq(report, config);
+    console.log("Notification:", JSON.stringify(result));
+    if (!result.success) {
+      process.exit(1);
+    }
+  }
+}
+
+function cmdSetFix(signature: string, flags: Record<string, string | boolean>): void {
+  const config = getConfig();
+  const tracker = new FixTracker(config.CRASH_ANALYSIS_PARENT);
+  const note = flags["note"] as string | undefined;
+  tracker.setFixed(signature, true, note);
+  console.log(`Marked as fixed: ${signature}${note ? ` (note: ${note})` : ""}`);
+}
+
+function cmdUnsetFix(signature: string): void {
+  const config = getConfig();
+  const tracker = new FixTracker(config.CRASH_ANALYSIS_PARENT);
+  tracker.setFixed(signature, false);
+  console.log(`Marked as unfixed: ${signature}`);
+}
+
+function cmdListFixes(): void {
+  const config = getConfig();
+  const tracker = new FixTracker(config.CRASH_ANALYSIS_PARENT);
+  console.log(JSON.stringify(tracker.getAll(), null, 2));
+}
+
+function cmdRemoveFix(signature: string): void {
+  const config = getConfig();
+  const tracker = new FixTracker(config.CRASH_ANALYSIS_PARENT);
+  tracker.remove(signature);
+  console.log(`Removed fix tracking for: ${signature}`);
+}
+
 function printUsage(): void {
   console.log(`
 CrashPoint iOS CLI — node dist/cli.js <command> [options]
@@ -182,6 +374,33 @@ Commands:
     --crash-dir <dir>   Directory of symbolicated crash files (default: SymbolicatedCrashLogsFolder)
     --dry-run           Analyze and filter but don't send to Cliq
     -o <output.json>    Write the filtered report JSON to a file
+  setup                 Create full folder structure + symlinks
+    --master-branch     Path to master/live branch checkout
+    --dev-branch        Path to development branch checkout
+    --dsym              Path to .dSYM bundle
+    --app               Path to .app bundle
+    --crash-logs        Directory to copy existing crash files from
+  symbolicate-one       Symbolicate a single crash file
+    --crash <path>      Path to .crash file (required)
+    --dsym <path>       Path to .dSYM bundle (overrides env)
+    --app <path>        Path to .app bundle (overrides env)
+    --output <path>     Write symbolicated output to file (default: stdout)
+    --all-threads       Symbolicate all threads (not just crashed thread)
+  diagnose              Frame-by-frame symbolication quality check
+    --crash <path>      Path to original .crash file (required)
+    --symbolicated <path>  Path to symbolicated .crash file (required)
+    --app-name <name>   App binary name filter (overrides env)
+  list-versions         List versions found in .xccrashpoint files
+    --input-dir <dir>   Directory to search (default: CRASH_INPUT_DIR or CRASH_ANALYSIS_PARENT)
+    --recursive         Search recursively
+  pipeline              Full export → symbolicate → analyze → (optionally) notify
+    --notify            Send Cliq notification after analysis
+    --versions v1,v2    Comma-separated version filter
+  set-fix <signature>   Mark crash signature as fixed
+    --note <text>       Optional note
+  unset-fix <signature> Mark crash signature as unfixed
+  list-fixes            List all tracked fix statuses
+  remove-fix <signature> Remove fix tracking entry
 
 Environment variables: see .env.example
 `);
@@ -207,6 +426,51 @@ Environment variables: see .env.example
       case "notify-unfixed":
         await cmdNotifyUnfixed(flags);
         break;
+      case "setup":
+        await cmdSetup(flags);
+        break;
+      case "symbolicate-one":
+        await cmdSymbolicateOne(flags);
+        break;
+      case "diagnose":
+        cmdDiagnose(flags);
+        break;
+      case "list-versions":
+        cmdListVersions(flags);
+        break;
+      case "pipeline":
+        await cmdPipeline(flags);
+        break;
+      case "set-fix": {
+        const signature = args[0];
+        if (!signature) {
+          console.error("Error: set-fix requires a signature argument.");
+          process.exit(1);
+        }
+        cmdSetFix(signature, parseFlags(args.slice(1)));
+        break;
+      }
+      case "unset-fix": {
+        const signature = args[0];
+        if (!signature) {
+          console.error("Error: unset-fix requires a signature argument.");
+          process.exit(1);
+        }
+        cmdUnsetFix(signature);
+        break;
+      }
+      case "list-fixes":
+        cmdListFixes();
+        break;
+      case "remove-fix": {
+        const signature = args[0];
+        if (!signature) {
+          console.error("Error: remove-fix requires a signature argument.");
+          process.exit(1);
+        }
+        cmdRemoveFix(signature);
+        break;
+      }
       default:
         printUsage();
         if (command) {

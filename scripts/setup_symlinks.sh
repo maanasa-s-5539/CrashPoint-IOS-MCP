@@ -48,6 +48,36 @@ else
   echo "  ℹ️  DEV_BRANCH_PATH not set — skipping CurrentDevelopmentBranch symlink"
 fi
 
+# dSYM_File symlink
+if [[ -n "${DSYM_PATH:-}" ]]; then
+  LINK="$PARENT/dSYM_File"
+  if [[ -L "$LINK" ]] || [[ -e "$LINK" ]]; then
+    rm -f "$LINK"
+  fi
+  ln -s "$DSYM_PATH" "$LINK"
+  echo "  ✅ dSYM_File -> $DSYM_PATH"
+  if [[ ! -e "$DSYM_PATH" ]]; then
+    echo "  ⚠️  Warning: DSYM_PATH target does not exist: $DSYM_PATH"
+  fi
+else
+  echo "  ℹ️  DSYM_PATH not set — skipping dSYM_File symlink"
+fi
+
+# app_File symlink
+if [[ -n "${APP_PATH:-}" ]]; then
+  LINK="$PARENT/app_File"
+  if [[ -L "$LINK" ]] || [[ -e "$LINK" ]]; then
+    rm -f "$LINK"
+  fi
+  ln -s "$APP_PATH" "$LINK"
+  echo "  ✅ app_File -> $APP_PATH"
+  if [[ ! -e "$APP_PATH" ]]; then
+    echo "  ⚠️  Warning: APP_PATH target does not exist: $APP_PATH"
+  fi
+else
+  echo "  ℹ️  APP_PATH not set — skipping app_File symlink"
+fi
+
 echo ""
 echo "Done. Folder structure:"
 ls -la "$PARENT"
