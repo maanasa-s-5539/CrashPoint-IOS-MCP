@@ -44,7 +44,11 @@ server.registerTool(
     const inputDir = input.inputDir ?? config.CRASH_INPUT_DIR ?? config.CRASH_ANALYSIS_PARENT;
     const recursive = input.recursive ?? false;
     const versions = listAvailableVersions(inputDir, recursive);
-    return { versions };
+    const result = { versions };
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      structuredContent: result,
+    };
   }
 );
 
@@ -82,10 +86,14 @@ server.registerTool(
     const recursive = input.recursive ?? false;
 
     const result = exportCrashLogs(inputDir, outputDir, versions, recursive, true);
-    return {
+    const structured = {
       would_export: result.exported,
       would_skip: result.skipped,
       files: result.files,
+    };
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(structured, null, 2) }],
+      structuredContent: structured,
     };
   }
 );
@@ -124,7 +132,11 @@ server.registerTool(
     const versions = input.versions?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
     const recursive = input.recursive ?? false;
 
-    return exportCrashLogs(inputDir, outputDir, versions, recursive, false);
+    const result = exportCrashLogs(inputDir, outputDir, versions, recursive, false);
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      structuredContent: result,
+    };
   }
 );
 
@@ -155,11 +167,15 @@ server.registerTool(
     const appPath = input.appPath ?? config.APP_PATH;
 
     if (!dsymPath) {
-      return {
+      const result = {
         success: false,
         detail: "dsymPath not provided and DSYM_PATH env var not set.",
         symbolicatedCount: 0,
         totalAppFrames: 0,
+      };
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
       };
     }
 
@@ -170,7 +186,7 @@ server.registerTool(
         path.basename(input.crashPath)
       );
 
-    return symbolicateOne(
+    const result = await symbolicateOne(
       input.crashPath,
       dsymPath,
       appPath,
@@ -178,6 +194,10 @@ server.registerTool(
       input.arch,
       input.allThreads ?? false
     );
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      structuredContent: result,
+    };
   }
 );
 
@@ -218,15 +238,23 @@ server.registerTool(
     const outputDir = input.outputDir ?? getSymbolicatedDir(config);
 
     if (!dsymPath) {
-      return {
+      const result = {
         succeeded: 0,
         failed: 0,
         total: 0,
         results: [],
       };
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
     }
 
-    return runBatch(crashDir, dsymPath, appPath, outputDir, input.arch, input.allThreads ?? false);
+    const result = await runBatch(crashDir, dsymPath, appPath, outputDir, input.arch, input.allThreads ?? false);
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      structuredContent: result,
+    };
   }
 );
 
@@ -260,7 +288,11 @@ server.registerTool(
   async (input) => {
     const config = getConfig();
     const appName = input.appName ?? config.APP_NAME;
-    return diagnoseFrames(input.crashPath, input.symbolicatedPath, appName);
+    const result = diagnoseFrames(input.crashPath, input.symbolicatedPath, appName);
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      structuredContent: result,
+    };
   }
 );
 
@@ -289,7 +321,11 @@ server.registerTool(
     for (const entry of tracker.getAll()) {
       fixStatuses[entry.signature] = { fixed: entry.fixed, note: entry.note };
     }
-    return analyzeDirectory(crashDir, fixStatuses);
+    const result = analyzeDirectory(crashDir, fixStatuses);
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      structuredContent: result,
+    };
   }
 );
 
@@ -313,9 +349,17 @@ server.registerTool(
     try {
       report = JSON.parse(input.report);
     } catch {
-      return { success: false, message: "Invalid JSON in report parameter." };
+      const result = { success: false, message: "Invalid JSON in report parameter." };
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
     }
-    return sendCrashReportToCliq(report, config);
+    const result = await sendCrashReportToCliq(report, config);
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      structuredContent: result,
+    };
   }
 );
 
@@ -338,9 +382,13 @@ server.registerTool(
     const config = getConfig();
     const tracker = new FixTracker(config.CRASH_ANALYSIS_PARENT);
     const status = tracker.setFixed(input.signature, input.fixed, input.note);
-    return {
+    const result = {
       success: true,
       status: `Marked as ${status.fixed ? "fixed" : "unfixed"}${status.note ? ` — ${status.note}` : ""} at ${status.updatedAt}`,
+    };
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      structuredContent: result,
     };
   }
 );
@@ -362,7 +410,11 @@ server.registerTool(
     const config = getConfig();
     const tracker = new FixTracker(config.CRASH_ANALYSIS_PARENT);
     const removed = tracker.remove(input.signature);
-    return { success: true, removed };
+    const result = { success: true, removed };
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      structuredContent: result,
+    };
   }
 );
 
@@ -390,11 +442,15 @@ server.registerTool(
     const config = getConfig();
     const tracker = new FixTracker(config.CRASH_ANALYSIS_PARENT);
     const statuses = tracker.getAll();
-    return {
+    const result = {
       total: statuses.length,
       fixed: statuses.filter((s) => s.fixed).length,
       unfixed: statuses.filter((s) => !s.fixed).length,
       statuses,
+    };
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      structuredContent: result,
     };
   }
 );
@@ -451,11 +507,15 @@ server.registerTool(
       notificationSent = notifResult.success;
     }
 
-    return {
+    const result = {
       export_result: exportResult,
       symbolication_result: symbolicationResult,
       analysis_report: analysisReport,
       notification_sent: notificationSent,
+    };
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      structuredContent: result,
     };
   }
 );
@@ -556,7 +616,11 @@ server.registerTool(
       }
     }
 
-    return { parentDir, created, symlinks, copiedFiles, warnings };
+    const result = { parentDir, created, symlinks, copiedFiles, warnings };
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      structuredContent: result,
+    };
   }
 );
 
@@ -612,7 +676,7 @@ server.registerTool(
     };
 
     if (!shouldNotify) {
-      return {
+      const result = {
         success: true,
         message: `Dry-run: ${unfixedGroups.length} unfixed crash type(s), ${fixedGroups.length} fixed. No notification sent.`,
         totalUnfixed: unfixedGroups.length,
@@ -620,10 +684,14 @@ server.registerTool(
         reportSent: false,
         unfixedReport,
       };
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
     }
 
     if (unfixedGroups.length === 0) {
-      return {
+      const result = {
         success: true,
         message: "No unfixed crashes to report.",
         totalUnfixed: 0,
@@ -631,16 +699,24 @@ server.registerTool(
         reportSent: false,
         unfixedReport,
       };
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
     }
 
-    const result = await sendCrashReportToCliq(unfixedReport, config);
-    return {
-      success: result.success,
-      message: result.message,
+    const cliqResult = await sendCrashReportToCliq(unfixedReport, config);
+    const result = {
+      success: cliqResult.success,
+      message: cliqResult.message,
       totalUnfixed: unfixedGroups.length,
       totalFixed: fixedGroups.length,
-      reportSent: result.success,
+      reportSent: cliqResult.success,
       unfixedReport,
+    };
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      structuredContent: result,
     };
   }
 );
