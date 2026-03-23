@@ -2,7 +2,7 @@
 
 A **TypeScript MCP (Model Context Protocol) server** that wraps the CrashPoint iOS crash analysis pipeline as MCP tools. Use it with Claude Desktop, Cursor, and other MCP clients to export, symbolicate, analyze, and report iOS/macOS crash logs — all through natural language.
 
-Also includes a standalone **CLI** (`crashpoint-ios-cli`) for cron/launchd scheduled runs without an AI client.
+Also includes a standalone **CLI** (`crashpoint-ios-cli`) for scheduled runs without an AI client.
 
 ---
 
@@ -240,61 +240,6 @@ If installed globally, you can also use:
 ```bash
 crashpoint-ios-cli analyze -o report.json
 ```
-
----
-
-## Scheduled Runs
-
-### Using cron
-
-```bash
-# Run daily at 9:00 AM, append logs to crashpoint.log
-0 9 * * * /path/to/scripts/scheduled_run.sh >> /path/to/crashpoint.log 2>&1
-```
-
-### Using launchd (macOS)
-
-Create `~/Library/LaunchAgents/com.yourapp.crashpoint.plist`:
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key>
-  <string>com.yourapp.crashpoint</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>/bin/bash</string>
-    <string>/path/to/scripts/scheduled_run.sh</string>
-  </array>
-  <key>StartCalendarInterval</key>
-  <dict>
-    <key>Hour</key>
-    <integer>9</integer>
-    <key>Minute</key>
-    <integer>0</integer>
-  </dict>
-  <key>EnvironmentVariables</key>
-  <dict>
-    <key>CRASH_ANALYSIS_PARENT</key>
-    <string>/path/to/ParentHolderFolder</string>
-    <key>DSYM_PATH</key>
-    <string>/path/to/MyApp.dSYM</string>
-    <key>APP_PATH</key>
-    <string>/path/to/MyApp.app</string>
-    <key>ZOHO_CLIQ_WEBHOOK_URL</key>
-    <string>https://cliq.zoho.in/company/{org_id}/api/v2/channelsbyname/{channel_name}/message</string>
-  </dict>
-  <key>StandardOutPath</key>
-  <string>/path/to/crashpoint.log</string>
-  <key>StandardErrorPath</key>
-  <string>/path/to/crashpoint.log</string>
-</dict>
-</plist>
-```
-
-Load it with: `launchctl load ~/Library/LaunchAgents/com.yourapp.crashpoint.plist`
 
 ---
 

@@ -33,7 +33,7 @@ message = message + "node dist/cli.js notify --report report.json\n";
 message = message + "```\n\n";
 
 message = message + "*Scheduled Runs:*\n";
-message = message + "Use `scripts/scheduled_run.sh` with cron or launchd for automated daily reports.\n\n";
+message = message + "Use `scripts/scheduled_run.sh` for automated daily reports.\n\n";
 
 message = message + "*Note:* AI analysis (crash pattern insights, root cause suggestions) is a separate manual step — ask Claude Desktop using the MCP tools.";
 
