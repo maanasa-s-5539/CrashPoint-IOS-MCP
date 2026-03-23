@@ -61,15 +61,57 @@ export function formatCrashReportText(report: CrashReport): string {
   ].join("\n");
 
   const body = report.crash_groups
-    .slice(0, 10)
     .map((g, i) => formatCrashGroup(g, i))
     .join("\n---\n");
 
   return header + body;
 }
 
-export async function sendToWebhook(webhookUrl: string, report: CrashReport): Promise<void> {
-  const text = formatCrashReportText(report);
+const CLIQ_MAX_LENGTH = 5000;
+
+export function splitIntoChunks(text: string, maxLength: number): string[] {
+  if (text.length <= maxLength) return [text];
+
+  const chunks: string[] = [];
+  const sections = text.split("\n---\n");
+
+  let current = "";
+  for (const section of sections) {
+    const separator = current ? "\n---\n" : "";
+    if ((current + separator + section).length > maxLength) {
+      if (current) chunks.push(current);
+      current = section;
+    } else {
+      current = current + separator + section;
+    }
+  }
+  if (current) chunks.push(current);
+
+  // If any single chunk is still over limit, split by newlines
+  const finalChunks: string[] = [];
+  for (const chunk of chunks) {
+    if (chunk.length <= maxLength) {
+      finalChunks.push(chunk);
+    } else {
+      const lines = chunk.split("\n");
+      let part = "";
+      for (const line of lines) {
+        const candidate = part ? part + "\n" + line : line;
+        if (candidate.length > maxLength) {
+          if (part) finalChunks.push(part);
+          part = line;
+        } else {
+          part = candidate;
+        }
+      }
+      if (part) finalChunks.push(part);
+    }
+  }
+
+  return finalChunks;
+}
+
+async function postToCliq(webhookUrl: string, text: string): Promise<void> {
   const response = await fetch(webhookUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -78,6 +120,20 @@ export async function sendToWebhook(webhookUrl: string, report: CrashReport): Pr
   if (!response.ok) {
     const body = await response.text();
     throw new Error(`Webhook POST failed: ${response.status} ${body}`);
+  }
+}
+
+export async function sendToWebhook(webhookUrl: string, report: CrashReport): Promise<void> {
+  const fullText = formatCrashReportText(report);
+
+  if (fullText.length <= CLIQ_MAX_LENGTH) {
+    await postToCliq(webhookUrl, fullText);
+    return;
+  }
+
+  const chunks = splitIntoChunks(fullText, CLIQ_MAX_LENGTH);
+  for (const chunk of chunks) {
+    await postToCliq(webhookUrl, chunk);
   }
 }
 
