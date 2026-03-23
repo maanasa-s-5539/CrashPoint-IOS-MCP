@@ -13,6 +13,8 @@ const envSchema = z.object({
   CRASH_VERSIONS: z.string().optional().describe("Comma-separated version filter"),
   ZOHO_CLIQ_WEBHOOK_URL: z.string().optional().describe("Cliq channel webhook URL"),
   ZOHO_CLIQ_BOT_WEBHOOK_URL: z.string().optional().describe("Cliq bot webhook URL"),
+  MASTER_BRANCH_PATH: z.string().optional().describe("Path to current master/live branch checkout"),
+  DEV_BRANCH_PATH: z.string().optional().describe("Path to current development branch checkout"),
 });
 
 export type CrashPointConfig = z.infer<typeof envSchema>;

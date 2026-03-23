@@ -284,7 +284,12 @@ server.registerTool(
   async (input) => {
     const config = getConfig();
     const crashDir = input.crashDir ?? getSymbolicatedDir(config);
-    return analyzeDirectory(crashDir);
+    const tracker = new FixTracker(config.CRASH_ANALYSIS_PARENT);
+    const fixStatuses: Record<string, { fixed: boolean; note?: string }> = {};
+    for (const entry of tracker.getAll()) {
+      fixStatuses[entry.signature] = { fixed: entry.fixed, note: entry.note };
+    }
+    return analyzeDirectory(crashDir, fixStatuses);
   }
 );
 
@@ -432,7 +437,12 @@ server.registerTool(
     }
 
     // Step 3: Analyze
-    const analysisReport = analyzeDirectory(symbolicatedDir);
+    const tracker = new FixTracker(config.CRASH_ANALYSIS_PARENT);
+    const fixStatuses: Record<string, { fixed: boolean; note?: string }> = {};
+    for (const entry of tracker.getAll()) {
+      fixStatuses[entry.signature] = { fixed: entry.fixed, note: entry.note };
+    }
+    const analysisReport = analyzeDirectory(symbolicatedDir, fixStatuses);
 
     // Step 4: Optionally notify
     let notificationSent: boolean | undefined;
@@ -455,20 +465,28 @@ server.registerTool(
   "setup_folders",
   {
     description:
-      "Create the ParentHolderFolder directory structure (BasicCrashLogsFolder, SymbolicatedCrashLogsFolder).",
-    inputSchema: z.object({}),
+      "Create the ParentHolderFolder directory structure (BasicCrashLogsFolder, SymbolicatedCrashLogsFolder) and optional symlinks for master/dev branches.",
+    inputSchema: z.object({
+      masterBranchPath: z.string().optional().describe("Path to current master/live branch checkout (creates CurrentMasterLiveBranch symlink)"),
+      devBranchPath: z.string().optional().describe("Path to current development branch checkout (creates CurrentDevelopmentBranch symlink)"),
+      existingCrashLogsDir: z.string().optional().describe("If provided, copies .crash and .ips files from this directory into BasicCrashLogsFolder"),
+    }),
     outputSchema: z.object({
       parentDir: z.string(),
       created: z.array(z.string()),
+      symlinks: z.array(z.object({ link: z.string(), target: z.string(), status: z.string() })),
+      copiedFiles: z.number().optional(),
+      warnings: z.array(z.string()),
     }),
   },
-  async () => {
+  async (input) => {
     const config = getConfig();
     const parentDir = config.CRASH_ANALYSIS_PARENT;
     const basicDir = getBasicCrashesDir(config);
     const symbolicatedDir = getSymbolicatedDir(config);
 
     const created: string[] = [];
+    const warnings: string[] = [];
 
     for (const dir of [parentDir, basicDir, symbolicatedDir]) {
       if (!fs.existsSync(dir)) {
@@ -477,7 +495,149 @@ server.registerTool(
       }
     }
 
-    return { parentDir, created };
+    // Handle symlinks
+    const symlinks: Array<{ link: string; target: string; status: string }> = [];
+
+    const symlinkDefs: Array<{ name: string; target: string | undefined }> = [
+      { name: "CurrentMasterLiveBranch", target: input.masterBranchPath ?? config.MASTER_BRANCH_PATH },
+      { name: "CurrentDevelopmentBranch", target: input.devBranchPath ?? config.DEV_BRANCH_PATH },
+    ];
+
+    for (const { name, target } of symlinkDefs) {
+      if (!target) continue;
+      const linkPath = path.join(parentDir, name);
+      let status: string;
+
+      if (!fs.existsSync(target)) {
+        warnings.push(`Target for ${name} does not exist: ${target}`);
+      }
+
+      try {
+        // Remove existing symlink/file if present (lstatSync detects broken symlinks too)
+        fs.lstatSync(linkPath);
+        fs.rmSync(linkPath, { force: true });
+      } catch {
+        // Path doesn't exist — nothing to remove
+      }
+
+      try {
+        fs.symlinkSync(target, linkPath);
+        status = "created";
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        status = `failed: ${msg}`;
+        warnings.push(`Could not create symlink ${name}: ${msg}`);
+      }
+
+      symlinks.push({ link: linkPath, target, status });
+    }
+
+    // Copy crash files from existingCrashLogsDir if provided
+    let copiedFiles: number | undefined;
+    if (input.existingCrashLogsDir) {
+      copiedFiles = 0;
+      try {
+        const srcFiles = fs.readdirSync(input.existingCrashLogsDir).filter(
+          (f) => f.endsWith(".crash") || f.endsWith(".ips")
+        );
+        for (const file of srcFiles) {
+          const src = path.join(input.existingCrashLogsDir, file);
+          const dest = path.join(basicDir, file);
+          fs.copyFileSync(src, dest);
+          copiedFiles++;
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        warnings.push(`Could not copy from existingCrashLogsDir: ${msg}`);
+      }
+    }
+
+    return { parentDir, created, symlinks, copiedFiles, warnings };
+  }
+);
+
+// ── Tool 14: notify_unfixed_cliq ─────────────────────────────────────────────
+server.registerTool(
+  "notify_unfixed_cliq",
+  {
+    description:
+      "Analyze symbolicated crashes, filter to only UNFIXED crash types, and send the filtered report to Zoho Cliq. Crashes marked as 'fixed in development' via set_fix_status are excluded.",
+    inputSchema: z.object({
+      crashDir: z.string().optional().describe("Directory of symbolicated crash files (default: SymbolicatedCrashLogsFolder)"),
+      notify: z.boolean().optional().describe("Actually send to Cliq (default: true). Set false for dry-run."),
+    }),
+    outputSchema: z.object({
+      success: z.boolean(),
+      message: z.string(),
+      totalUnfixed: z.number(),
+      totalFixed: z.number(),
+      reportSent: z.boolean(),
+      unfixedReport: z.any().optional(),
+    }),
+  },
+  async (input) => {
+    const config = getConfig();
+    const crashDir = input.crashDir ?? getSymbolicatedDir(config);
+    const shouldNotify = input.notify !== false;
+
+    // Load fix statuses
+    const tracker = new FixTracker(config.CRASH_ANALYSIS_PARENT);
+    const fixStatuses: Record<string, { fixed: boolean; note?: string }> = {};
+    for (const entry of tracker.getAll()) {
+      fixStatuses[entry.signature] = { fixed: entry.fixed, note: entry.note };
+    }
+
+    // Analyze directory with fix statuses
+    const fullReport = analyzeDirectory(crashDir, fixStatuses);
+
+    // Separate fixed vs unfixed
+    const fixedGroups = fullReport.crash_groups.filter(
+      (g) => g.fix_status?.fixed === true
+    );
+    const unfixedGroups = fullReport.crash_groups.filter(
+      (g) => !g.fix_status || g.fix_status.fixed === false
+    );
+
+    // Rebuild report with only unfixed groups
+    const unfixedReport = {
+      ...fullReport,
+      report_type: "unfixed-only",
+      crash_groups: unfixedGroups.map((g, idx) => ({ ...g, rank: idx + 1 })),
+      total_crashes: unfixedGroups.reduce((sum, g) => sum + g.count, 0),
+      unique_crash_types: unfixedGroups.length,
+    };
+
+    if (!shouldNotify) {
+      return {
+        success: true,
+        message: `Dry-run: ${unfixedGroups.length} unfixed crash type(s), ${fixedGroups.length} fixed. No notification sent.`,
+        totalUnfixed: unfixedGroups.length,
+        totalFixed: fixedGroups.length,
+        reportSent: false,
+        unfixedReport,
+      };
+    }
+
+    if (unfixedGroups.length === 0) {
+      return {
+        success: true,
+        message: "No unfixed crashes to report.",
+        totalUnfixed: 0,
+        totalFixed: fixedGroups.length,
+        reportSent: false,
+        unfixedReport,
+      };
+    }
+
+    const result = await sendCrashReportToCliq(unfixedReport, config);
+    return {
+      success: result.success,
+      message: result.message,
+      totalUnfixed: unfixedGroups.length,
+      totalFixed: fixedGroups.length,
+      reportSent: result.success,
+      unfixedReport,
+    };
   }
 );
 

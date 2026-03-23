@@ -22,13 +22,39 @@ function formatCrashGroup(group: CrashGroup, index: number): string {
     .map(([k, v]) => `${k}(${v})`)
     .join(", ");
   lines.push(`App Versions: ${appVSummary || "N/A"}`);
+
+  // Sources
+  const sourceLabels: Record<string, string> = {
+    "xcode-organizer": "Xcode Organizer",
+    "apptics": "Apptics",
+    "ips-file": ".ips file",
+    "manual": "Manual",
+  };
+  const sourcesSummary = Object.entries(group.sources)
+    .map(([k, v]) => `${sourceLabels[k] ?? k}(${v})`)
+    .join(", ");
+  lines.push(`Sources: ${sourcesSummary || "N/A"}`);
+
+  // Fix status
+  if (group.fix_status) {
+    if (group.fix_status.fixed) {
+      lines.push(`Fix Status: ✅ Fixed in dev${group.fix_status.note ? ` — ${group.fix_status.note}` : ""}`);
+    } else {
+      lines.push(`Fix Status: ❌ Not yet fixed${group.fix_status.note ? ` — ${group.fix_status.note}` : ""}`);
+    }
+  }
+
   lines.push("");
   return lines.join("\n");
 }
 
 export function formatCrashReportText(report: CrashReport): string {
+  const isUnfixedOnly = report.report_type === "unfixed-only";
+  const headerLine = isUnfixedOnly
+    ? `⚠️ *Unfixed iOS Crashes — ${report.report_date}*`
+    : `🚨 *iOS Crash Report — ${report.report_date}*`;
   const header = [
-    `🚨 *iOS Crash Report — ${report.report_date}*`,
+    headerLine,
     `Total crashes: ${report.total_crashes} | Unique types: ${report.unique_crash_types}`,
     `Source: ${report.source_dir}`,
     "",

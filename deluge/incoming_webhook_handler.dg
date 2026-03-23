@@ -1,0 +1,146 @@
+// Zoho Cliq Incoming Webhook Handler — CrashReportBot
+// Receives a CrashReport JSON payload from `node dist/cli.js notify`
+// and posts a formatted summary to a Cliq channel.
+//
+// Configuration:
+//   Set CHANNEL_NAME below to your target Cliq channel name.
+
+string CHANNEL_NAME = "ios-crashes";
+
+// Parse incoming payload
+map payload = input.get("payload");
+if(payload == null)
+{
+  return {"text": "⚠️ No payload received."};
+}
+
+string report_date = payload.get("report_date").toString();
+int total_crashes = payload.get("total_crashes").tolong();
+int unique_types = payload.get("unique_crash_types").tolong();
+string source_dir = payload.get("source_dir").toString();
+
+list crash_groups = payload.get("crash_groups");
+
+string message = "🚨 *iOS Crash Report — " + report_date + "*\n";
+message = message + "Total crashes: " + total_crashes + " | Unique types: " + unique_types + "\n";
+message = message + "Source: " + source_dir + "\n\n";
+
+// Source label lookup
+map sourceLabels = {"xcode-organizer": "Xcode Organizer", "apptics": "Apptics", "ips-file": ".ips file", "manual": "Manual"};
+
+int groupCount = crash_groups.size();
+int limit = 10;
+if(groupCount < limit)
+{
+  limit = groupCount;
+}
+
+for each group in crash_groups
+{
+  if(group.get("rank").tolong() > limit)
+  {
+    break;
+  }
+
+  int rank = group.get("rank").tolong();
+  string exception_type = group.get("exception_type").toString();
+  int count = group.get("count").tolong();
+  string exception_codes = group.get("exception_codes").toString();
+
+  map crashed_thread = group.get("crashed_thread");
+  string thread_display = crashed_thread.get("display").toString();
+
+  list top_frames = group.get("top_frames");
+
+  map devices = group.get("devices");
+  map ios_versions = group.get("ios_versions");
+  map app_versions = group.get("app_versions");
+  map sources = group.get("sources");
+  map fix_status = group.get("fix_status");
+
+  message = message + "---\n";
+  message = message + "*#" + rank + " — " + exception_type + "* (" + count + " crashes)\n";
+  message = message + "Exception Codes: " + exception_codes + "\n";
+  message = message + "Crashed Thread: " + thread_display + "\n";
+
+  // Top frames
+  message = message + "Top Frames:\n";
+  for each frame in top_frames
+  {
+    message = message + "  • " + frame + "\n";
+  }
+
+  // Devices
+  string devicesSummary = "";
+  for each entry in devices.entrySet()
+  {
+    if(devicesSummary != "") { devicesSummary = devicesSummary + ", "; }
+    devicesSummary = devicesSummary + entry.getKey() + "(" + entry.getValue() + ")";
+  }
+  if(devicesSummary == "") { devicesSummary = "N/A"; }
+  message = message + "Devices: " + devicesSummary + "\n";
+
+  // iOS versions
+  string iosSummary = "";
+  for each entry in ios_versions.entrySet()
+  {
+    if(iosSummary != "") { iosSummary = iosSummary + ", "; }
+    iosSummary = iosSummary + entry.getKey() + "(" + entry.getValue() + ")";
+  }
+  if(iosSummary == "") { iosSummary = "N/A"; }
+  message = message + "iOS Versions: " + iosSummary + "\n";
+
+  // App versions
+  string appVSummary = "";
+  for each entry in app_versions.entrySet()
+  {
+    if(appVSummary != "") { appVSummary = appVSummary + ", "; }
+    appVSummary = appVSummary + entry.getKey() + "(" + entry.getValue() + ")";
+  }
+  if(appVSummary == "") { appVSummary = "N/A"; }
+  message = message + "App Versions: " + appVSummary + "\n";
+
+  // Sources with labels
+  string sourcesSummary = "";
+  for each entry in sources.entrySet()
+  {
+    string key = entry.getKey().toString();
+    string label = sourceLabels.get(key);
+    if(label == null) { label = key; }
+    if(sourcesSummary != "") { sourcesSummary = sourcesSummary + ", "; }
+    sourcesSummary = sourcesSummary + label + "(" + entry.getValue() + ")";
+  }
+  if(sourcesSummary == "") { sourcesSummary = "N/A"; }
+  message = message + "Sources: " + sourcesSummary + "\n";
+
+  // Fix status
+  if(fix_status != null)
+  {
+    bool fixed = fix_status.get("fixed");
+    string note = fix_status.get("note").toString();
+    if(fixed)
+    {
+      string fixLine = "Fix Status: ✅ Fixed in dev";
+      if(note != null && note != "null" && note != "")
+      {
+        fixLine = fixLine + " — " + note;
+      }
+      message = message + fixLine + "\n";
+    }
+    else
+    {
+      string fixLine = "Fix Status: ❌ Not yet fixed";
+      if(note != null && note != "null" && note != "")
+      {
+        fixLine = fixLine + " — " + note;
+      }
+      message = message + fixLine + "\n";
+    }
+  }
+
+  message = message + "\n";
+}
+
+// Post to channel
+zoho.cliq.postToChannel(CHANNEL_NAME, {"text": message});
+return {"text": "Report posted to #" + CHANNEL_NAME};

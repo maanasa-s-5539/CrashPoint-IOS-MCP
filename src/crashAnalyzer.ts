@@ -20,6 +20,7 @@ export interface CrashGroup {
   sources: Record<string, number>;
   affected_files: string[];
   signature: string;
+  fix_status?: { fixed: boolean; note?: string; date?: string };
 }
 
 export interface CrashReport {
@@ -28,6 +29,7 @@ export interface CrashReport {
   total_crashes: number;
   unique_crash_types: number;
   crash_groups: CrashGroup[];
+  report_type?: string;
 }
 
 export interface CrashMetadata {
@@ -205,7 +207,14 @@ export function analyzeDirectory(
 
   const sortedGroups = Array.from(groups.values())
     .sort((a, b) => b.count - a.count)
-    .map((g, idx) => ({ ...g, rank: idx + 1 }));
+    .map((g, idx) => {
+      const fs = fixStatuses?.[g.signature];
+      return {
+        ...g,
+        rank: idx + 1,
+        fix_status: fs ? { fixed: fs.fixed, note: fs.note } : undefined,
+      };
+    });
 
   return {
     report_date: new Date().toISOString().slice(0, 10),
