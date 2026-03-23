@@ -49,8 +49,12 @@ function formatCrashGroup(group: CrashGroup, index: number): string {
 }
 
 export function formatCrashReportText(report: CrashReport): string {
+  const isUnfixedOnly = report.report_type === "unfixed-only";
+  const headerLine = isUnfixedOnly
+    ? `⚠️ *Unfixed iOS Crashes — ${report.report_date}*`
+    : `🚨 *iOS Crash Report — ${report.report_date}*`;
   const header = [
-    `🚨 *iOS Crash Report — ${report.report_date}*`,
+    headerLine,
     `Total crashes: ${report.total_crashes} | Unique types: ${report.unique_crash_types}`,
     `Source: ${report.source_dir}`,
     "",

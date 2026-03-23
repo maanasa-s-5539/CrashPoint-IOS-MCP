@@ -161,6 +161,7 @@ bash scripts/setup_symlinks.sh
 | `list_fix_statuses` | Show all locally tracked fix statuses |
 | `run_full_pipeline` | Run the complete pipeline: export → symbolicate → analyze → (optionally notify) |
 | `setup_folders` | Create folder structure + optional branch symlinks + copy existing crash files |
+| `notify_unfixed_cliq` | Analyze crashes, filter to unfixed only, and send filtered report to Cliq |
 
 ### `setup_folders` Parameters
 
@@ -191,6 +192,15 @@ node dist/cli.js analyze --crash-dir /path/to/dir -o report.json
 
 # Send a saved report to Zoho Cliq
 node dist/cli.js notify --report report.json
+
+# Analyze crashes, filter to unfixed only, and send filtered report to Cliq
+node dist/cli.js notify-unfixed
+
+# Dry-run: analyze and filter but don't send to Cliq
+node dist/cli.js notify-unfixed --dry-run
+
+# Analyze unfixed crashes and save the filtered report to a file
+node dist/cli.js notify-unfixed -o unfixed_report.json
 ```
 
 If installed globally, you can also use:

@@ -29,6 +29,7 @@ export interface CrashReport {
   total_crashes: number;
   unique_crash_types: number;
   crash_groups: CrashGroup[];
+  report_type?: string;
 }
 
 export interface CrashMetadata {
