@@ -50,19 +50,20 @@ async function cmdExport(flags: Record<string, string | boolean>): Promise<void>
   console.log(JSON.stringify(result, null, 2));
 }
 
-async function cmdBatch(): Promise<void> {
+async function cmdBatch(flags: Record<string, string | boolean>): Promise<void> {
   const config = getConfig();
   const crashDir = getBasicCrashesDir(config);
   const outputDir = getSymbolicatedDir(config);
   const dsymPath = config.DSYM_PATH;
   const appPath = config.APP_PATH;
+  const allThreads = flags["all-threads"] === true;
 
   if (!dsymPath) {
     console.error("Error: DSYM_PATH env var is required for batch symbolication.");
     process.exit(1);
   }
 
-  const result = await runBatch(crashDir, dsymPath, appPath, outputDir);
+  const result = await runBatch(crashDir, dsymPath, appPath, outputDir, undefined, allThreads);
   console.log(JSON.stringify(result, null, 2));
 }
 
@@ -311,6 +312,7 @@ async function cmdPipeline(flags: Record<string, string | boolean>): Promise<voi
   const dsymPath = config.DSYM_PATH;
   const appPath = config.APP_PATH;
   const notify = flags["notify"] === true;
+  const allThreads = flags["all-threads"] === true;
   const versions = flags["versions"]
     ? (flags["versions"] as string).split(",").map((v) => v.trim()).filter(Boolean)
     : (config.CRASH_VERSIONS?.split(",").map((v) => v.trim()).filter(Boolean) ?? []);
@@ -325,7 +327,7 @@ async function cmdPipeline(flags: Record<string, string | boolean>): Promise<voi
   // Step 2: symbolicate
   let symbolicationResult: unknown = null;
   if (dsymPath) {
-    symbolicationResult = await runBatch(basicDir, dsymPath, appPath, symbolicatedDir);
+    symbolicationResult = await runBatch(basicDir, dsymPath, appPath, symbolicatedDir, undefined, allThreads);
     console.log("Symbolication:", JSON.stringify(symbolicationResult));
   } else {
     console.log("Symbolication: skipped (DSYM_PATH not set)");
@@ -387,6 +389,7 @@ Commands:
     --start-date <date> ISO date string to filter crashes from (e.g. 2026-03-01)
     --end-date <date>   ISO date string to filter crashes until (e.g. 2026-03-20)
   batch                 Symbolicate all crash files in BasicCrashLogsFolder
+    --all-threads       Symbolicate all threads (not just crashed thread)
   analyze               Group and deduplicate crashes into a report
     --crash-dir <dir>   Directory of crash files (default: SymbolicatedCrashLogsFolder)
     -o <output.json>    Write report JSON to file (default: stdout)
@@ -417,6 +420,7 @@ Commands:
     --recursive         Search recursively
   pipeline              Full export → symbolicate → analyze → (optionally) notify
     --notify            Send Cliq notification after analysis
+    --all-threads       Symbolicate all threads (not just crashed thread)
     --versions v1,v2    Comma-separated version filter
     --start-date <date> ISO date string to filter crashes from (e.g. 2026-03-01)
     --end-date <date>   ISO date string to filter crashes until (e.g. 2026-03-20)
@@ -439,7 +443,7 @@ Environment variables: see .env.example
         await cmdExport(flags);
         break;
       case "batch":
-        await cmdBatch();
+        await cmdBatch(flags);
         break;
       case "analyze":
         await cmdAnalyze(flags);
