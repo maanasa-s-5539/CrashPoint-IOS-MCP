@@ -81,56 +81,24 @@ export async function sendToWebhook(webhookUrl: string, report: CrashReport): Pr
   }
 }
 
-export async function sendToBotWebhook(botWebhookUrl: string, report: CrashReport): Promise<void> {
-  const text = formatCrashReportText(report);
-  const response = await fetch(botWebhookUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, ...report }),
-  });
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Bot webhook POST failed: ${response.status} ${body}`);
-  }
-}
-
 export async function sendCrashReportToCliq(
   report: CrashReport,
   config: CrashPointConfig
 ): Promise<{ success: boolean; message: string }> {
-  const botUrl = config.ZOHO_CLIQ_BOT_WEBHOOK_URL;
   const channelUrl = config.ZOHO_CLIQ_WEBHOOK_URL;
 
-  if (!botUrl && !channelUrl) {
+  if (!channelUrl) {
     return {
       success: false,
-      message: "No Zoho Cliq webhook URL configured. Set ZOHO_CLIQ_WEBHOOK_URL or ZOHO_CLIQ_BOT_WEBHOOK_URL.",
+      message: "No Zoho Cliq webhook URL configured. Set ZOHO_CLIQ_WEBHOOK_URL.",
     };
   }
 
-  // Try bot URL first
-  if (botUrl) {
-    try {
-      await sendToBotWebhook(botUrl, report);
-      return { success: true, message: "Report sent to Cliq bot webhook." };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (!channelUrl) {
-        return { success: false, message: `Bot webhook failed: ${msg}` };
-      }
-      // Fall through to channel webhook
-    }
+  try {
+    await sendToWebhook(channelUrl, report);
+    return { success: true, message: "Report sent to Cliq channel webhook." };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false, message: `Channel webhook failed: ${msg}` };
   }
-
-  if (channelUrl) {
-    try {
-      await sendToWebhook(channelUrl, report);
-      return { success: true, message: "Report sent to Cliq channel webhook." };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return { success: false, message: `Channel webhook failed: ${msg}` };
-    }
-  }
-
-  return { success: false, message: "Unexpected error sending to Cliq." };
 }

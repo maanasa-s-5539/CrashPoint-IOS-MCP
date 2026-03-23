@@ -9,7 +9,7 @@
 # launchd example: see README.md for a sample plist.
 #
 # Required env vars (set in .env or pass directly):
-#   CRASH_ANALYSIS_PARENT, DSYM_PATH, APP_PATH, ZOHO_CLIQ_BOT_WEBHOOK_URL
+#   CRASH_ANALYSIS_PARENT, DSYM_PATH, APP_PATH, ZOHO_CLIQ_WEBHOOK_URL
 
 set -euo pipefail
 
@@ -45,7 +45,7 @@ echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] Analyzing crashes..."
 node "$PROJECT_DIR/dist/cli.js" analyze -o "$REPORT_FILE"
 
 # Step 4: Notify Cliq
-if [[ -n "${ZOHO_CLIQ_BOT_WEBHOOK_URL:-}" ]] || [[ -n "${ZOHO_CLIQ_WEBHOOK_URL:-}" ]]; then
+if [[ -n "${ZOHO_CLIQ_WEBHOOK_URL:-}" ]]; then
   echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] Sending Cliq notification..."
   node "$PROJECT_DIR/dist/cli.js" notify --report "$REPORT_FILE"
 else
@@ -53,7 +53,7 @@ else
 fi
 
 # Step 4b: Send unfixed-only report to Cliq
-if [[ -n "${ZOHO_CLIQ_BOT_WEBHOOK_URL:-}" ]] || [[ -n "${ZOHO_CLIQ_WEBHOOK_URL:-}" ]]; then
+if [[ -n "${ZOHO_CLIQ_WEBHOOK_URL:-}" ]]; then
   echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] Sending unfixed crashes report to Zoho Cliq..."
   node "$PROJECT_DIR/dist/cli.js" notify-unfixed
 else
