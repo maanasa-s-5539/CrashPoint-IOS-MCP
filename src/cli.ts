@@ -200,9 +200,10 @@ async function cmdSetup(flags: Record<string, string | boolean>): Promise<void> 
   const symlinks: Array<{ link: string; target: string; status: string }> = [];
   for (const { name, target } of symlinkDefs) {
     if (!target) continue;
+    const resolvedTarget = path.resolve(target);
     const linkPath = path.join(parentDir, name);
-    if (!fs.existsSync(target)) {
-      warnings.push(`Target for ${name} does not exist: ${target}`);
+    if (!fs.existsSync(resolvedTarget)) {
+      warnings.push(`Target for ${name} does not exist: ${resolvedTarget}`);
     }
     try {
       fs.lstatSync(linkPath);
@@ -210,13 +211,28 @@ async function cmdSetup(flags: Record<string, string | boolean>): Promise<void> 
     } catch {
       // Path doesn't exist — nothing to remove
     }
+    let symlinkType: "dir" | "file" = "file";
+    if (fs.existsSync(resolvedTarget)) {
+      symlinkType = fs.statSync(resolvedTarget).isDirectory() ? "dir" : "file";
+    } else {
+      // Target doesn't exist yet — infer type from path extension
+      const lowerTarget = resolvedTarget.toLowerCase();
+      if (
+        lowerTarget.endsWith(".dsym") ||
+        lowerTarget.endsWith(".app") ||
+        lowerTarget.endsWith(".framework") ||
+        !path.extname(resolvedTarget)
+      ) {
+        symlinkType = "dir";
+      }
+    }
     try {
-      fs.symlinkSync(target, linkPath);
-      symlinks.push({ link: linkPath, target, status: "created" });
+      fs.symlinkSync(resolvedTarget, linkPath, symlinkType);
+      symlinks.push({ link: linkPath, target: resolvedTarget, status: "created" });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       warnings.push(`Could not create symlink ${name}: ${msg}`);
-      symlinks.push({ link: linkPath, target, status: `failed: ${msg}` });
+      symlinks.push({ link: linkPath, target: resolvedTarget, status: `failed: ${msg}` });
     }
   }
 

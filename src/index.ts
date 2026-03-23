@@ -575,11 +575,12 @@ server.registerTool(
 
     for (const { name, target } of symlinkDefs) {
       if (!target) continue;
+      const resolvedTarget = path.resolve(target);
       const linkPath = path.join(parentDir, name);
       let status: string;
 
-      if (!fs.existsSync(target)) {
-        warnings.push(`Target for ${name} does not exist: ${target}`);
+      if (!fs.existsSync(resolvedTarget)) {
+        warnings.push(`Target for ${name} does not exist: ${resolvedTarget}`);
       }
 
       try {
@@ -590,8 +591,24 @@ server.registerTool(
         // Path doesn't exist — nothing to remove
       }
 
+      let symlinkType: "dir" | "file" = "file";
+      if (fs.existsSync(resolvedTarget)) {
+        symlinkType = fs.statSync(resolvedTarget).isDirectory() ? "dir" : "file";
+      } else {
+        // Target doesn't exist yet — infer type from path extension
+        const lowerTarget = resolvedTarget.toLowerCase();
+        if (
+          lowerTarget.endsWith(".dsym") ||
+          lowerTarget.endsWith(".app") ||
+          lowerTarget.endsWith(".framework") ||
+          !path.extname(resolvedTarget)
+        ) {
+          symlinkType = "dir";
+        }
+      }
+
       try {
-        fs.symlinkSync(target, linkPath);
+        fs.symlinkSync(resolvedTarget, linkPath, symlinkType);
         status = "created";
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -599,7 +616,7 @@ server.registerTool(
         warnings.push(`Could not create symlink ${name}: ${msg}`);
       }
 
-      symlinks.push({ link: linkPath, target, status });
+      symlinks.push({ link: linkPath, target: resolvedTarget, status });
     }
 
     // Copy crash files from existingCrashLogsDir if provided
