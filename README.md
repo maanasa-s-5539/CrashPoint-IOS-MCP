@@ -106,8 +106,8 @@ Create or update `.cursor/mcp.json` in your project:
 | Variable | Required | Description |
 |---|---|---|
 | `CRASH_ANALYSIS_PARENT` | **Yes** | Path to your ParentHolderFolder |
-| `DSYM_PATH` | Recommended | Path to `MyApp.dSYM` bundle — required for symbolication |
-| `APP_PATH` | Recommended | Path to `MyApp.app` bundle |
+| `DSYM_PATH` | Recommended | Path to `MyApp.dSYM` bundle — symlinked as `dSYM_File`; required for symbolication |
+| `APP_PATH` | Recommended | Path to `MyApp.app` bundle — symlinked as `app_File` |
 | `APP_NAME` | Optional | App binary name (e.g. `MyApp`) — used to filter frames in reports |
 | `CRASH_INPUT_DIR` | Optional | Override directory searched for `.xccrashpoint` files |
 | `CRASH_VERSIONS` | Optional | Comma-separated version filter for exports |
@@ -126,19 +126,37 @@ CrashPoint iOS MCP uses a `ParentHolderFolder` to organize crash data:
 ParentHolderFolder/                   ← CRASH_ANALYSIS_PARENT
 ├── BasicCrashLogsFolder/             ← Exported raw .crash files
 ├── SymbolicatedCrashLogsFolder/      ← Symbolicated .crash files
-├── CurrentMasterLiveBranch -> ...    ← Symlink to master branch (optional)
-├── CurrentDevelopmentBranch -> ...   ← Symlink to dev branch (optional)
+├── CurrentMasterLiveBranch -> ...    ← Symlink to master branch (MASTER_BRANCH_PATH)
+├── CurrentDevelopmentBranch -> ...   ← Symlink to dev branch (DEV_BRANCH_PATH)
+├── dSYM_File -> ...                  ← Symlink to .dSYM bundle (DSYM_PATH)
+├── app_File -> ...                   ← Symlink to .app bundle (APP_PATH)
 └── fix_status.json                   ← Local fix tracking database
 ```
 
-Run `setup_folders` (MCP tool) or `scripts/setup_symlinks.sh` to create this structure.
+Run `setup_folders` (MCP tool), `node dist/cli.js setup`, or `scripts/setup_symlinks.sh` to create this structure.
 
-### Standalone Symlink Setup
+### Standalone Setup (CLI)
+
+The quickest way to set up the full folder structure from the terminal:
+
+```bash
+node dist/cli.js setup \
+  --parent /path/to/ParentHolderFolder \
+  --master /path/to/app-ios-master \
+  --dev /path/to/app-ios-dev \
+  --dsym /path/to/MyApp.dSYM \
+  --app /path/to/MyApp.app \
+  --crash-logs /path/to/existing/crash/logs
+```
+
+Or using env vars with the shell script:
 
 ```bash
 CRASH_ANALYSIS_PARENT=/path/to/ParentHolderFolder \
 MASTER_BRANCH_PATH=/path/to/app-ios-master \
 DEV_BRANCH_PATH=/path/to/app-ios-dev \
+DSYM_PATH=/path/to/MyApp.dSYM \
+APP_PATH=/path/to/MyApp.app \
 bash scripts/setup_symlinks.sh
 ```
 
@@ -169,27 +187,51 @@ bash scripts/setup_symlinks.sh
 |---|---|
 | `masterBranchPath` | Path to master branch checkout → creates `CurrentMasterLiveBranch` symlink |
 | `devBranchPath` | Path to dev branch checkout → creates `CurrentDevelopmentBranch` symlink |
+| `dsymPath` | Path to `.dSYM` bundle → creates `dSYM_File` symlink (falls back to `DSYM_PATH` env var) |
+| `appPath` | Path to `.app` bundle → creates `app_File` symlink (falls back to `APP_PATH` env var) |
 | `existingCrashLogsDir` | Copy `.crash` and `.ips` files from this directory into `BasicCrashLogsFolder` |
 
 ---
 
 ## Standalone CLI
 
-The CLI lets you run the crash analysis pipeline without an MCP client (useful for scheduled runs):
+All tool capabilities (except AI analysis to verify fixes in `CurrentDevelopmentBranch`) work as standalone CLI commands — no Claude or Cursor required.
 
 ```bash
-# Export crash logs from Xcode Organizer
+# ── Setup ─────────────────────────────────────────────────────────────────────
+# Create full folder structure with all symlinks
+node dist/cli.js setup --parent /path/to/ParentHolderFolder \
+  --master /path/to/master --dev /path/to/dev \
+  --dsym /path/to/MyApp.dSYM --app /path/to/MyApp.app \
+  --crash-logs /path/to/existing/crash/logs
+
+# ── Export ────────────────────────────────────────────────────────────────────
+# Export crash logs from Xcode Organizer .xccrashpoint packages
 node dist/cli.js export
 
+# List available app versions in .xccrashpoint files
+node dist/cli.js list-versions
+node dist/cli.js list-versions --input-dir /path/to/DiagnosticReports
+
+# ── Symbolication ─────────────────────────────────────────────────────────────
 # Symbolicate all crash files in BasicCrashLogsFolder
 node dist/cli.js batch
 
+# Symbolicate a single crash file
+node dist/cli.js symbolicate-one --crash /path/to/crash.crash
+node dist/cli.js symbolicate-one --crash /path/to/crash.crash --all-threads
+
+# Diagnose symbolication quality for a crash file
+node dist/cli.js diagnose --crash /path/to/crash.crash
+
+# ── Analysis ──────────────────────────────────────────────────────────────────
 # Analyze crashes and print JSON report
 node dist/cli.js analyze
 
 # Analyze and save to file
 node dist/cli.js analyze --crash-dir /path/to/dir -o report.json
 
+# ── Notifications ─────────────────────────────────────────────────────────────
 # Send a saved report to Zoho Cliq
 node dist/cli.js notify --report report.json
 
@@ -201,6 +243,25 @@ node dist/cli.js notify-unfixed --dry-run
 
 # Analyze unfixed crashes and save the filtered report to a file
 node dist/cli.js notify-unfixed -o unfixed_report.json
+
+# ── Full Pipeline ─────────────────────────────────────────────────────────────
+# Run export → symbolicate → analyze (and optionally notify)
+node dist/cli.js pipeline
+node dist/cli.js pipeline --notify
+node dist/cli.js pipeline --notify --versions 2.1.0,2.2.0
+
+# ── Fix Tracking ──────────────────────────────────────────────────────────────
+# Mark a crash signature as fixed in development
+node dist/cli.js set-fix "MyClass.methodName()" --note "Fixed in PR #42"
+
+# Mark a crash signature as unfixed
+node dist/cli.js unset-fix "MyClass.methodName()"
+
+# List all fix statuses
+node dist/cli.js list-fixes
+
+# Remove fix tracking for a signature
+node dist/cli.js remove-fix "MyClass.methodName()"
 ```
 
 If installed globally, you can also use:

@@ -465,10 +465,12 @@ server.registerTool(
   "setup_folders",
   {
     description:
-      "Create the ParentHolderFolder directory structure (BasicCrashLogsFolder, SymbolicatedCrashLogsFolder) and optional symlinks for master/dev branches.",
+      "Create the ParentHolderFolder directory structure (BasicCrashLogsFolder, SymbolicatedCrashLogsFolder) and optional symlinks for master/dev branches, dSYM, and .app bundle.",
     inputSchema: z.object({
       masterBranchPath: z.string().optional().describe("Path to current master/live branch checkout (creates CurrentMasterLiveBranch symlink)"),
       devBranchPath: z.string().optional().describe("Path to current development branch checkout (creates CurrentDevelopmentBranch symlink)"),
+      dsymPath: z.string().optional().describe("Path to the .dSYM bundle (creates dSYM_File symlink; defaults to DSYM_PATH env var)"),
+      appPath: z.string().optional().describe("Path to the .app bundle (creates app_File symlink; defaults to APP_PATH env var)"),
       existingCrashLogsDir: z.string().optional().describe("If provided, copies .crash and .ips files from this directory into BasicCrashLogsFolder"),
     }),
     outputSchema: z.object({
@@ -501,6 +503,8 @@ server.registerTool(
     const symlinkDefs: Array<{ name: string; target: string | undefined }> = [
       { name: "CurrentMasterLiveBranch", target: input.masterBranchPath ?? config.MASTER_BRANCH_PATH },
       { name: "CurrentDevelopmentBranch", target: input.devBranchPath ?? config.DEV_BRANCH_PATH },
+      { name: "dSYM_File", target: input.dsymPath ?? config.DSYM_PATH },
+      { name: "app_File", target: input.appPath ?? config.APP_PATH },
     ];
 
     for (const { name, target } of symlinkDefs) {
