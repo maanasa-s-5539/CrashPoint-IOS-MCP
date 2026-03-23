@@ -52,7 +52,7 @@ export interface DiagnoseResult {
 }
 
 const BINARY_IMAGE_REGEX =
-  /(0x[0-9a-fA-F]+)\s*-\s*0x[0-9a-fA-F]+\s+(\S+)\s+(\S+)\s+<([0-9a-fA-F-]+)>\s*(.*)/;
+  /^\s*\+?\s*(0x[0-9a-fA-F]+)\s*-\s*(0x[0-9a-fA-F]+)\s+\+?(\S+)\s+(\S+)\s+<([0-9a-fA-F-]+)>\s*(.*)/;
 const FRAME_REGEX = /^\s*(\d+)\s+(\S+)\s+(0x[0-9a-fA-F]+)/;
 const CRASHED_THREAD_REGEX = /^Thread\s+(\d+)\s+Crashed/;
 
@@ -65,16 +65,19 @@ function parseBinaryImages(lines: string[]): Map<string, BinaryImage> {
       continue;
     }
     if (!inSection) continue;
+    if (line.trim() === "" && images.size > 0) break;
     const match = BINARY_IMAGE_REGEX.exec(line);
     if (match) {
+      // Groups: 1=loadAddr, 2=endAddr, 3=name, 4=arch, 5=uuid, 6=filePath
+      const name = match[3].replace(/^\+/, "");
       const img: BinaryImage = {
         loadAddress: match[1],
-        name: match[2],
-        arch: match[3],
-        uuid: match[4],
-        filePath: match[5].trim(),
+        name,
+        arch: match[4],
+        uuid: match[5],
+        filePath: match[6].trim(),
       };
-      images.set(img.name, img);
+      images.set(name, img);
     }
   }
   return images;
@@ -208,6 +211,21 @@ export async function symbolicateOne(
     // Try to find by dsym name
     const dsymBaseName = path.basename(dsymPath, ".dSYM");
     appImage = binaryImages.get(dsymBaseName);
+  }
+
+  if (!appImage && (appBinaryName || dsymPath)) {
+    // Fallback: case-insensitive or file-path-based match
+    const needle = (appBinaryName ?? path.basename(dsymPath, ".dSYM")).toLowerCase();
+    for (const [, image] of binaryImages) {
+      if (image.name.toLowerCase() === needle) {
+        appImage = image;
+        break;
+      }
+      if (image.filePath.toLowerCase().includes(needle)) {
+        appImage = image;
+        break;
+      }
+    }
   }
 
   if (!appImage) {
