@@ -14,6 +14,18 @@ const envSchema = z.object({
   ZOHO_CLIQ_WEBHOOK_URL: z.string().url().optional().describe("Cliq channel webhook URL"),
   MASTER_BRANCH_PATH: z.string().optional().describe("Path to current master/live branch checkout"),
   DEV_BRANCH_PATH: z.string().optional().describe("Path to current development branch checkout"),
+
+  // Zoho Projects MCP (for CLI + MCP tool)
+  ZOHO_PROJECTS_MCP_URL: z.string().url().optional().describe("Zoho Projects MCP server URL from mcp.zoho.com"),
+  ZOHO_PROJECTS_PORTAL_ID: z.string().optional().describe("Zoho Projects Portal ID"),
+  ZOHO_PROJECTS_PROJECT_ID: z.string().optional().describe("Zoho Projects Project ID"),
+
+  // Zoho Bug Field Value IDs (unique per portal/project)
+  ZOHO_BUG_STATUS_OPEN: z.string().optional().describe("Zoho bug status ID for 'Open'"),
+  ZOHO_BUG_STATUS_FIXED: z.string().optional().describe("Zoho bug status ID for 'Fixed'"),
+  ZOHO_BUG_SEVERITY_CRITICAL: z.string().optional().describe("Zoho bug severity ID for 'Critical'"),
+  ZOHO_BUG_SEVERITY_MAJOR: z.string().optional().describe("Zoho bug severity ID for 'Major'"),
+  ZOHO_BUG_SEVERITY_MINOR: z.string().optional().describe("Zoho bug severity ID for 'Minor'"),
 });
 
 export type CrashPointConfig = z.infer<typeof envSchema>;

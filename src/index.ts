@@ -20,6 +20,7 @@ import { analyzeDirectory } from "./crashAnalyzer.js";
 import { sendCrashReportToCliq } from "./cliqNotifier.js";
 import { FixTracker } from "./fixTracker.js";
 import { assertPathUnderBase, assertNoTraversal, assertSafeSymlinkTarget } from "./pathSafety.js";
+import { reportToZohoProjectsViaMcp, getFieldIdsFromConfig } from "./zohoProjectsMcpBridge.js";
 
 const server = new McpServer({
   name: "crashpoint-ios-mcp",
@@ -760,6 +761,93 @@ server.registerTool(
       reportSent: cliqResult.success,
       unfixedReport,
     };
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      structuredContent: result,
+    };
+  }
+);
+
+// ── Tool 15: report_to_zoho_projects ────────────────────────────────────────
+server.registerTool(
+  "report_to_zoho_projects",
+  {
+    description:
+      "Analyze symbolicated crashes, then create a bug in Zoho Projects for each unique crash group via the configured Zoho Projects MCP server. Each bug includes status (mapped from local fix tracking) and severity (auto-mapped from exception type and count). Requires ZOHO_PROJECTS_MCP_URL, ZOHO_PROJECTS_PORTAL_ID, ZOHO_PROJECTS_PROJECT_ID, and bug field IDs in env.",
+    inputSchema: z.object({
+      crashDir: z.string().optional().describe("Directory of symbolicated crash files (default: SymbolicatedCrashLogsFolder)"),
+      unfixedOnly: z.boolean().optional().describe("Only report unfixed crashes (default: false)"),
+    }),
+    outputSchema: z.object({
+      success: z.boolean(),
+      message: z.string(),
+      totalBugsCreated: z.number(),
+      totalFailed: z.number(),
+      bugs: z.array(z.object({
+        success: z.boolean(),
+        title: z.string(),
+        severityLabel: z.string(),
+        statusLabel: z.string(),
+        error: z.string().optional(),
+      })),
+      missingFieldIds: z.array(z.string()),
+    }),
+  },
+  async (input) => {
+    const config = getConfig();
+    const crashDir = input.crashDir ?? getSymbolicatedDir(config);
+
+    const zohoMcpUrl = config.ZOHO_PROJECTS_MCP_URL;
+    const portalId = config.ZOHO_PROJECTS_PORTAL_ID;
+    const projectId = config.ZOHO_PROJECTS_PROJECT_ID;
+
+    if (!zohoMcpUrl || !portalId || !projectId) {
+      const missing: string[] = [];
+      if (!zohoMcpUrl) missing.push("ZOHO_PROJECTS_MCP_URL");
+      if (!portalId) missing.push("ZOHO_PROJECTS_PORTAL_ID");
+      if (!projectId) missing.push("ZOHO_PROJECTS_PROJECT_ID");
+      const result = {
+        success: false,
+        message: `Missing required config: ${missing.join(", ")}. Set these in your .env or Claude Desktop config.`,
+        totalBugsCreated: 0,
+        totalFailed: 0,
+        bugs: [],
+        missingFieldIds: missing,
+      };
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
+    }
+
+    // Load fix statuses
+    const tracker = new FixTracker(config.CRASH_ANALYSIS_PARENT);
+    const fixStatuses: Record<string, { fixed: boolean; note?: string }> = {};
+    for (const entry of tracker.getAll()) {
+      fixStatuses[entry.signature] = { fixed: entry.fixed, note: entry.note };
+    }
+
+    const fullReport = analyzeDirectory(crashDir, fixStatuses);
+
+    const report = input.unfixedOnly
+      ? {
+          ...fullReport,
+          crash_groups: fullReport.crash_groups.filter(
+            (g) => !g.fix_status || g.fix_status.fixed === false
+          ),
+          unique_crash_types: 0,
+          total_crashes: 0,
+        }
+      : fullReport;
+
+    if (input.unfixedOnly) {
+      report.unique_crash_types = report.crash_groups.length;
+      report.total_crashes = report.crash_groups.reduce((sum, g) => sum + g.count, 0);
+    }
+
+    const fieldIds = getFieldIdsFromConfig(config);
+    const result = await reportToZohoProjectsViaMcp(report, zohoMcpUrl, portalId, projectId, fieldIds);
+
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
       structuredContent: result,

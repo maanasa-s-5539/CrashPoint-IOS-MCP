@@ -165,6 +165,7 @@ bash scripts/setup_symlinks.sh
 | `run_full_pipeline` | Run the complete pipeline: export → symbolicate → analyze → (optionally notify) |
 | `setup_folders` | Create folder structure + optional branch symlinks + copy existing crash files |
 | `notify_unfixed_cliq` | Analyze crashes, filter to unfixed only, and send filtered report to Cliq |
+| `report_to_zoho_projects` | Analyze crashes and create a Zoho Projects bug for each unique crash group (status + severity auto-mapped) |
 
 ### `setup_folders` Parameters
 
@@ -233,6 +234,15 @@ node dist/cli.js list-fixes
 
 # Remove fix tracking
 node dist/cli.js remove-fix "EXC_BAD_ACCESS SIGSEGV"
+
+# Create Zoho Projects bugs for all crash groups
+node dist/cli.js report-zoho
+
+# Create bugs for unfixed crashes only
+node dist/cli.js report-zoho --unfixed-only
+
+# Override portal/project IDs
+node dist/cli.js report-zoho --portal-id 123 --project-id 456
 ```
 
 If installed globally, you can also use:
@@ -256,6 +266,153 @@ The API endpoint format is:
 `https://cliq.zoho.in/company/{org_id}/api/v2/channelsbyname/{channel_name}/message`
 
 The MCP server posts `{ "text": formattedReport }` directly to this URL — no bot or Deluge script required.
+
+---
+
+## Zoho Projects Integration
+
+CrashPoint can automatically create a Zoho Projects bug for each unique crash group, with **severity** (mapped from exception type and occurrence count) and **status** (mapped from your local fix tracking).
+
+### Architecture
+
+Two MCP servers run side-by-side in Claude Desktop / Cursor:
+- **CrashPoint MCP** — analyzes crashes and calls `report_to_zoho_projects`
+- **Zoho Projects MCP** (from mcp.zoho.com) — receives the `create_bug` tool calls
+
+The CLI `report-zoho` command connects directly to the Zoho Projects MCP server via SSE as an MCP client, so the full pipeline can run in a scheduled job without Claude.
+
+### Setup
+
+#### 1. Get your Zoho Projects MCP URL
+
+You need a Zoho account with access to Zoho Projects.
+
+1. Go to [mcp.zoho.com](https://mcp.zoho.com) (sign in with your Zoho account)
+2. Add Zoho Projects tools and copy the MCP Server URL
+3. Set `ZOHO_PROJECTS_MCP_URL` in your `.env`
+
+#### 2. Find your Portal & Project IDs
+
+Ask Claude (with the Zoho Projects MCP configured):
+> "List my Zoho Projects portals"
+> "List projects in portal 123456"
+
+Or find them in the Zoho Projects URL: `https://projects.zoho.com/portal/{portal_name}/projects/{project_id}`
+
+Set `ZOHO_PROJECTS_PORTAL_ID` and `ZOHO_PROJECTS_PROJECT_ID` in your `.env`.
+
+#### 3. Find Bug Field Value IDs
+
+Status and severity in Zoho use numeric IDs that are unique to your portal/project. Ask Claude:
+> "Using Zoho Projects, list all bug fields and their allowed values for my project"
+
+Copy the IDs for **Open**, **Fixed**, **Critical**, **Major**, **Minor** into your `.env`:
+
+```dotenv
+ZOHO_BUG_STATUS_OPEN=1139168000000007045
+ZOHO_BUG_STATUS_FIXED=1139168000000007051
+ZOHO_BUG_SEVERITY_CRITICAL=1139168000000007061
+ZOHO_BUG_SEVERITY_MAJOR=1139168000000007063
+ZOHO_BUG_SEVERITY_MINOR=1139168000000007065
+```
+
+> **Note:** If you don't set these IDs, bugs will still be created — just without status/severity fields.
+
+### Configuration
+
+Add to your `.env`:
+
+```dotenv
+ZOHO_PROJECTS_MCP_URL=https://mcp.zoho.com/...
+ZOHO_PROJECTS_PORTAL_ID=your-portal-id
+ZOHO_PROJECTS_PROJECT_ID=your-project-id
+ZOHO_BUG_STATUS_OPEN=
+ZOHO_BUG_STATUS_FIXED=
+ZOHO_BUG_SEVERITY_CRITICAL=
+ZOHO_BUG_SEVERITY_MAJOR=
+ZOHO_BUG_SEVERITY_MINOR=
+```
+
+| Variable | Description |
+|---|---|
+| `ZOHO_PROJECTS_MCP_URL` | Zoho Projects MCP server URL from mcp.zoho.com |
+| `ZOHO_PROJECTS_PORTAL_ID` | Your Zoho Projects portal ID |
+| `ZOHO_PROJECTS_PROJECT_ID` | Your Zoho Projects project ID |
+| `ZOHO_BUG_STATUS_OPEN` | Zoho bug status field value ID for "Open" |
+| `ZOHO_BUG_STATUS_FIXED` | Zoho bug status field value ID for "Fixed" |
+| `ZOHO_BUG_SEVERITY_CRITICAL` | Zoho bug severity field value ID for "Critical" |
+| `ZOHO_BUG_SEVERITY_MAJOR` | Zoho bug severity field value ID for "Major" |
+| `ZOHO_BUG_SEVERITY_MINOR` | Zoho bug severity field value ID for "Minor" |
+
+### Claude Desktop Config Example
+
+```json
+{
+  "mcpServers": {
+    "crashpoint-ios": {
+      "command": "npx",
+      "args": ["github:maanasa-s-5539/CrashPoint-IOS-MCP"],
+      "env": {
+        "CRASH_ANALYSIS_PARENT": "/path/to/ParentHolderFolder",
+        "DSYM_PATH": "/path/to/MyApp.dSYM",
+        "APP_PATH": "/path/to/MyApp.app",
+        "ZOHO_PROJECTS_MCP_URL": "https://mcp.zoho.com/...",
+        "ZOHO_PROJECTS_PORTAL_ID": "your-portal-id",
+        "ZOHO_PROJECTS_PROJECT_ID": "your-project-id",
+        "ZOHO_BUG_STATUS_OPEN": "1139168000000007045",
+        "ZOHO_BUG_STATUS_FIXED": "1139168000000007051",
+        "ZOHO_BUG_SEVERITY_CRITICAL": "1139168000000007061",
+        "ZOHO_BUG_SEVERITY_MAJOR": "1139168000000007063",
+        "ZOHO_BUG_SEVERITY_MINOR": "1139168000000007065"
+      }
+    }
+  }
+}
+```
+
+### CLI Usage
+
+```bash
+# Create bugs for all crash groups
+node dist/cli.js report-zoho
+
+# Create bugs for unfixed crashes only
+node dist/cli.js report-zoho --unfixed-only
+
+# Override portal/project IDs
+node dist/cli.js report-zoho --portal-id 123 --project-id 456
+
+# Use a specific crash directory
+node dist/cli.js report-zoho --crash-dir /path/to/symbolicated --unfixed-only
+```
+
+### MCP Tool Usage
+
+The `report_to_zoho_projects` tool lets Claude/Cursor create Zoho bugs natively — no separate Zoho MCP orchestration needed for this flow:
+
+> "Create Zoho Projects bugs for all my unfixed crashes"
+
+> "Report my crash analysis to Zoho Projects"
+
+### Severity Mapping
+
+| Exception Type | Severity |
+|---|---|
+| `EXC_BAD_ACCESS`, `SIGSEGV`, `SIGBUS` | Critical |
+| `SIGABRT`, `EXC_CRASH` with ≥10 occurrences | Critical |
+| `SIGABRT`, `EXC_CRASH` with <10 occurrences | Major |
+| `EXC_BREAKPOINT`, `SIGTRAP` | Major |
+| `EXC_RESOURCE` | Minor |
+| Other with ≥20 occurrences | Critical |
+| Other with ≥5 occurrences | Major |
+| Other with <5 occurrences | Minor |
+
+### Status Mapping
+
+| CrashPoint Fix Status | Zoho Bug Status |
+|---|---|
+| Marked as fixed (`set_fix_status`) | `ZOHO_BUG_STATUS_FIXED` ID |
+| Not fixed / not tracked | `ZOHO_BUG_STATUS_OPEN` ID |
 
 ---
 

@@ -432,6 +432,12 @@ Commands:
   unset-fix <signature> Mark crash signature as unfixed
   list-fixes            List all tracked fix statuses
   remove-fix <signature> Remove fix tracking entry
+  report-zoho           Create bugs in Zoho Projects for each unique crash via Zoho MCP
+    --zoho-mcp-url <u>  Zoho Projects MCP server URL (default: ZOHO_PROJECTS_MCP_URL from .env)
+    --portal-id <id>    Zoho Projects Portal ID (default: ZOHO_PROJECTS_PORTAL_ID from .env)
+    --project-id <id>   Zoho Projects Project ID (default: ZOHO_PROJECTS_PROJECT_ID from .env)
+    --crash-dir <dir>   Directory of symbolicated crash files (default: SymbolicatedCrashLogsFolder)
+    --unfixed-only      Only create bugs for unfixed crashes
 
 Environment variables: see .env.example
 `);
@@ -500,6 +506,70 @@ Environment variables: see .env.example
           process.exit(1);
         }
         cmdRemoveFix(signature);
+        break;
+      }
+      case "report-zoho": {
+        const config = getConfig();
+
+        const zohoMcpUrl = (flags["zoho-mcp-url"] as string) ?? config.ZOHO_PROJECTS_MCP_URL;
+        if (!zohoMcpUrl) {
+          console.error("Error: Zoho Projects MCP URL is required.");
+          console.error("  Set ZOHO_PROJECTS_MCP_URL in .env, or pass --zoho-mcp-url <url>");
+          process.exit(1);
+        }
+
+        const portalId = (flags["portal-id"] as string) ?? config.ZOHO_PROJECTS_PORTAL_ID;
+        if (!portalId) {
+          console.error("Error: Zoho Projects Portal ID is required.");
+          console.error("  Set ZOHO_PROJECTS_PORTAL_ID in .env, or pass --portal-id <id>");
+          process.exit(1);
+        }
+
+        const projectId = (flags["project-id"] as string) ?? config.ZOHO_PROJECTS_PROJECT_ID;
+        if (!projectId) {
+          console.error("Error: Zoho Projects Project ID is required.");
+          console.error("  Set ZOHO_PROJECTS_PROJECT_ID in .env, or pass --project-id <id>");
+          process.exit(1);
+        }
+
+        const crashDir = (flags["crash-dir"] as string) ?? getSymbolicatedDir(config);
+        const unfixedOnly = flags["unfixed-only"] === true;
+
+        const tracker = new FixTracker(config.CRASH_ANALYSIS_PARENT);
+        const fixStatuses: Record<string, { fixed: boolean; note?: string }> = {};
+        for (const entry of tracker.getAll()) {
+          fixStatuses[entry.signature] = { fixed: entry.fixed, note: entry.note };
+        }
+
+        const report = analyzeDirectory(crashDir, fixStatuses);
+
+        if (unfixedOnly) {
+          report.crash_groups = report.crash_groups.filter(
+            (g) => !g.fix_status || g.fix_status.fixed === false
+          );
+          report.unique_crash_types = report.crash_groups.length;
+          report.total_crashes = report.crash_groups.reduce((sum, g) => sum + g.count, 0);
+        }
+
+        const { reportToZohoProjectsViaMcp, getFieldIdsFromConfig } = await import("./zohoProjectsMcpBridge.js");
+        const fieldIds = getFieldIdsFromConfig(config);
+
+        console.log(`Connecting to Zoho Projects MCP: ${zohoMcpUrl}`);
+        console.log(`Target: portal ${portalId} / project ${projectId}`);
+        console.log(`Crash groups to report: ${report.crash_groups.length}${unfixedOnly ? " (unfixed only)" : ""}`);
+
+        const result = await reportToZohoProjectsViaMcp(report, zohoMcpUrl, portalId, projectId, fieldIds);
+
+        if (result.missingFieldIds.length > 0) {
+          console.warn(`\n⚠️  Missing field ID config (bugs created without these fields):`);
+          for (const m of result.missingFieldIds) {
+            console.warn(`   ${m} — not set in .env`);
+          }
+          console.warn(`   Tip: Ask Claude (with Zoho Projects MCP configured) "List all bug fields for my Zoho project" to get the IDs.\n`);
+        }
+
+        console.log(JSON.stringify(result, null, 2));
+        if (!result.success) process.exit(1);
         break;
       }
       default:
