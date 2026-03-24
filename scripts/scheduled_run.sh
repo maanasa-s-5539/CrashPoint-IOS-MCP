@@ -61,12 +61,4 @@ else
   echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] No Cliq webhook configured — skipping unfixed notification"
 fi
 
-# Step 5: Create bugs in Zoho Projects via MCP
-if [[ -n "${ZOHO_PROJECTS_MCP_URL:-}" && -n "${ZOHO_PROJECTS_PORTAL_ID:-}" && -n "${ZOHO_PROJECTS_PROJECT_ID:-}" ]]; then
-  echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] Creating bugs in Zoho Projects (unfixed only)..."
-  node "$PROJECT_DIR/dist/cli.js" report-zoho --unfixed-only
-else
-  echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] Zoho Projects MCP not configured — skipping bug creation"
-fi
-
 echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] Done. Report saved to: $REPORT_FILE"

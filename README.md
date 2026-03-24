@@ -312,21 +312,7 @@ CrashPoint can create a bug in Zoho Projects for each unique crash group. It con
 
 ### CLI Usage
 
-```bash
-# Create bugs for all unique crash groups
-node dist/cli.js report-zoho
-
-# Create bugs for unfixed crashes only
-node dist/cli.js report-zoho --unfixed-only
-
-# Override Zoho settings via CLI flags
-node dist/cli.js report-zoho \
-  --zoho-mcp-url https://mcp.zoho.com/projects/sse \
-  --portal-id 12345678 \
-  --project-id 87654321 \
-  --crash-dir /path/to/crashes \
-  --unfixed-only
-```
+> **Note:** Zoho Projects bug creation is **not available via the CLI** because the Zoho Projects MCP server requires browser-based OAuth authentication, which cannot be performed headlessly. Use the MCP tool from Claude Desktop or Cursor instead (see below).
 
 ### MCP Tool Usage (Claude / Cursor)
 
