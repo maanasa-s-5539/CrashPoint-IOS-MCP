@@ -259,6 +259,118 @@ The MCP server posts `{ "text": formattedReport }` directly to this URL — no b
 
 ---
 
+## Zoho Projects Integration
+
+CrashPoint can create a bug in Zoho Projects for each unique crash group. It connects to the **Zoho Projects MCP server** (already authenticated via your Claude Desktop / Cursor Zoho MCP connection) — no OAuth client credentials required.
+
+### Setup
+
+1. **Connect the Zoho Projects MCP** to your Claude Desktop / Cursor configuration (via mcp.zoho.com). CrashPoint will connect to it as an MCP client.
+
+2. **Find your Portal ID and Project ID** from the Zoho Projects URL:
+   `https://projects.zoho.com/portal/{portal_name}/projects/{project_id}/...`
+
+3. **Discover field value IDs** for status and severity. These are numeric IDs unique to your portal/project. You can find them via the Zoho Projects API or by inspecting network requests when creating a bug.
+
+4. **Configure `.env`** with the Zoho Projects settings:
+
+   ```dotenv
+   ZOHO_PROJECTS_MCP_URL=https://mcp.zoho.com/projects/sse
+   ZOHO_PROJECTS_PORTAL_ID=12345678
+   ZOHO_PROJECTS_PROJECT_ID=87654321
+
+   ZOHO_BUG_STATUS_OPEN=1139168000000007045
+   ZOHO_BUG_STATUS_FIXED=1139168000000007049
+   ZOHO_BUG_SEVERITY_SHOWSTOPPER=1139168000000007051
+   ZOHO_BUG_SEVERITY_CRITICAL=1139168000000007053
+   ZOHO_BUG_SEVERITY_MAJOR=1139168000000007055
+   ZOHO_BUG_SEVERITY_MINOR=1139168000000007057
+   ZOHO_BUG_SEVERITY_NONE=1139168000000007059
+   ```
+
+   If a field ID env var is left blank, bugs will be created without that field set.
+
+### Severity Mapping
+
+| Exception Type | Condition | Severity |
+|---|---|---|
+| `EXC_BAD_ACCESS` / `SIGSEGV` / `SIGBUS` | Always | **Critical** |
+| `SIGABRT` / `EXC_CRASH` | ≥10 occurrences | **Major** |
+| `SIGABRT` / `EXC_CRASH` | <10 occurrences | **Minor** |
+| `EXC_BREAKPOINT` / `SIGTRAP` | Always | **Major** |
+| Any other | ≥20 occurrences | **ShowStopper** |
+| Any other | ≥10 (and <20) occurrences | **Major** |
+| Any other | 2–9 occurrences | **Minor** |
+| Any other | 1 occurrence | **None** |
+
+### Status Mapping
+
+| Local Fix Status | Zoho Bug Status |
+|---|---|
+| `fixed: true` | Fixed (`ZOHO_BUG_STATUS_FIXED`) |
+| `fixed: false` or not set | Open (`ZOHO_BUG_STATUS_OPEN`) |
+
+### CLI Usage
+
+```bash
+# Create bugs for all unique crash groups
+node dist/cli.js report-zoho
+
+# Create bugs for unfixed crashes only
+node dist/cli.js report-zoho --unfixed-only
+
+# Override Zoho settings via CLI flags
+node dist/cli.js report-zoho \
+  --zoho-mcp-url https://mcp.zoho.com/projects/sse \
+  --portal-id 12345678 \
+  --project-id 87654321 \
+  --crash-dir /path/to/crashes \
+  --unfixed-only
+```
+
+### MCP Tool Usage (Claude / Cursor)
+
+Ask Claude (with the CrashPoint MCP connected):
+
+> "Report all unfixed crashes to Zoho Projects as bugs"
+
+> "Create Zoho Projects bugs for the top 5 crash groups"
+
+This invokes the `report_to_zoho_projects` tool (Tool 15).
+
+### Claude Desktop Configuration
+
+Add the Zoho Projects env vars to your Claude Desktop config. **Do not include OAuth credentials** — the Zoho Projects MCP server handles its own authentication separately:
+
+```json
+{
+  "mcpServers": {
+    "crashpoint-ios": {
+      "command": "npx",
+      "args": ["github:maanasa-s-5539/CrashPoint-IOS-MCP"],
+      "env": {
+        "CRASH_ANALYSIS_PARENT": "/path/to/ParentHolderFolder",
+        "DSYM_PATH": "/path/to/MyApp.dSYM",
+        "APP_PATH": "/path/to/MyApp.app",
+        "ZOHO_CLIQ_WEBHOOK_URL": "https://cliq.zoho.com/...",
+        "ZOHO_PROJECTS_MCP_URL": "https://mcp.zoho.com/projects/sse",
+        "ZOHO_PROJECTS_PORTAL_ID": "12345678",
+        "ZOHO_PROJECTS_PROJECT_ID": "87654321",
+        "ZOHO_BUG_STATUS_OPEN": "1139168000000007045",
+        "ZOHO_BUG_STATUS_FIXED": "1139168000000007049",
+        "ZOHO_BUG_SEVERITY_SHOWSTOPPER": "1139168000000007051",
+        "ZOHO_BUG_SEVERITY_CRITICAL": "1139168000000007053",
+        "ZOHO_BUG_SEVERITY_MAJOR": "1139168000000007055",
+        "ZOHO_BUG_SEVERITY_MINOR": "1139168000000007057",
+        "ZOHO_BUG_SEVERITY_NONE": "1139168000000007059"
+      }
+    }
+  }
+}
+```
+
+---
+
 ## Crash Source Tracking
 
 Each crash file is tagged with its source:

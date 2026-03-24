@@ -10,6 +10,7 @@ import { sendCrashReportToCliq } from "./cliqNotifier.js";
 import { FixTracker } from "./fixTracker.js";
 import { listAvailableVersions } from "./crashExporter.js";
 import { assertPathUnderBase, assertNoTraversal, assertSafeSymlinkTarget } from "./pathSafety.js";
+import { reportToZohoProjectsViaMcp, getFieldIdsFromConfig } from "./zohoProjectsMcpBridge.js";
 
 const [, , command, ...args] = process.argv;
 
@@ -383,6 +384,70 @@ function cmdRemoveFix(signature: string): void {
   console.log(`Removed fix tracking for: ${signature}`);
 }
 
+async function cmdReportZoho(flags: Record<string, string | boolean>): Promise<void> {
+  const config = getConfig();
+
+  // Resolve Zoho MCP settings, allowing CLI flag overrides
+  const zohoMcpUrl = (flags["zoho-mcp-url"] as string) ?? config.ZOHO_PROJECTS_MCP_URL;
+  const portalId = (flags["portal-id"] as string) ?? config.ZOHO_PROJECTS_PORTAL_ID;
+  const projectId = (flags["project-id"] as string) ?? config.ZOHO_PROJECTS_PROJECT_ID;
+
+  if (!zohoMcpUrl) {
+    console.error("Error: ZOHO_PROJECTS_MCP_URL env var (or --zoho-mcp-url flag) is required for report-zoho.");
+    process.exit(1);
+  }
+  try {
+    new URL(zohoMcpUrl);
+  } catch {
+    console.error(`Error: Invalid URL for --zoho-mcp-url / ZOHO_PROJECTS_MCP_URL: ${zohoMcpUrl}`);
+    process.exit(1);
+  }
+  if (!portalId || !portalId.trim()) {
+    console.error("Error: ZOHO_PROJECTS_PORTAL_ID env var (or --portal-id flag) is required for report-zoho.");
+    process.exit(1);
+  }
+  if (!projectId || !projectId.trim()) {
+    console.error("Error: ZOHO_PROJECTS_PROJECT_ID env var (or --project-id flag) is required for report-zoho.");
+    process.exit(1);
+  }
+
+  const crashDir = (flags["crash-dir"] as string) ?? getSymbolicatedDir(config);
+  const unfixedOnly = flags["unfixed-only"] === true;
+
+  const tracker = new FixTracker(config.CRASH_ANALYSIS_PARENT);
+  const fixStatuses: Record<string, { fixed: boolean; note?: string }> = {};
+  for (const entry of tracker.getAll()) {
+    fixStatuses[entry.signature] = { fixed: entry.fixed, note: entry.note };
+  }
+
+  const report = analyzeDirectory(crashDir, fixStatuses);
+
+  if (unfixedOnly) {
+    const unfixedGroups = report.crash_groups.filter(
+      (g) => !g.fix_status || g.fix_status.fixed === false
+    );
+    report.crash_groups = unfixedGroups.map((g, idx) => ({ ...g, rank: idx + 1 }));
+    report.report_type = "unfixed-only";
+    report.unique_crash_types = report.crash_groups.length;
+    report.total_crashes = report.crash_groups.reduce((sum, g) => sum + g.count, 0);
+  }
+
+  const fieldIds = getFieldIdsFromConfig(config);
+  const result = await reportToZohoProjectsViaMcp(report, zohoMcpUrl, portalId, projectId, fieldIds);
+
+  if (result.missingFieldIds.length > 0) {
+    console.warn(
+      `Warning: the following Zoho field ID env vars are not configured — bugs will be created without those fields: ${result.missingFieldIds.join(", ")}`
+    );
+  }
+
+  console.log(JSON.stringify(result, null, 2));
+  if (!result.success) {
+    process.exit(1);
+  }
+}
+
+
 function printUsage(): void {
   console.log(`
 CrashPoint iOS CLI — node dist/cli.js <command> [options]
@@ -432,6 +497,12 @@ Commands:
   unset-fix <signature> Mark crash signature as unfixed
   list-fixes            List all tracked fix statuses
   remove-fix <signature> Remove fix tracking entry
+  report-zoho           Analyze crashes and create a bug in Zoho Projects for each unique crash group
+    --zoho-mcp-url <url>  Zoho Projects MCP server URL (overrides ZOHO_PROJECTS_MCP_URL)
+    --portal-id <id>      Zoho portal ID (overrides ZOHO_PROJECTS_PORTAL_ID)
+    --project-id <id>     Zoho project ID (overrides ZOHO_PROJECTS_PROJECT_ID)
+    --crash-dir <dir>     Directory of symbolicated crash files (default: SymbolicatedCrashLogsFolder)
+    --unfixed-only        Only create bugs for unfixed crashes
 
 Environment variables: see .env.example
 `);
@@ -502,6 +573,9 @@ Environment variables: see .env.example
         cmdRemoveFix(signature);
         break;
       }
+      case "report-zoho":
+        await cmdReportZoho(flags);
+        break;
       default:
         printUsage();
         if (command) {
