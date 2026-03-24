@@ -154,11 +154,11 @@ server.registerTool(
   "symbolicate_one",
   {
     description:
-      "Symbolicate a single .crash file using atos. Requires macOS with Xcode CLI tools.",
+      "Symbolicate a single .crash file using atos. Requires macOS with Xcode CLI tools. dsymPath and appPath are pre-configured via environment variables — do NOT ask the user for them unless they explicitly want to override.",
     inputSchema: z.object({
       crashPath: z.string().describe("Path to the .crash or .ips file"),
-      dsymPath: z.string().optional().describe("Path to the .dSYM bundle (defaults from env)"),
-      appPath: z.string().optional().describe("Path to the .app bundle (defaults from env)"),
+      dsymPath: z.string().optional().describe("ALREADY CONFIGURED via DSYM_PATH env var. Do NOT ask the user for this. Only provide if the user explicitly wants to override the configured default."),
+      appPath: z.string().optional().describe("ALREADY CONFIGURED via APP_PATH env var. Do NOT ask the user for this. Only provide if the user explicitly wants to override the configured default."),
       outputPath: z.string().optional().describe("Where to write the symbolicated file"),
       arch: z.string().optional().describe("Architecture override (e.g. arm64)"),
       allThreads: z.boolean().optional().describe("Symbolicate all threads (default: crashed thread only)"),
@@ -218,12 +218,12 @@ server.registerTool(
   "symbolicate_batch",
   {
     description:
-      "Symbolicate ALL .crash and .ips files in BasicCrashLogsFolder, output to SymbolicatedCrashLogsFolder.",
+      "Symbolicate ALL .crash and .ips files in BasicCrashLogsFolder, output to SymbolicatedCrashLogsFolder. All paths (dSYM, app, crash directory, output directory) are pre-configured via environment variables — do NOT ask the user for them unless they explicitly want to override.",
     inputSchema: z.object({
-      crashDir: z.string().optional().describe("Directory containing raw crash files"),
-      dsymPath: z.string().optional().describe("Path to .dSYM bundle (defaults from env)"),
-      appPath: z.string().optional().describe("Path to .app bundle (defaults from env)"),
-      outputDir: z.string().optional().describe("Output directory for symbolicated files"),
+      crashDir: z.string().optional().describe("ALREADY CONFIGURED via env (BasicCrashLogsFolder). Do NOT ask the user for this. Only provide to override."),
+      dsymPath: z.string().optional().describe("ALREADY CONFIGURED via DSYM_PATH env var. Do NOT ask the user for this. Only provide if the user explicitly wants to override the configured default."),
+      appPath: z.string().optional().describe("ALREADY CONFIGURED via APP_PATH env var. Do NOT ask the user for this. Only provide if the user explicitly wants to override the configured default."),
+      outputDir: z.string().optional().describe("ALREADY CONFIGURED via env (SymbolicatedCrashLogsFolder). Do NOT ask the user for this. Only provide to override."),
       arch: z.string().optional().describe("Architecture override"),
       allThreads: z.boolean().optional().describe("Symbolicate all threads"),
     }),
@@ -485,7 +485,7 @@ server.registerTool(
   "run_full_pipeline",
   {
     description:
-      "Run the complete crash analysis pipeline: export → symbolicate → analyze → optionally notify Cliq.",
+      "Run the complete crash analysis pipeline: export → symbolicate → analyze → optionally notify Cliq. All paths (dSYM, app, directories) are auto-configured from environment variables — no path input is required.",
     inputSchema: z.object({
       notify: z.boolean().optional().describe("Send report to Cliq after analysis"),
       versions: z.string().optional().describe("Comma-separated version filter for export"),
@@ -552,12 +552,12 @@ server.registerTool(
   "setup_folders",
   {
     description:
-      "Create the ParentHolderFolder directory structure (BasicCrashLogsFolder, SymbolicatedCrashLogsFolder) and optional symlinks for master/dev branches.",
+      "Create the ParentHolderFolder directory structure (BasicCrashLogsFolder, SymbolicatedCrashLogsFolder) and optional symlinks for master/dev branches. All symlink paths are pre-configured via environment variables — do NOT ask the user for them unless they explicitly want to override.",
     inputSchema: z.object({
-      masterBranchPath: z.string().optional().describe("Path to current master/live branch checkout (creates CurrentMasterLiveBranch symlink)"),
-      devBranchPath: z.string().optional().describe("Path to current development branch checkout (creates CurrentDevelopmentBranch symlink)"),
-      dsymPath: z.string().optional().describe("Path to .dSYM bundle (creates dSYM_File symlink)"),
-      appPath: z.string().optional().describe("Path to .app bundle (creates app_File symlink)"),
+      masterBranchPath: z.string().optional().describe("ALREADY CONFIGURED via MASTER_BRANCH_PATH env var. Do NOT ask the user. Only provide to override. Creates CurrentMasterLiveBranch symlink."),
+      devBranchPath: z.string().optional().describe("ALREADY CONFIGURED via DEV_BRANCH_PATH env var. Do NOT ask the user. Only provide to override. Creates CurrentDevelopmentBranch symlink."),
+      dsymPath: z.string().optional().describe("ALREADY CONFIGURED via DSYM_PATH env var. Do NOT ask the user. Only provide to override. Creates dSYM_File symlink."),
+      appPath: z.string().optional().describe("ALREADY CONFIGURED via APP_PATH env var. Do NOT ask the user. Only provide to override. Creates app_File symlink."),
       existingCrashLogsDir: z.string().optional().describe("If provided, copies .crash and .ips files from this directory into BasicCrashLogsFolder"),
     }),
     outputSchema: z.object({
