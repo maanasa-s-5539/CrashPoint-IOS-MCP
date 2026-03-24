@@ -11,7 +11,7 @@ const envSchema = z.object({
   APP_NAME: z.string().optional().describe("App binary name e.g. MyApp"),
   CRASH_INPUT_DIR: z.string().optional().describe("Override .xccrashpoint search dir"),
   CRASH_VERSIONS: z.string().optional().describe("Comma-separated version filter"),
-  ZOHO_CLIQ_WEBHOOK_URL: z.string().optional().describe("Cliq channel webhook URL"),
+  ZOHO_CLIQ_WEBHOOK_URL: z.string().url().optional().describe("Cliq channel webhook URL"),
   MASTER_BRANCH_PATH: z.string().optional().describe("Path to current master/live branch checkout"),
   DEV_BRANCH_PATH: z.string().optional().describe("Path to current development branch checkout"),
 });

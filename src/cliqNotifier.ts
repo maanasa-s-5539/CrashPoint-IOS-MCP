@@ -111,7 +111,19 @@ export function splitIntoChunks(text: string, maxLength: number): string[] {
   return finalChunks;
 }
 
+function validateWebhookUrl(url: string): void {
+  const parsed = new URL(url);
+  const allowedHosts = ["cliq.zoho.com", "cliq.zoho.in", "cliq.zoho.eu", "cliq.zoho.com.au", "cliq.zoho.jp"];
+  if (!allowedHosts.some(h => parsed.hostname === h || parsed.hostname.endsWith("." + h))) {
+    throw new Error(`Webhook URL must be a Zoho Cliq domain, got: ${parsed.hostname}`);
+  }
+  if (parsed.protocol !== "https:") {
+    throw new Error("Webhook URL must use HTTPS");
+  }
+}
+
 async function postToCliq(webhookUrl: string, text: string): Promise<void> {
+  validateWebhookUrl(webhookUrl);
   const response = await fetch(webhookUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
