@@ -1,7 +1,7 @@
 {
   "name": "crashpoint-ios-mcp",
   "version": "1.0.0",
-  "description": "MCP server for iOS/macOS crash log export, symbolication, analysis & Zoho Cliq reporting.",
+  "description": "MCP server for iOS/macOS crash log export, symbolication, analysis, Zoho Cliq reporting & Zoho Projects bug creation.",
   "license": "MIT",
   "scripts": {
     "build": "esbuild src/index.ts --bundle --platform=node --target=node18 --outfile=dist/index.js && esbuild src/cli.ts --bundle --platform=node --target=node18 --outfile=dist/cli.js",
@@ -39,7 +39,8 @@
     "MCP",
     "Xcode",
     "Zoho",
-    "Cliq"
+    "Cliq",
+    "Projects"
   ],
   "author": "maanasa-s-5539",
   "bugs": {

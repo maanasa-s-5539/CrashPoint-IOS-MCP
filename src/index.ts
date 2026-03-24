@@ -20,6 +20,7 @@ import { analyzeDirectory } from "./crashAnalyzer.js";
 import { sendCrashReportToCliq } from "./cliqNotifier.js";
 import { FixTracker } from "./fixTracker.js";
 import { assertPathUnderBase, assertNoTraversal, assertSafeSymlinkTarget } from "./pathSafety.js";
+import { reportToZohoProjectsViaMcp, getFieldIdsFromConfig } from "./zohoProjectsMcpBridge.js";
 
 const server = new McpServer({
   name: "crashpoint-ios-mcp",
@@ -760,6 +761,76 @@ server.registerTool(
       reportSent: cliqResult.success,
       unfixedReport,
     };
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      structuredContent: result,
+    };
+  }
+);
+
+// ── Tool 15: report_to_zoho_projects ─────────────────────────────────────────
+server.registerTool(
+  "report_to_zoho_projects",
+  {
+    description:
+      "Analyze symbolicated crashes and create a bug in Zoho Projects for each unique crash group. Severity is auto-mapped from exception type and occurrence count. Fix status is read from local tracking. Requires ZOHO_PROJECTS_MCP_URL, ZOHO_PROJECTS_PORTAL_ID, and ZOHO_PROJECTS_PROJECT_ID to be configured.",
+    inputSchema: z.object({
+      crashDir: z.string().optional().describe("Directory of symbolicated crash files (default: SymbolicatedCrashLogsFolder)"),
+      unfixedOnly: z.boolean().optional().describe("Only create bugs for unfixed crashes (default: false)"),
+    }),
+    outputSchema: z.object({
+      success: z.boolean(),
+      message: z.string(),
+      totalBugsCreated: z.number(),
+      totalFailed: z.number(),
+      bugs: z.array(z.any()),
+      missingFieldIds: z.array(z.string()),
+    }),
+  },
+  async (input) => {
+    const config = getConfig();
+
+    if (!config.ZOHO_PROJECTS_MCP_URL) {
+      throw new Error("ZOHO_PROJECTS_MCP_URL env var is required for report_to_zoho_projects.");
+    }
+    if (!config.ZOHO_PROJECTS_PORTAL_ID) {
+      throw new Error("ZOHO_PROJECTS_PORTAL_ID env var is required for report_to_zoho_projects.");
+    }
+    if (!config.ZOHO_PROJECTS_PROJECT_ID) {
+      throw new Error("ZOHO_PROJECTS_PROJECT_ID env var is required for report_to_zoho_projects.");
+    }
+
+    const crashDir = input.crashDir ?? getSymbolicatedDir(config);
+    if (input.crashDir) assertPathUnderBase(input.crashDir, config.CRASH_ANALYSIS_PARENT);
+
+    // Load fix statuses
+    const tracker = new FixTracker(config.CRASH_ANALYSIS_PARENT);
+    const fixStatuses: Record<string, { fixed: boolean; note?: string }> = {};
+    for (const entry of tracker.getAll()) {
+      fixStatuses[entry.signature] = { fixed: entry.fixed, note: entry.note };
+    }
+
+    const report = analyzeDirectory(crashDir, fixStatuses);
+
+    if (input.unfixedOnly) {
+      const unfixedGroups = report.crash_groups.filter(
+        (g) => !g.fix_status || g.fix_status.fixed === false
+      );
+      report.crash_groups = unfixedGroups.map((g, idx) => ({ ...g, rank: idx + 1 }));
+      report.report_type = "unfixed-only";
+      report.unique_crash_types = report.crash_groups.length;
+      report.total_crashes = report.crash_groups.reduce((sum, g) => sum + g.count, 0);
+    }
+
+    const fieldIds = getFieldIdsFromConfig(config);
+    const result = await reportToZohoProjectsViaMcp(
+      report,
+      config.ZOHO_PROJECTS_MCP_URL,
+      config.ZOHO_PROJECTS_PORTAL_ID,
+      config.ZOHO_PROJECTS_PROJECT_ID,
+      fieldIds
+    );
+
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
       structuredContent: result,
