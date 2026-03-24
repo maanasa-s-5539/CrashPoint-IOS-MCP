@@ -9,6 +9,7 @@ import { analyzeDirectory } from "./crashAnalyzer.js";
 import { sendCrashReportToCliq } from "./cliqNotifier.js";
 import { FixTracker } from "./fixTracker.js";
 import { listAvailableVersions } from "./crashExporter.js";
+import { assertPathUnderBase, assertNoTraversal, assertSafeSymlinkTarget } from "./pathSafety.js";
 
 const [, , command, ...args] = process.argv;
 
@@ -201,6 +202,8 @@ async function cmdSetup(flags: Record<string, string | boolean>): Promise<void> 
   const symlinks: Array<{ link: string; target: string; status: string }> = [];
   for (const { name, target } of symlinkDefs) {
     if (!target) continue;
+    assertNoTraversal(target);
+    assertSafeSymlinkTarget(target);
     const resolvedTarget = path.resolve(target);
     const linkPath = path.join(parentDir, name);
     if (!fs.existsSync(resolvedTarget)) {

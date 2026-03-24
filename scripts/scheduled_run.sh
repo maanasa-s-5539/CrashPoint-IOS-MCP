@@ -18,8 +18,9 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Load .env if present
 if [[ -f "$PROJECT_DIR/.env" ]]; then
-  # shellcheck disable=SC2046
-  export $(grep -v '^#' "$PROJECT_DIR/.env" | xargs)
+  set -a
+  source "$PROJECT_DIR/.env"
+  set +a
 fi
 
 : "${CRASH_ANALYSIS_PARENT:?CRASH_ANALYSIS_PARENT env var must be set}"

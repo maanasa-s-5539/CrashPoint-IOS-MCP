@@ -149,6 +149,9 @@ function findDwarfBinary(dsymPath: string, appName?: string): string | null {
   return null;
 }
 
+const VALID_HEX_ADDRESS = /^0x[0-9a-fA-F]+$/;
+const VALID_ARCHS = ["arm64", "x86_64", "armv7", "armv7s", "arm64e", "i386"];
+
 export async function runAtos(
   dsymPath: string,
   appPath: string | undefined,
@@ -157,6 +160,17 @@ export async function runAtos(
   arch?: string
 ): Promise<string[]> {
   if (addresses.length === 0) return [];
+
+  if (!VALID_HEX_ADDRESS.test(loadAddress)) {
+    throw new Error(`Invalid load address: "${loadAddress}". Must match 0x[0-9a-fA-F]+`);
+  }
+  const invalidAddr = addresses.find((a) => !VALID_HEX_ADDRESS.test(a));
+  if (invalidAddr !== undefined) {
+    throw new Error(`Invalid address: "${invalidAddr}". Must match 0x[0-9a-fA-F]+`);
+  }
+  if (arch !== undefined && !VALID_ARCHS.includes(arch)) {
+    throw new Error(`Invalid arch: "${arch}". Must be one of: ${VALID_ARCHS.join(", ")}`);
+  }
 
   const dwarfBinary = findDwarfBinary(dsymPath, appPath ? path.basename(appPath) : undefined);
   const binaryArg = dwarfBinary ?? (appPath || dsymPath);

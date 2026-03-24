@@ -19,6 +19,7 @@ import {
 import { analyzeDirectory } from "./crashAnalyzer.js";
 import { sendCrashReportToCliq } from "./cliqNotifier.js";
 import { FixTracker } from "./fixTracker.js";
+import { assertPathUnderBase, assertNoTraversal, assertSafeSymlinkTarget } from "./pathSafety.js";
 
 const server = new McpServer({
   name: "crashpoint-ios-mcp",
@@ -84,6 +85,8 @@ server.registerTool(
     const config = getConfig();
     const inputDir = input.inputDir ?? config.CRASH_INPUT_DIR ?? config.CRASH_ANALYSIS_PARENT;
     const outputDir = input.outputDir ?? getBasicCrashesDir(config);
+    assertPathUnderBase(inputDir, config.CRASH_ANALYSIS_PARENT);
+    assertPathUnderBase(outputDir, config.CRASH_ANALYSIS_PARENT);
     const versions = input.versions?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
     const recursive = input.recursive ?? false;
 
@@ -133,6 +136,8 @@ server.registerTool(
     const config = getConfig();
     const inputDir = input.inputDir ?? config.CRASH_INPUT_DIR ?? config.CRASH_ANALYSIS_PARENT;
     const outputDir = input.outputDir ?? getBasicCrashesDir(config);
+    assertPathUnderBase(inputDir, config.CRASH_ANALYSIS_PARENT);
+    assertPathUnderBase(outputDir, config.CRASH_ANALYSIS_PARENT);
     const versions = input.versions?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
     const recursive = input.recursive ?? false;
 
@@ -167,8 +172,11 @@ server.registerTool(
   },
   async (input) => {
     const config = getConfig();
+    assertNoTraversal(input.crashPath);
     const dsymPath = input.dsymPath ?? config.DSYM_PATH;
     const appPath = input.appPath ?? config.APP_PATH;
+    if (input.dsymPath) assertNoTraversal(input.dsymPath);
+    if (input.appPath) assertNoTraversal(input.appPath);
 
     if (!dsymPath) {
       const result = {
@@ -240,6 +248,10 @@ server.registerTool(
     const dsymPath = input.dsymPath ?? config.DSYM_PATH;
     const appPath = input.appPath ?? config.APP_PATH;
     const outputDir = input.outputDir ?? getSymbolicatedDir(config);
+    if (input.crashDir) assertPathUnderBase(input.crashDir, config.CRASH_ANALYSIS_PARENT);
+    if (input.outputDir) assertPathUnderBase(input.outputDir, config.CRASH_ANALYSIS_PARENT);
+    if (input.dsymPath) assertNoTraversal(input.dsymPath);
+    if (input.appPath) assertNoTraversal(input.appPath);
 
     if (!dsymPath) {
       const result = {
@@ -320,6 +332,7 @@ server.registerTool(
   async (input) => {
     const config = getConfig();
     const crashDir = input.crashDir ?? getSymbolicatedDir(config);
+    if (input.crashDir) assertPathUnderBase(input.crashDir, config.CRASH_ANALYSIS_PARENT);
     const tracker = new FixTracker(config.CRASH_ANALYSIS_PARENT);
     const fixStatuses: Record<string, { fixed: boolean; note?: string }> = {};
     for (const entry of tracker.getAll()) {
@@ -350,6 +363,14 @@ server.registerTool(
   async (input) => {
     const config = getConfig();
     let report;
+    const MAX_REPORT_SIZE = 10 * 1024 * 1024; // 10 MB
+    if (input.report.length > MAX_REPORT_SIZE) {
+      const result = { success: false, message: `Report payload too large (${input.report.length} bytes, max ${MAX_REPORT_SIZE})` };
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
+    }
     try {
       report = JSON.parse(input.report);
     } catch {
@@ -575,6 +596,8 @@ server.registerTool(
 
     for (const { name, target } of symlinkDefs) {
       if (!target) continue;
+      assertNoTraversal(target);
+      assertSafeSymlinkTarget(target);
       const resolvedTarget = path.resolve(target);
       const linkPath = path.join(parentDir, name);
       let status: string;
