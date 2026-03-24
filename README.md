@@ -58,7 +58,7 @@ Add to your `claude_desktop_config.json`:
   "mcpServers": {
     "crashpoint-ios": {
       "command": "npx",
-      "args": ["crashpoint-ios-mcp"],
+      "args": ["github:maanasa-s-5539/CrashPoint-IOS-MCP"],
       "env": {
         "CRASH_ANALYSIS_PARENT": "/path/to/ParentHolderFolder",
         "DSYM_PATH": "/path/to/MyApp.dSYM",
@@ -84,7 +84,7 @@ Create or update `.cursor/mcp.json` in your project:
   "mcpServers": {
     "crashpoint-ios": {
       "command": "npx",
-      "args": ["crashpoint-ios-mcp"],
+      "args": ["github:maanasa-s-5539/CrashPoint-IOS-MCP"],
       "env": {
         "CRASH_ANALYSIS_PARENT": "/path/to/ParentHolderFolder",
         "DSYM_PATH": "/path/to/MyApp.dSYM",
