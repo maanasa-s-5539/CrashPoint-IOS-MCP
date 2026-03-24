@@ -85,7 +85,7 @@ server.registerTool(
     const config = getConfig();
     const inputDir = input.inputDir ?? config.CRASH_INPUT_DIR ?? config.CRASH_ANALYSIS_PARENT;
     const outputDir = input.outputDir ?? getBasicCrashesDir(config);
-    assertPathUnderBase(inputDir, config.CRASH_ANALYSIS_PARENT);
+    assertNoTraversal(inputDir);
     assertPathUnderBase(outputDir, config.CRASH_ANALYSIS_PARENT);
     const versions = input.versions?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
     const recursive = input.recursive ?? false;
@@ -136,7 +136,7 @@ server.registerTool(
     const config = getConfig();
     const inputDir = input.inputDir ?? config.CRASH_INPUT_DIR ?? config.CRASH_ANALYSIS_PARENT;
     const outputDir = input.outputDir ?? getBasicCrashesDir(config);
-    assertPathUnderBase(inputDir, config.CRASH_ANALYSIS_PARENT);
+    assertNoTraversal(inputDir);
     assertPathUnderBase(outputDir, config.CRASH_ANALYSIS_PARENT);
     const versions = input.versions?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
     const recursive = input.recursive ?? false;
