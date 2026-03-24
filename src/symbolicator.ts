@@ -172,6 +172,13 @@ export async function runAtos(
     throw new Error(`Invalid arch: "${arch}". Must be one of: ${VALID_ARCHS.join(", ")}`);
   }
 
+  if (fs.existsSync(dsymPath)) {
+    dsymPath = fs.realpathSync(dsymPath);
+  }
+  if (appPath && fs.existsSync(appPath)) {
+    appPath = fs.realpathSync(appPath);
+  }
+
   const dwarfBinary = findDwarfBinary(dsymPath, appPath ? path.basename(appPath) : undefined);
   const binaryArg = dwarfBinary ?? (appPath || dsymPath);
 
@@ -203,6 +210,13 @@ export async function symbolicateOne(
   }
   if (!fs.existsSync(dsymPath)) {
     return { success: false, detail: `dSYM not found: ${dsymPath}`, symbolicatedCount: 0, totalAppFrames: 0 };
+  }
+
+  if (fs.existsSync(dsymPath)) {
+    dsymPath = fs.realpathSync(dsymPath);
+  }
+  if (appPath && fs.existsSync(appPath)) {
+    appPath = fs.realpathSync(appPath);
   }
 
   const content = fs.readFileSync(crashPath, "utf-8");
