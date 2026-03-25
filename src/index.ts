@@ -6,7 +6,7 @@ import { z } from "zod";
 import fs from "fs";
 import path from "path";
 
-import { getConfig, getBasicCrashesDir, getSymbolicatedDir } from "./config.js";
+import { getConfig, getBasicCrashesDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir, hasCrashFiles } from "./config.js";
 import {
   listAvailableVersions,
   exportCrashLogs,
@@ -15,6 +15,7 @@ import {
   symbolicateOne,
   runBatch,
   diagnoseFrames,
+  BatchResult,
 } from "./symbolicator.js";
 import { analyzeDirectory } from "./crashAnalyzer.js";
 import { sendCrashReportToCliq } from "./cliqNotifier.js";
@@ -246,6 +247,8 @@ server.registerTool(
   async (input) => {
     const config = getConfig();
     const crashDir = input.crashDir ?? getBasicCrashesDir(config);
+    const appticsDir = getAppticsCrashesDir(config);
+    const otherDir = getOtherCrashesDir(config);
     const dsymPath = input.dsymPath ?? config.DSYM_PATH;
     const appPath = input.appPath ?? config.APP_PATH;
     const outputDir = input.outputDir ?? getSymbolicatedDir(config);
@@ -267,7 +270,49 @@ server.registerTool(
       };
     }
 
-    const result = await runBatch(crashDir, dsymPath, appPath, outputDir, input.arch, input.allThreads ?? false);
+    // Check whether any .crash/.ips files exist across all three input folders
+    // When crashDir is overridden by the caller, only check that dir; otherwise check all three
+    const inputIsDefault = !input.crashDir;
+    const anyFiles = inputIsDefault
+      ? hasCrashFiles(crashDir) || hasCrashFiles(appticsDir) || hasCrashFiles(otherDir)
+      : hasCrashFiles(crashDir);
+
+    if (!anyFiles) {
+      const noFilesMsg = inputIsDefault
+        ? "No .crash or .ips files found in BasicCrashLogsFolder, AppticsCrashLogsFolder, or OtherCrashLogsFolder"
+        : `No .crash or .ips files found in ${crashDir}`;
+      const result = {
+        succeeded: 0,
+        failed: 0,
+        total: 0,
+        results: [] as BatchResult[],
+        message: noFilesMsg,
+      };
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+        structuredContent: { succeeded: 0, failed: 0, total: 0, results: [] },
+      };
+    }
+
+    // Run batch for each input directory and merge results
+    const dirsToProcess = inputIsDefault
+      ? [crashDir, appticsDir, otherDir]
+      : [crashDir];
+
+    let succeeded = 0;
+    let failed = 0;
+    let total = 0;
+    const results: BatchResult[] = [];
+
+    for (const dir of dirsToProcess) {
+      const batchResult = await runBatch(dir, dsymPath, appPath, outputDir, input.arch, input.allThreads ?? false);
+      succeeded += batchResult.succeeded;
+      failed += batchResult.failed;
+      total += batchResult.total;
+      results.push(...batchResult.results);
+    }
+
+    const result = { succeeded, failed, total, results };
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
       structuredContent: result,
@@ -517,7 +562,31 @@ server.registerTool(
     let symbolicationResult: object = { skipped: true, reason: "DSYM_PATH not configured" };
 
     if (dsymPath) {
-      symbolicationResult = await runBatch(basicDir, dsymPath, appPath, symbolicatedDir);
+      const appticsDir = getAppticsCrashesDir(config);
+      const otherDir = getOtherCrashesDir(config);
+
+      const anyFiles =
+        hasCrashFiles(basicDir) || hasCrashFiles(appticsDir) || hasCrashFiles(otherDir);
+
+      if (!anyFiles) {
+        symbolicationResult = {
+          skipped: true,
+          reason: "No .crash or .ips files found in BasicCrashLogsFolder, AppticsCrashLogsFolder, or OtherCrashLogsFolder",
+        };
+      } else {
+        let succeeded = 0;
+        let failed = 0;
+        let total = 0;
+        const results: BatchResult[] = [];
+        for (const dir of [basicDir, appticsDir, otherDir]) {
+          const r = await runBatch(dir, dsymPath, appPath, symbolicatedDir);
+          succeeded += r.succeeded;
+          failed += r.failed;
+          total += r.total;
+          results.push(...r.results);
+        }
+        symbolicationResult = { succeeded, failed, total, results };
+      }
     }
 
     // Step 3: Analyze
@@ -573,12 +642,14 @@ server.registerTool(
     const config = getConfig();
     const parentDir = config.CRASH_ANALYSIS_PARENT;
     const basicDir = getBasicCrashesDir(config);
+    const appticsDir = getAppticsCrashesDir(config);
+    const otherDir = getOtherCrashesDir(config);
     const symbolicatedDir = getSymbolicatedDir(config);
 
     const created: string[] = [];
     const warnings: string[] = [];
 
-    for (const dir of [parentDir, basicDir, symbolicatedDir]) {
+    for (const dir of [parentDir, basicDir, appticsDir, otherDir, symbolicatedDir]) {
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
         created.push(dir);

@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 import { z } from "zod";
 import path from "path";
+import fs from "fs";
 
 dotenv.config({ path: path.resolve(__dirname, "..", ".env"), quiet: true });
 
@@ -41,6 +42,21 @@ export function getBasicCrashesDir(config: CrashPointConfig): string {
   return path.join(config.CRASH_ANALYSIS_PARENT, "BasicCrashLogsFolder");
 }
 
+export function getAppticsCrashesDir(config: CrashPointConfig): string {
+  return path.join(config.CRASH_ANALYSIS_PARENT, "AppticsCrashLogsFolder");
+}
+
+export function getOtherCrashesDir(config: CrashPointConfig): string {
+  return path.join(config.CRASH_ANALYSIS_PARENT, "OtherCrashLogsFolder");
+}
+
 export function getSymbolicatedDir(config: CrashPointConfig): string {
   return path.join(config.CRASH_ANALYSIS_PARENT, "SymbolicatedCrashLogsFolder");
+}
+
+export function hasCrashFiles(dir: string): boolean {
+  return (
+    fs.existsSync(dir) &&
+    fs.readdirSync(dir).some((f) => f.endsWith(".crash") || f.endsWith(".ips"))
+  );
 }
