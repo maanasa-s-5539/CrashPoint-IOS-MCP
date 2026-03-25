@@ -1,5 +1,5 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import type { CrashGroup, CrashReport } from "./crashAnalyzer.js";
 import type { CrashPointConfig } from "./config.js";
 
@@ -283,7 +283,7 @@ export async function reportToZohoProjectsViaMcp(
   }
 
   // Connect to Zoho Projects MCP server
-  const transport = new StreamableHTTPClientTransport(new URL(zohoMcpUrl));
+  const transport = new SSEClientTransport(new URL(zohoMcpUrl));
   const client = new Client(
     { name: "crashpoint-ios-mcp", version: "1.0.0" },
     { capabilities: {} }
