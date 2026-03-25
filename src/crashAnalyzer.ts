@@ -146,7 +146,7 @@ export function analyzeCrashFile(filepath: string): (CrashMetadata & { source: s
 
 function detectSource(filepath: string): string {
   const lower = filepath.toLowerCase();
-  if (lower.includes("xccrashpoint") || lower.includes("xcode")) return "xcode-organizer";
+  if (lower.includes("xccrashpoint") || lower.includes("xcode") || lower.includes("xcodecrashlogs")) return "xcode-organizer";
   if (lower.includes("apptics")) return "apptics";
   if (filepath.endsWith(".ips")) return "ips-file";
   return "manual";

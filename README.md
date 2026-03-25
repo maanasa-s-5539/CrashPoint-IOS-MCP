@@ -114,6 +114,18 @@ Create or update `.cursor/mcp.json` in your project:
 | `MASTER_BRANCH_PATH` | Optional | Path to master/live branch checkout (creates `CurrentMasterLiveBranch` symlink) |
 | `DEV_BRANCH_PATH` | Optional | Path to dev branch checkout (creates `CurrentDevelopmentBranch` symlink) |
 | `ZOHO_CLIQ_WEBHOOK_URL` | Optional | Incoming webhook URL for a Zoho Cliq channel — the only Cliq integration method |
+| `ZOHO_PROJECTS_MCP_URL` | Optional | Zoho Projects MCP server URL |
+| `ZOHO_PROJECTS_PORTAL_ID` | Optional | Zoho Projects portal ID |
+| `ZOHO_PROJECTS_PROJECT_ID` | Optional | Zoho Projects project ID |
+| `ZOHO_BUG_STATUS_OPEN` | Optional | Zoho bug status field value ID for Open |
+| `ZOHO_BUG_STATUS_FIXED` | Optional | Zoho bug status field value ID for Fixed |
+| `ZOHO_BUG_SEVERITY_SHOWSTOPPER` | Optional | Zoho bug severity field value ID for ShowStopper |
+| `ZOHO_BUG_SEVERITY_CRITICAL` | Optional | Zoho bug severity field value ID for Critical |
+| `ZOHO_BUG_SEVERITY_MAJOR` | Optional | Zoho bug severity field value ID for Major |
+| `ZOHO_BUG_SEVERITY_MINOR` | Optional | Zoho bug severity field value ID for Minor |
+| `ZOHO_BUG_SEVERITY_NONE` | Optional | Zoho bug severity field value ID for None |
+| `ZOHO_BUG_CF_OCCURRENCES` | Optional | Zoho custom field ID for number of crash occurrences |
+| `ZOHO_BUG_CF_APP_VERSION` | Optional | Zoho custom field ID for App Version of the crash |
 
 ---
 
@@ -123,9 +135,10 @@ CrashPoint iOS MCP uses a `ParentHolderFolder` to organize crash data:
 
 ```
 ParentHolderFolder/                   ← CRASH_ANALYSIS_PARENT
-├── BasicCrashLogsFolder/             ← Exported raw .crash files
-├── AppticsCrashLogsFolder/           ← User-placed Apptics SDK crash logs
-├── OtherCrashLogsFolder/             ← User-placed other crash logs
+├── MainCrashLogsFolder/
+│   ├── XCodeCrashLogs/               ← Exported raw .crash files from Xcode Organizer
+│   ├── AppticsCrashLogs/             ← User-placed Apptics SDK crash logs
+│   └── OtherCrashLogs/              ← User-placed other crash logs
 ├── SymbolicatedCrashLogsFolder/      ← Symbolicated .crash files
 ├── CurrentMasterLiveBranch -> ...    ← Symlink to master branch (optional)
 ├── CurrentDevelopmentBranch -> ...   ← Symlink to dev branch (optional)
@@ -155,9 +168,9 @@ bash scripts/setup_symlinks.sh
 |---|---|
 | `list_versions` | List all app versions found in `.xccrashpoint` files |
 | `preview_export` | Dry-run: show what would be exported without writing files |
-| `export_crashes` | Export `.crash` files from `.xccrashpoint` packages to BasicCrashLogsFolder |
+| `export_crashes` | Export `.crash` files from `.xccrashpoint` packages to `MainCrashLogsFolder/XCodeCrashLogs` |
 | `symbolicate_one` | Symbolicate a single `.crash` file using `atos` |
-| `symbolicate_batch` | Batch symbolicate all crashes in BasicCrashLogsFolder |
+| `symbolicate_batch` | Batch symbolicate all crashes in `MainCrashLogsFolder` (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs) |
 | `diagnose_frames` | Frame-by-frame diff: shows which frames were resolved vs missed |
 | `analyze_crashes` | Group & deduplicate crashes by signature; includes fix status |
 | `notify_cliq` | Send crash analysis report to Zoho Cliq (includes source labels + fix status) |
@@ -176,7 +189,7 @@ bash scripts/setup_symlinks.sh
 | `devBranchPath` | Path to dev branch checkout → creates `CurrentDevelopmentBranch` symlink |
 | `dsymPath` | Path to .dSYM bundle → creates `dSYM_File` symlink |
 | `appPath` | Path to .app bundle → creates `app_File` symlink |
-| `existingCrashLogsDir` | Copy `.crash` and `.ips` files from this directory into `BasicCrashLogsFolder` |
+| `existingCrashLogsDir` | Copy `.crash` and `.ips` files from this directory into `MainCrashLogsFolder/XCodeCrashLogs` |
 
 ---
 
@@ -188,7 +201,7 @@ The CLI lets you run the crash analysis pipeline without an MCP client (useful f
 # Export crash logs from Xcode Organizer
 node dist/cli.js export
 
-# Symbolicate all crash files in BasicCrashLogsFolder
+# Symbolicate all crash files in MainCrashLogsFolder (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs)
 node dist/cli.js batch
 
 # Analyze crashes and print JSON report
@@ -288,6 +301,10 @@ CrashPoint can create a bug in Zoho Projects for each unique crash group. It con
    ZOHO_BUG_SEVERITY_MAJOR=1139168000000007055
    ZOHO_BUG_SEVERITY_MINOR=1139168000000007057
    ZOHO_BUG_SEVERITY_NONE=1139168000000007059
+
+   # Optional: custom field IDs for crash metadata
+   ZOHO_BUG_CF_OCCURRENCES=<your_custom_field_id>
+   ZOHO_BUG_CF_APP_VERSION=<your_custom_field_id>
    ```
 
    If a field ID env var is left blank, bugs will be created without that field set.

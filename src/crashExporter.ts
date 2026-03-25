@@ -57,7 +57,7 @@ export function extractVersion(crashFilePath: string): string {
 
 export function detectCrashSource(filepath: string): string {
   const lower = filepath.toLowerCase();
-  if (lower.includes("xccrashpoint") || lower.includes("xcode")) {
+  if (lower.includes("xccrashpoint") || lower.includes("xcode") || lower.includes("xcodecrashlogs")) {
     return "xcode-organizer";
   }
   if (lower.includes("apptics")) {

@@ -2,7 +2,7 @@
 
 import fs from "fs";
 import path from "path";
-import { getConfig, getBasicCrashesDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir, hasCrashFiles } from "./config.js";
+import { getConfig, getXcodeCrashesDir, getMainCrashLogsDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir, hasCrashFiles } from "./config.js";
 import { exportCrashLogs } from "./crashExporter.js";
 import { runBatch, symbolicateOne, diagnoseFrames, BatchResult } from "./symbolicator.js";
 import { analyzeDirectory } from "./crashAnalyzer.js";
@@ -43,7 +43,7 @@ function parseFlags(argv: string[]): Record<string, string | boolean> {
 async function cmdExport(flags: Record<string, string | boolean>): Promise<void> {
   const config = getConfig();
   const inputDir = config.CRASH_INPUT_DIR ?? config.CRASH_ANALYSIS_PARENT;
-  const outputDir = getBasicCrashesDir(config);
+  const outputDir = getXcodeCrashesDir(config);
   const versions = config.CRASH_VERSIONS?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
   const startDate = flags["start-date"] as string | undefined;
   const endDate = flags["end-date"] as string | undefined;
@@ -53,7 +53,7 @@ async function cmdExport(flags: Record<string, string | boolean>): Promise<void>
 
 async function cmdBatch(flags: Record<string, string | boolean>): Promise<void> {
   const config = getConfig();
-  const crashDir = getBasicCrashesDir(config);
+  const crashDir = getXcodeCrashesDir(config);
   const appticsDir = getAppticsCrashesDir(config);
   const otherDir = getOtherCrashesDir(config);
   const outputDir = getSymbolicatedDir(config);
@@ -73,7 +73,7 @@ async function cmdBatch(flags: Record<string, string | boolean>): Promise<void> 
         failed: 0,
         total: 0,
         results: [],
-        message: "No .crash or .ips files found in BasicCrashLogsFolder, AppticsCrashLogsFolder, or OtherCrashLogsFolder",
+        message: "No .crash or .ips files found in MainCrashLogsFolder/XCodeCrashLogs, MainCrashLogsFolder/AppticsCrashLogs, or MainCrashLogsFolder/OtherCrashLogs",
       }, null, 2)
     );
     return;
@@ -201,15 +201,24 @@ async function cmdNotifyUnfixed(flags: Record<string, string | boolean>): Promis
 async function cmdSetup(flags: Record<string, string | boolean>): Promise<void> {
   const config = getConfig();
   const parentDir = config.CRASH_ANALYSIS_PARENT;
-  const basicDir = path.join(parentDir, "BasicCrashLogsFolder");
-  const appticsDir = path.join(parentDir, "AppticsCrashLogsFolder");
-  const otherDir = path.join(parentDir, "OtherCrashLogsFolder");
+  const mainCrashDir = getMainCrashLogsDir(config);
+  const xcodeCrashDir = getXcodeCrashesDir(config);
+  const appticsDir = getAppticsCrashesDir(config);
+  const otherDir = getOtherCrashesDir(config);
   const symbolicatedDir = path.join(parentDir, "SymbolicatedCrashLogsFolder");
 
   const created: string[] = [];
   const warnings: string[] = [];
 
-  for (const dir of [parentDir, basicDir, appticsDir, otherDir, symbolicatedDir]) {
+  // Always create mainCrashDir and xcodeCrashDir
+  for (const dir of [parentDir, mainCrashDir, xcodeCrashDir, symbolicatedDir]) {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+      created.push(dir);
+    }
+  }
+  // Create AppticsCrashLogs and OtherCrashLogs only if they don't already exist
+  for (const dir of [appticsDir, otherDir]) {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
       created.push(dir);
@@ -278,7 +287,7 @@ async function cmdSetup(flags: Record<string, string | boolean>): Promise<void> 
         (f) => f.endsWith(".crash") || f.endsWith(".ips")
       );
       for (const file of srcFiles) {
-        fs.copyFileSync(path.join(existingCrashLogsDir, file), path.join(basicDir, file));
+        fs.copyFileSync(path.join(existingCrashLogsDir, file), path.join(xcodeCrashDir, file));
         copiedFiles++;
       }
     } catch (err) {
@@ -339,7 +348,7 @@ function cmdListVersions(flags: Record<string, string | boolean>): void {
 async function cmdPipeline(flags: Record<string, string | boolean>): Promise<void> {
   const config = getConfig();
   const inputDir = config.CRASH_INPUT_DIR ?? config.CRASH_ANALYSIS_PARENT;
-  const basicDir = path.join(config.CRASH_ANALYSIS_PARENT, "BasicCrashLogsFolder");
+  const basicDir = getXcodeCrashesDir(config);
   const symbolicatedDir = path.join(config.CRASH_ANALYSIS_PARENT, "SymbolicatedCrashLogsFolder");
   const dsymPath = config.DSYM_PATH;
   const appPath = config.APP_PATH;
@@ -365,7 +374,7 @@ async function cmdPipeline(flags: Record<string, string | boolean>): Promise<voi
     if (!hasCrashFiles(basicDir) && !hasCrashFiles(appticsDir) && !hasCrashFiles(otherDir)) {
       symbolicationResult = {
         skipped: true,
-        reason: "No .crash or .ips files found in BasicCrashLogsFolder, AppticsCrashLogsFolder, or OtherCrashLogsFolder",
+        reason: "No .crash or .ips files found in MainCrashLogsFolder/XCodeCrashLogs, MainCrashLogsFolder/AppticsCrashLogs, or MainCrashLogsFolder/OtherCrashLogs",
       };
     } else {
       let succeeded = 0;
@@ -438,10 +447,10 @@ function printUsage(): void {
 CrashPoint iOS CLI — node dist/cli.js <command> [options]
 
 Commands:
-  export                Export .crash files from .xccrashpoint packages into BasicCrashLogsFolder
+  export                Export .crash files from .xccrashpoint packages into MainCrashLogsFolder/XCodeCrashLogs
     --start-date <date> ISO date string to filter crashes from (e.g. 2026-03-01)
     --end-date <date>   ISO date string to filter crashes until (e.g. 2026-03-20)
-  batch                 Symbolicate all crash files in BasicCrashLogsFolder
+  batch                 Symbolicate all crash files in MainCrashLogsFolder (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs)
     --all-threads       Symbolicate all threads (not just crashed thread)
   analyze               Group and deduplicate crashes into a report
     --crash-dir <dir>   Directory of crash files (default: SymbolicatedCrashLogsFolder)
