@@ -2,9 +2,9 @@
 
 import fs from "fs";
 import path from "path";
-import { getConfig, getBasicCrashesDir, getSymbolicatedDir } from "./config.js";
+import { getConfig, getBasicCrashesDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir, hasCrashFiles } from "./config.js";
 import { exportCrashLogs } from "./crashExporter.js";
-import { runBatch, symbolicateOne, diagnoseFrames } from "./symbolicator.js";
+import { runBatch, symbolicateOne, diagnoseFrames, BatchResult } from "./symbolicator.js";
 import { analyzeDirectory } from "./crashAnalyzer.js";
 import { sendCrashReportToCliq } from "./cliqNotifier.js";
 import { FixTracker } from "./fixTracker.js";
@@ -54,6 +54,8 @@ async function cmdExport(flags: Record<string, string | boolean>): Promise<void>
 async function cmdBatch(flags: Record<string, string | boolean>): Promise<void> {
   const config = getConfig();
   const crashDir = getBasicCrashesDir(config);
+  const appticsDir = getAppticsCrashesDir(config);
+  const otherDir = getOtherCrashesDir(config);
   const outputDir = getSymbolicatedDir(config);
   const dsymPath = config.DSYM_PATH;
   const appPath = config.APP_PATH;
@@ -64,8 +66,33 @@ async function cmdBatch(flags: Record<string, string | boolean>): Promise<void> 
     process.exit(1);
   }
 
-  const result = await runBatch(crashDir, dsymPath, appPath, outputDir, undefined, allThreads);
-  console.log(JSON.stringify(result, null, 2));
+  if (!hasCrashFiles(crashDir) && !hasCrashFiles(appticsDir) && !hasCrashFiles(otherDir)) {
+    console.log(
+      JSON.stringify({
+        succeeded: 0,
+        failed: 0,
+        total: 0,
+        results: [],
+        message: "No .crash or .ips files found in BasicCrashLogsFolder, AppticsCrashLogsFolder, or OtherCrashLogsFolder",
+      }, null, 2)
+    );
+    return;
+  }
+
+  let succeeded = 0;
+  let failed = 0;
+  let total = 0;
+  const results: BatchResult[] = [];
+
+  for (const dir of [crashDir, appticsDir, otherDir]) {
+    const r = await runBatch(dir, dsymPath, appPath, outputDir, undefined, allThreads);
+    succeeded += r.succeeded;
+    failed += r.failed;
+    total += r.total;
+    results.push(...r.results);
+  }
+
+  console.log(JSON.stringify({ succeeded, failed, total, results }, null, 2));
 }
 
 async function cmdAnalyze(flags: Record<string, string | boolean>): Promise<void> {
@@ -175,12 +202,14 @@ async function cmdSetup(flags: Record<string, string | boolean>): Promise<void> 
   const config = getConfig();
   const parentDir = config.CRASH_ANALYSIS_PARENT;
   const basicDir = path.join(parentDir, "BasicCrashLogsFolder");
+  const appticsDir = path.join(parentDir, "AppticsCrashLogsFolder");
+  const otherDir = path.join(parentDir, "OtherCrashLogsFolder");
   const symbolicatedDir = path.join(parentDir, "SymbolicatedCrashLogsFolder");
 
   const created: string[] = [];
   const warnings: string[] = [];
 
-  for (const dir of [parentDir, basicDir, symbolicatedDir]) {
+  for (const dir of [parentDir, basicDir, appticsDir, otherDir, symbolicatedDir]) {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
       created.push(dir);
@@ -330,7 +359,28 @@ async function cmdPipeline(flags: Record<string, string | boolean>): Promise<voi
   // Step 2: symbolicate
   let symbolicationResult: unknown = null;
   if (dsymPath) {
-    symbolicationResult = await runBatch(basicDir, dsymPath, appPath, symbolicatedDir, undefined, allThreads);
+    const appticsDir = getAppticsCrashesDir(config);
+    const otherDir = getOtherCrashesDir(config);
+
+    if (!hasCrashFiles(basicDir) && !hasCrashFiles(appticsDir) && !hasCrashFiles(otherDir)) {
+      symbolicationResult = {
+        skipped: true,
+        reason: "No .crash or .ips files found in BasicCrashLogsFolder, AppticsCrashLogsFolder, or OtherCrashLogsFolder",
+      };
+    } else {
+      let succeeded = 0;
+      let failed = 0;
+      let total = 0;
+      const results: BatchResult[] = [];
+      for (const dir of [basicDir, appticsDir, otherDir]) {
+        const r = await runBatch(dir, dsymPath, appPath, symbolicatedDir, undefined, allThreads);
+        succeeded += r.succeeded;
+        failed += r.failed;
+        total += r.total;
+        results.push(...r.results);
+      }
+      symbolicationResult = { succeeded, failed, total, results };
+    }
     console.log("Symbolication:", JSON.stringify(symbolicationResult));
   } else {
     console.log("Symbolication: skipped (DSYM_PATH not set)");
