@@ -125,7 +125,7 @@ CrashPoint iOS MCP uses a `ParentHolderFolder` to organize crash data:
 ParentHolderFolder/                   ← CRASH_ANALYSIS_PARENT
 ├── BasicCrashLogsFolder/             ← Exported raw .crash files
 ├── AppticsCrashLogsFolder/           ← User-placed Apptics SDK crash logs
-├── OtherCrashLogsFolder/             ← User-placed other/third-party crash logs
+├── OtherCrashLogsFolder/             ← User-placed other crash logs
 ├── SymbolicatedCrashLogsFolder/      ← Symbolicated .crash files
 ├── CurrentMasterLiveBranch -> ...    ← Symlink to master branch (optional)
 ├── CurrentDevelopmentBranch -> ...   ← Symlink to dev branch (optional)
