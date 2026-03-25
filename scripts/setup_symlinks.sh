@@ -12,14 +12,18 @@ PARENT="${CRASH_ANALYSIS_PARENT:?CRASH_ANALYSIS_PARENT env var must be set}"
 
 echo "Setting up folder structure under: $PARENT"
 
-mkdir -p "$PARENT/BasicCrashLogsFolder"
-mkdir -p "$PARENT/AppticsCrashLogsFolder"
-mkdir -p "$PARENT/OtherCrashLogsFolder"
+mkdir -p "$PARENT/MainCrashLogsFolder/XCodeCrashLogs"
+if [[ ! -d "$PARENT/MainCrashLogsFolder/AppticsCrashLogs" ]]; then
+  mkdir -p "$PARENT/MainCrashLogsFolder/AppticsCrashLogs"
+fi
+if [[ ! -d "$PARENT/MainCrashLogsFolder/OtherCrashLogs" ]]; then
+  mkdir -p "$PARENT/MainCrashLogsFolder/OtherCrashLogs"
+fi
 mkdir -p "$PARENT/SymbolicatedCrashLogsFolder"
 
-echo "  [OK] BasicCrashLogsFolder"
-echo "  [OK] AppticsCrashLogsFolder"
-echo "  [OK] OtherCrashLogsFolder"
+echo "  [OK] MainCrashLogsFolder/XCodeCrashLogs"
+echo "  [OK] MainCrashLogsFolder/AppticsCrashLogs"
+echo "  [OK] MainCrashLogsFolder/OtherCrashLogs"
 echo "  [OK] SymbolicatedCrashLogsFolder"
 
 # Helper: resolve a path to absolute (uses realpath if target exists, else manual resolution)

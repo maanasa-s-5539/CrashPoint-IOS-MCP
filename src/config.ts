@@ -25,6 +25,8 @@ const envSchema = z.object({
   ZOHO_BUG_SEVERITY_MAJOR: z.string().optional().describe("Zoho bug severity field value ID for Major"),
   ZOHO_BUG_SEVERITY_MINOR: z.string().optional().describe("Zoho bug severity field value ID for Minor"),
   ZOHO_BUG_SEVERITY_NONE: z.string().optional().describe("Zoho bug severity field value ID for None"),
+  ZOHO_BUG_CF_OCCURRENCES: z.string().optional().describe("Zoho bug custom field ID for number of crash occurrences"),
+  ZOHO_BUG_CF_APP_VERSION: z.string().optional().describe("Zoho bug custom field ID for App Version"),
 });
 
 export type CrashPointConfig = z.infer<typeof envSchema>;
@@ -38,16 +40,20 @@ export function getConfig(): CrashPointConfig {
   return cachedConfig;
 }
 
-export function getBasicCrashesDir(config: CrashPointConfig): string {
-  return path.join(config.CRASH_ANALYSIS_PARENT, "BasicCrashLogsFolder");
+export function getMainCrashLogsDir(config: CrashPointConfig): string {
+  return path.join(config.CRASH_ANALYSIS_PARENT, "MainCrashLogsFolder");
+}
+
+export function getXcodeCrashesDir(config: CrashPointConfig): string {
+  return path.join(config.CRASH_ANALYSIS_PARENT, "MainCrashLogsFolder", "XCodeCrashLogs");
 }
 
 export function getAppticsCrashesDir(config: CrashPointConfig): string {
-  return path.join(config.CRASH_ANALYSIS_PARENT, "AppticsCrashLogsFolder");
+  return path.join(config.CRASH_ANALYSIS_PARENT, "MainCrashLogsFolder", "AppticsCrashLogs");
 }
 
 export function getOtherCrashesDir(config: CrashPointConfig): string {
-  return path.join(config.CRASH_ANALYSIS_PARENT, "OtherCrashLogsFolder");
+  return path.join(config.CRASH_ANALYSIS_PARENT, "MainCrashLogsFolder", "OtherCrashLogs");
 }
 
 export function getSymbolicatedDir(config: CrashPointConfig): string {

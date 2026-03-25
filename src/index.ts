@@ -6,7 +6,7 @@ import { z } from "zod";
 import fs from "fs";
 import path from "path";
 
-import { getConfig, getBasicCrashesDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir, hasCrashFiles } from "./config.js";
+import { getConfig, getXcodeCrashesDir, getMainCrashLogsDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir, hasCrashFiles } from "./config.js";
 import {
   listAvailableVersions,
   exportCrashLogs,
@@ -86,7 +86,7 @@ server.registerTool(
   async (input) => {
     const config = getConfig();
     const inputDir = input.inputDir ?? config.CRASH_INPUT_DIR ?? config.CRASH_ANALYSIS_PARENT;
-    const outputDir = input.outputDir ?? getBasicCrashesDir(config);
+    const outputDir = input.outputDir ?? getXcodeCrashesDir(config);
     assertNoTraversal(inputDir);
     assertPathUnderBase(outputDir, config.CRASH_ANALYSIS_PARENT);
     const versions = input.versions?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
@@ -110,7 +110,7 @@ server.registerTool(
   "export_crashes",
   {
     description:
-      "Export .crash files from .xccrashpoint packages into BasicCrashLogsFolder.",
+      "Export .crash files from .xccrashpoint packages into MainCrashLogsFolder/XCodeCrashLogs.",
     inputSchema: z.object({
       inputDir: z.string().optional().describe("Directory to search for .xccrashpoint files"),
       outputDir: z.string().optional().describe("Destination directory for crash logs"),
@@ -137,7 +137,7 @@ server.registerTool(
   async (input) => {
     const config = getConfig();
     const inputDir = input.inputDir ?? config.CRASH_INPUT_DIR ?? config.CRASH_ANALYSIS_PARENT;
-    const outputDir = input.outputDir ?? getBasicCrashesDir(config);
+    const outputDir = input.outputDir ?? getXcodeCrashesDir(config);
     assertNoTraversal(inputDir);
     assertPathUnderBase(outputDir, config.CRASH_ANALYSIS_PARENT);
     const versions = input.versions?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
@@ -220,9 +220,9 @@ server.registerTool(
   "symbolicate_batch",
   {
     description:
-      "Symbolicate ALL .crash and .ips files in BasicCrashLogsFolder, output to SymbolicatedCrashLogsFolder. All paths (dSYM, app, crash directory, output directory) are pre-configured via environment variables — do NOT ask the user for them unless they explicitly want to override.",
+      "Symbolicate ALL .crash and .ips files in MainCrashLogsFolder (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs), output to SymbolicatedCrashLogsFolder. All paths (dSYM, app, crash directory, output directory) are pre-configured via environment variables — do NOT ask the user for them unless they explicitly want to override.",
     inputSchema: z.object({
-      crashDir: z.string().optional().describe("ALREADY CONFIGURED via env (BasicCrashLogsFolder). Do NOT ask the user for this. Only provide to override."),
+      crashDir: z.string().optional().describe("ALREADY CONFIGURED via env (MainCrashLogsFolder/XCodeCrashLogs). Do NOT ask the user for this. Only provide to override."),
       dsymPath: z.string().optional().describe("ALREADY CONFIGURED via DSYM_PATH env var. Do NOT ask the user for this. Only provide if the user explicitly wants to override the configured default."),
       appPath: z.string().optional().describe("ALREADY CONFIGURED via APP_PATH env var. Do NOT ask the user for this. Only provide if the user explicitly wants to override the configured default."),
       outputDir: z.string().optional().describe("ALREADY CONFIGURED via env (SymbolicatedCrashLogsFolder). Do NOT ask the user for this. Only provide to override."),
@@ -246,7 +246,7 @@ server.registerTool(
   },
   async (input) => {
     const config = getConfig();
-    const crashDir = input.crashDir ?? getBasicCrashesDir(config);
+    const crashDir = input.crashDir ?? getXcodeCrashesDir(config);
     const appticsDir = getAppticsCrashesDir(config);
     const otherDir = getOtherCrashesDir(config);
     const dsymPath = input.dsymPath ?? config.DSYM_PATH;
@@ -279,7 +279,7 @@ server.registerTool(
 
     if (!anyFiles) {
       const noFilesMsg = inputIsDefault
-        ? "No .crash or .ips files found in BasicCrashLogsFolder, AppticsCrashLogsFolder, or OtherCrashLogsFolder"
+        ? "No .crash or .ips files found in MainCrashLogsFolder/XCodeCrashLogs, MainCrashLogsFolder/AppticsCrashLogs, or MainCrashLogsFolder/OtherCrashLogs"
         : `No .crash or .ips files found in ${crashDir}`;
       const result = {
         succeeded: 0,
@@ -548,7 +548,7 @@ server.registerTool(
   async (input) => {
     const config = getConfig();
     const inputDir = config.CRASH_INPUT_DIR ?? config.CRASH_ANALYSIS_PARENT;
-    const basicDir = getBasicCrashesDir(config);
+    const basicDir = getXcodeCrashesDir(config);
     const symbolicatedDir = getSymbolicatedDir(config);
     const versions =
       input.versions?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
@@ -571,7 +571,7 @@ server.registerTool(
       if (!anyFiles) {
         symbolicationResult = {
           skipped: true,
-          reason: "No .crash or .ips files found in BasicCrashLogsFolder, AppticsCrashLogsFolder, or OtherCrashLogsFolder",
+          reason: "No .crash or .ips files found in MainCrashLogsFolder/XCodeCrashLogs, MainCrashLogsFolder/AppticsCrashLogs, or MainCrashLogsFolder/OtherCrashLogs",
         };
       } else {
         let succeeded = 0;
@@ -622,13 +622,13 @@ server.registerTool(
   "setup_folders",
   {
     description:
-      "Create the ParentHolderFolder directory structure (BasicCrashLogsFolder, SymbolicatedCrashLogsFolder) and optional symlinks for master/dev branches. All symlink paths are pre-configured via environment variables — do NOT ask the user for them unless they explicitly want to override.",
+      "Create the ParentHolderFolder directory structure (MainCrashLogsFolder/XCodeCrashLogs, MainCrashLogsFolder/AppticsCrashLogs, MainCrashLogsFolder/OtherCrashLogs, SymbolicatedCrashLogsFolder) and optional symlinks for master/dev branches. All symlink paths are pre-configured via environment variables — do NOT ask the user for them unless they explicitly want to override.",
     inputSchema: z.object({
       masterBranchPath: z.string().optional().describe("ALREADY CONFIGURED via MASTER_BRANCH_PATH env var. Do NOT ask the user. Only provide to override. Creates CurrentMasterLiveBranch symlink."),
       devBranchPath: z.string().optional().describe("ALREADY CONFIGURED via DEV_BRANCH_PATH env var. Do NOT ask the user. Only provide to override. Creates CurrentDevelopmentBranch symlink."),
       dsymPath: z.string().optional().describe("ALREADY CONFIGURED via DSYM_PATH env var. Do NOT ask the user. Only provide to override. Creates dSYM_File symlink."),
       appPath: z.string().optional().describe("ALREADY CONFIGURED via APP_PATH env var. Do NOT ask the user. Only provide to override. Creates app_File symlink."),
-      existingCrashLogsDir: z.string().optional().describe("If provided, copies .crash and .ips files from this directory into BasicCrashLogsFolder"),
+      existingCrashLogsDir: z.string().optional().describe("If provided, copies .crash and .ips files from this directory into MainCrashLogsFolder/XCodeCrashLogs"),
     }),
     outputSchema: z.object({
       parentDir: z.string(),
@@ -641,7 +641,8 @@ server.registerTool(
   async (input) => {
     const config = getConfig();
     const parentDir = config.CRASH_ANALYSIS_PARENT;
-    const basicDir = getBasicCrashesDir(config);
+    const mainCrashDir = getMainCrashLogsDir(config);
+    const xcodeCrashDir = getXcodeCrashesDir(config);
     const appticsDir = getAppticsCrashesDir(config);
     const otherDir = getOtherCrashesDir(config);
     const symbolicatedDir = getSymbolicatedDir(config);
@@ -649,7 +650,15 @@ server.registerTool(
     const created: string[] = [];
     const warnings: string[] = [];
 
-    for (const dir of [parentDir, basicDir, appticsDir, otherDir, symbolicatedDir]) {
+    // Always create mainCrashDir and xcodeCrashDir
+    for (const dir of [parentDir, mainCrashDir, xcodeCrashDir, symbolicatedDir]) {
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+        created.push(dir);
+      }
+    }
+    // Create AppticsCrashLogs and OtherCrashLogs only if they don't already exist
+    for (const dir of [appticsDir, otherDir]) {
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
         created.push(dir);
@@ -724,7 +733,7 @@ server.registerTool(
         );
         for (const file of srcFiles) {
           const src = path.join(input.existingCrashLogsDir, file);
-          const dest = path.join(basicDir, file);
+          const dest = path.join(xcodeCrashDir, file);
           fs.copyFileSync(src, dest);
           copiedFiles++;
         }

@@ -13,6 +13,8 @@ export interface ZohoBugFieldIds {
   severityMajor?: string;
   severityMinor?: string;
   severityNone?: string;
+  cfOccurrences?: string;
+  cfAppVersion?: string;
 }
 
 export function getFieldIdsFromConfig(config: CrashPointConfig): ZohoBugFieldIds {
@@ -24,6 +26,8 @@ export function getFieldIdsFromConfig(config: CrashPointConfig): ZohoBugFieldIds
     severityMajor: config.ZOHO_BUG_SEVERITY_MAJOR,
     severityMinor: config.ZOHO_BUG_SEVERITY_MINOR,
     severityNone: config.ZOHO_BUG_SEVERITY_NONE,
+    cfOccurrences: config.ZOHO_BUG_CF_OCCURRENCES,
+    cfAppVersion: config.ZOHO_BUG_CF_APP_VERSION,
   };
 }
 
@@ -227,6 +231,18 @@ export async function reportToZohoProjectsViaMcp(
       }
       if (severity.id !== undefined) {
         toolArgs.severity_id = severity.id;
+      }
+      if (fieldIds.cfOccurrences) {
+        toolArgs.custom_fields = toolArgs.custom_fields || {};
+        (toolArgs.custom_fields as Record<string, unknown>)[fieldIds.cfOccurrences] = String(group.count);
+      }
+      if (fieldIds.cfAppVersion) {
+        const topAppVersion = Object.entries(group.app_versions)
+          .sort(([, a], [, b]) => b - a)[0]?.[0] ?? "";
+        if (topAppVersion) {
+          toolArgs.custom_fields = toolArgs.custom_fields || {};
+          (toolArgs.custom_fields as Record<string, unknown>)[fieldIds.cfAppVersion] = topAppVersion;
+        }
       }
 
       try {
