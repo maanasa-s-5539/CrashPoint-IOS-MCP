@@ -853,7 +853,7 @@ server.registerTool(
   "report_to_zoho_projects",
   {
     description:
-      "Analyze symbolicated crashes and create a bug in Zoho Projects for each unique crash group. Severity is auto-mapped from exception type and occurrence count. Fix status is read from local tracking. Requires ZOHO_PROJECTS_MCP_URL, ZOHO_PROJECTS_PORTAL_ID, and ZOHO_PROJECTS_PROJECT_ID to be configured.",
+      "Analyze symbolicated crashes and create a bug in Zoho Projects for each unique crash group. Before creating, fetches existing bugs via getProjectIssues and compares by title and app version — duplicates are updated (occurrences accumulated) instead of re-created. Severity is auto-mapped from exception type and occurrence count. Fix status is read from local tracking. Requires ZOHO_PROJECTS_MCP_URL, ZOHO_PROJECTS_PORTAL_ID, and ZOHO_PROJECTS_PROJECT_ID to be configured.",
     inputSchema: z.object({
       crashDir: z.string().optional().describe("Directory of symbolicated crash files (default: SymbolicatedCrashLogsFolder)"),
       unfixedOnly: z.boolean().optional().describe("Only create bugs for unfixed crashes (default: false)"),
@@ -863,6 +863,7 @@ server.registerTool(
       message: z.string(),
       totalBugsCreated: z.number(),
       totalFailed: z.number(),
+      totalSkipped: z.number(),
       bugs: z.array(z.any()),
       missingFieldIds: z.array(z.string()),
     }),
