@@ -201,6 +201,9 @@ The CLI lets you run the crash analysis pipeline without an MCP client (useful f
 # Export crash logs from Xcode Organizer
 node dist/cli.js export
 
+# Export crashes filtered by date range
+node dist/cli.js export --start-date 2026-03-01 --end-date 2026-03-20
+
 # Symbolicate all crash files in MainCrashLogsFolder (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs)
 node dist/cli.js batch
 
@@ -278,6 +281,8 @@ The MCP server posts `{ "text": formattedReport }` directly to this URL — no b
 
 CrashPoint can create a bug in Zoho Projects for each unique crash group. It connects to the **Zoho Projects MCP server** (already authenticated via your Claude Desktop / Cursor Zoho MCP connection) — no OAuth client credentials required.
 
+> **No OAuth Handling in CrashPoint:** CrashPoint iOS MCP does **not** handle OAuth client ID, client secret, or token management. Authentication to Zoho Projects is handled entirely by the MCP host (Claude Desktop / Cursor) via Zoho's "Authorize Via Connection" mechanism. The `report_to_zoho_projects` tool prepares and returns structured bug payloads (title, description, severity, status) for each crash group. The MCP host, which already holds the authenticated Zoho Projects connection, then calls `create_bug` on the Zoho Projects MCP for each entry.
+
 ### Setup
 
 1. **Connect the Zoho Projects MCP** to your Claude Desktop / Cursor configuration (via mcp.zoho.com). CrashPoint will connect to it as an MCP client.
@@ -290,7 +295,7 @@ CrashPoint can create a bug in Zoho Projects for each unique crash group. It con
 4. **Configure `.env`** with the Zoho Projects settings:
 
    ```dotenv
-   ZOHO_PROJECTS_MCP_URL=https://mcp.zoho.com/projects/sse
+   ZOHO_PROJECTS_MCP_URL=https://mcp.zoho.com/projects/http-stream
    ZOHO_PROJECTS_PORTAL_ID=12345678
    ZOHO_PROJECTS_PROJECT_ID=87654321
 
@@ -335,13 +340,7 @@ CrashPoint can create a bug in Zoho Projects for each unique crash group. It con
 
 ### MCP Tool Usage (Claude / Cursor)
 
-Ask Claude (with the CrashPoint MCP connected):
-
-> "Report all unfixed crashes to Zoho Projects as bugs"
-
-> "Create Zoho Projects bugs for the top 5 crash groups"
-
-This invokes the `report_to_zoho_projects` tool (Tool 15).
+Once CrashPoint iOS MCP and the Zoho Projects MCP are both connected to your MCP host (Claude Desktop or Cursor), the host can invoke the `report_to_zoho_projects` tool to create bugs in Zoho Projects for analyzed crash groups. The MCP host handles the authenticated Zoho Projects connection.
 
 ### Claude Desktop Configuration
 
@@ -358,7 +357,7 @@ Add the Zoho Projects env vars to your Claude Desktop config. **Do not include O
         "DSYM_PATH": "/path/to/MyApp.dSYM",
         "APP_PATH": "/path/to/MyApp.app",
         "ZOHO_CLIQ_WEBHOOK_URL": "https://cliq.zoho.com/...",
-        "ZOHO_PROJECTS_MCP_URL": "https://mcp.zoho.com/projects/sse",
+        "ZOHO_PROJECTS_MCP_URL": "https://mcp.zoho.com/projects/http-stream",
         "ZOHO_PROJECTS_PORTAL_ID": "12345678",
         "ZOHO_PROJECTS_PROJECT_ID": "87654321",
         "ZOHO_BUG_STATUS_OPEN": "1139168000000007045",
@@ -400,21 +399,7 @@ When crashes are analyzed, each group shows its fix status if one has been set:
 
 Fix statuses are stored in `{CRASH_ANALYSIS_PARENT}/fix_status.json` (local only, gitignored).
 
-Use the `set_fix_status` MCP tool or ask Claude:
-
-> "Mark the EXC_BAD_ACCESS crash as fixed with note 'Fixed in PR #42'"
-
----
-
-## AI Analysis
-
-AI-powered analysis (pattern insights, root cause suggestions, priority ranking) is a **separate manual step** — it is not part of the automated scheduled pipeline. Use Claude Desktop with the MCP tools for interactive analysis:
-
-> "Analyze my symbolicated crashes and tell me which ones are most critical"
-
-> "Which crash groups are still unfixed?"
-
-> "Summarize the top 3 crashes for our next sprint"
+Use the `set_fix_status` MCP tool to mark crash signatures as fixed or unfixed.
 
 ---
 
@@ -436,8 +421,6 @@ This file is local-only (gitignored) and tracks which crash types your team has 
 
 ## Symbolication Notes
 
-- Symbolication requires **macOS** and **Xcode CLI tools** — `atos` is macOS-only
-- By default, only the **crashed thread** is symbolicated (pass `allThreads: true` to symbolicate all)
 - Symbolicated files are written to `SymbolicatedCrashLogsFolder/` with the same filename
 
 ---
