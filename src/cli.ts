@@ -103,6 +103,10 @@ async function cmdAnalyze(flags: Record<string, string | boolean>): Promise<void
   const crashDir = (flags["crash-dir"] as string) ?? getSymbolicatedDir(config);
   const outputFile = (flags["o"] as string) ?? undefined;
 
+  if (outputFile) {
+    assertPathUnderBase(outputFile, config.CRASH_ANALYSIS_PARENT);
+  }
+
   const tracker = new FixTracker(config.CRASH_ANALYSIS_PARENT);
   const fixStatuses: Record<string, { fixed: boolean; note?: string }> = {};
   for (const entry of tracker.getAll()) {
@@ -126,6 +130,10 @@ async function cmdNotify(flags: Record<string, string | boolean>): Promise<void>
   const unfixedOnly = flags["unfixed-only"] === true;
   const dryRun = flags["dry-run"] === true;
   const outputFile = (flags["o"] as string) ?? undefined;
+
+  if (outputFile) {
+    assertPathUnderBase(outputFile, config.CRASH_ANALYSIS_PARENT);
+  }
 
   const tracker = new FixTracker(config.CRASH_ANALYSIS_PARENT);
   const fixStatuses: Record<string, { fixed: boolean; note?: string }> = {};
@@ -154,16 +162,14 @@ async function cmdNotify(flags: Record<string, string | boolean>): Promise<void>
     );
   }
 
-  if (outputFile) {
-    fs.writeFileSync(outputFile, JSON.stringify(reportToSend, null, 2), "utf-8");
-    console.log(`Report written to ${path.resolve(outputFile)}`);
-  }
-
   if (dryRun) {
-    if (!outputFile) {
+    if (outputFile) {
+      fs.writeFileSync(outputFile, JSON.stringify(reportToSend, null, 2), "utf-8");
+      console.log(`Report written to ${path.resolve(outputFile)}`);
+    } else {
       console.log(JSON.stringify(reportToSend, null, 2));
     }
-    console.log("Dry-run: no notification sent.");
+    console.log("Dry-run: no notification sent to Cliq.");
     return;
   }
 
@@ -173,6 +179,10 @@ async function cmdNotify(flags: Record<string, string | boolean>): Promise<void>
   }
 
   const result = await sendCrashReportToCliq(reportToSend, config);
+  if (outputFile) {
+    fs.writeFileSync(outputFile, JSON.stringify(reportToSend, null, 2), "utf-8");
+    console.log(`Report written to ${path.resolve(outputFile)}`);
+  }
   console.log(JSON.stringify(result, null, 2));
   if (!result.success) {
     process.exit(1);
@@ -289,6 +299,10 @@ async function cmdSymbolicateOne(flags: Record<string, string | boolean>): Promi
   const config = getConfig();
   const dsymPath = (flags["dsym"] as string) ?? config.DSYM_PATH;
   const outputPath = (flags["output"] as string) ?? path.join(config.CRASH_ANALYSIS_PARENT, "SymbolicatedCrashLogsFolder", path.basename(crashPath));
+
+  if (flags["output"]) {
+    assertPathUnderBase(outputPath, config.CRASH_ANALYSIS_PARENT);
+  }
 
   if (!dsymPath) {
     console.error("Error: --dsym or DSYM_PATH env var is required.");
