@@ -5,6 +5,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import fs from "fs";
 import path from "path";
+import { execFile } from "child_process";
+import { promisify } from "util";
 
 import { getConfig, getXcodeCrashesDir, getMainCrashLogsDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir, hasCrashFiles } from "./config.js";
 import {
@@ -17,11 +19,13 @@ import {
   diagnoseFrames,
   BatchResult,
 } from "./symbolicator.js";
-import { analyzeDirectory } from "./crashAnalyzer.js";
+import { analyzeDirectory, readCrash, searchCrashes, cleanOldCrashes } from "./crashAnalyzer.js";
 import { sendCrashReportToCliq } from "./cliqNotifier.js";
 import { FixTracker } from "./fixTracker.js";
 import { assertPathUnderBase, assertNoTraversal, assertSafeSymlinkTarget } from "./pathSafety.js";
 import { reportToZohoProjectsViaMcp, getFieldIdsFromConfig } from "./zohoProjectsMcpBridge.js";
+
+const execFileAsync = promisify(execFile);
 
 const server = new McpServer({
   name: "crashpoint-ios-mcp",
@@ -55,62 +59,12 @@ server.registerTool(
   }
 );
 
-// ── Tool 2: preview_export ───────────────────────────────────────────────────
-server.registerTool(
-  "preview_export",
-  {
-    description:
-      "Dry-run preview of crash log export. Shows what files would be exported without writing anything.",
-    inputSchema: z.object({
-      inputDir: z.string().optional().describe("Directory to search for .xccrashpoint files"),
-      outputDir: z.string().optional().describe("Destination directory for crash logs"),
-      versions: z.string().optional().describe("Comma-separated version filter"),
-      recursive: z.boolean().optional().describe("Search subdirectories recursively"),
-      startDate: z.string().optional().describe("ISO date string to filter crashes from (e.g. 2026-03-01)"),
-      endDate: z.string().optional().describe("ISO date string to filter crashes until (e.g. 2026-03-20)"),
-    }),
-    outputSchema: z.object({
-      would_export: z.number(),
-      would_skip: z.number(),
-      files: z.array(
-        z.object({
-          source: z.string(),
-          destination: z.string(),
-          version: z.string(),
-          skipped: z.boolean(),
-          reason: z.string().optional(),
-        })
-      ),
-    }),
-  },
-  async (input) => {
-    const config = getConfig();
-    const inputDir = input.inputDir ?? config.CRASH_INPUT_DIR ?? config.CRASH_ANALYSIS_PARENT;
-    const outputDir = input.outputDir ?? getXcodeCrashesDir(config);
-    assertNoTraversal(inputDir);
-    assertPathUnderBase(outputDir, config.CRASH_ANALYSIS_PARENT);
-    const versions = input.versions?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
-    const recursive = input.recursive ?? false;
-
-    const result = exportCrashLogs(inputDir, outputDir, versions, recursive, true, input.startDate, input.endDate);
-    const structured = {
-      would_export: result.exported,
-      would_skip: result.skipped,
-      files: result.files,
-    };
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify(structured, null, 2) }],
-      structuredContent: structured,
-    };
-  }
-);
-
-// ── Tool 3: export_crashes ───────────────────────────────────────────────────
+// ── Tool 2: export_crashes ───────────────────────────────────────────────────
 server.registerTool(
   "export_crashes",
   {
     description:
-      "Export .crash files from .xccrashpoint packages into MainCrashLogsFolder/XCodeCrashLogs.",
+      "Export .crash files from .xccrashpoint packages into MainCrashLogsFolder/XCodeCrashLogs. When dryRun is true, shows what would be exported without writing any files.",
     inputSchema: z.object({
       inputDir: z.string().optional().describe("Directory to search for .xccrashpoint files"),
       outputDir: z.string().optional().describe("Destination directory for crash logs"),
@@ -118,6 +72,7 @@ server.registerTool(
       recursive: z.boolean().optional().describe("Search subdirectories recursively"),
       startDate: z.string().optional().describe("ISO date string to filter crashes from (e.g. 2026-03-01)"),
       endDate: z.string().optional().describe("ISO date string to filter crashes until (e.g. 2026-03-20)"),
+      dryRun: z.boolean().optional().describe("When true, shows what would be exported without writing any files"),
     }),
     outputSchema: z.object({
       exported: z.number(),
@@ -142,8 +97,9 @@ server.registerTool(
     assertPathUnderBase(outputDir, config.CRASH_ANALYSIS_PARENT);
     const versions = input.versions?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
     const recursive = input.recursive ?? false;
+    const dryRun = input.dryRun ?? false;
 
-    const result = exportCrashLogs(inputDir, outputDir, versions, recursive, false, input.startDate, input.endDate);
+    const result = exportCrashLogs(inputDir, outputDir, versions, recursive, dryRun, input.startDate, input.endDate);
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
       structuredContent: result,
@@ -151,19 +107,16 @@ server.registerTool(
   }
 );
 
-// ── Tool 4: symbolicate_one ──────────────────────────────────────────────────
+// ── Tool 3: symbolicate_one ──────────────────────────────────────────────────
 server.registerTool(
   "symbolicate_one",
   {
     description:
-      "Symbolicate a single .crash file using Xcode's symbolicatecrash tool. All threads and all binaries (including system frameworks) are automatically symbolicated. Requires macOS with Xcode installed. dsymPath and appPath are pre-configured via environment variables — do NOT ask the user for them unless they explicitly want to override.",
+      "Symbolicate a single .crash file using Xcode's symbolicatecrash tool. All threads and all binaries (including system frameworks) are automatically symbolicated. Requires macOS with Xcode installed. dsymPath is pre-configured via environment variable — do NOT ask the user for it unless they explicitly want to override.",
     inputSchema: z.object({
       crashPath: z.string().describe("Path to the .crash or .ips file"),
       dsymPath: z.string().optional().describe("ALREADY CONFIGURED via DSYM_PATH env var. Do NOT ask the user for this. Only provide if the user explicitly wants to override the configured default."),
-      appPath: z.string().optional().describe("ALREADY CONFIGURED via APP_PATH env var. Do NOT ask the user for this. Only provide if the user explicitly wants to override the configured default."),
       outputPath: z.string().optional().describe("Where to write the symbolicated file"),
-      arch: z.string().optional().describe("Architecture override (e.g. arm64)"),
-      allThreads: z.boolean().optional().describe("Deprecated: all threads are always symbolicated by symbolicatecrash. This parameter is ignored."),
     }),
     outputSchema: z.object({
       success: z.boolean(),
@@ -174,9 +127,7 @@ server.registerTool(
     const config = getConfig();
     assertNoTraversal(input.crashPath);
     const dsymPath = input.dsymPath ?? config.DSYM_PATH;
-    const appPath = input.appPath ?? config.APP_PATH;
     if (input.dsymPath) assertNoTraversal(input.dsymPath);
-    if (input.appPath) assertNoTraversal(input.appPath);
 
     if (!dsymPath) {
       const result = {
@@ -199,10 +150,7 @@ server.registerTool(
     const result = await symbolicateOne(
       input.crashPath,
       dsymPath,
-      appPath,
       outputPath,
-      input.arch,
-      input.allThreads ?? false
     );
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
@@ -211,19 +159,16 @@ server.registerTool(
   }
 );
 
-// ── Tool 5: symbolicate_batch ────────────────────────────────────────────────
+// ── Tool 4: symbolicate_batch ────────────────────────────────────────────────
 server.registerTool(
   "symbolicate_batch",
   {
     description:
-      "Symbolicate ALL .crash and .ips files in MainCrashLogsFolder (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs) using Xcode's symbolicatecrash tool, output to SymbolicatedCrashLogsFolder. All threads and all binaries (including system frameworks) are automatically symbolicated. All paths (dSYM, app, crash directory, output directory) are pre-configured via environment variables — do NOT ask the user for them unless they explicitly want to override.",
+      "Symbolicate ALL .crash and .ips files in MainCrashLogsFolder (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs) using Xcode's symbolicatecrash tool, output to SymbolicatedCrashLogsFolder. All threads and all binaries (including system frameworks) are automatically symbolicated. All paths (dSYM, crash directory, output directory) are pre-configured via environment variables — do NOT ask the user for them unless they explicitly want to override.",
     inputSchema: z.object({
       crashDir: z.string().optional().describe("ALREADY CONFIGURED via env (MainCrashLogsFolder/XCodeCrashLogs). Do NOT ask the user for this. Only provide to override."),
       dsymPath: z.string().optional().describe("ALREADY CONFIGURED via DSYM_PATH env var. Do NOT ask the user for this. Only provide if the user explicitly wants to override the configured default."),
-      appPath: z.string().optional().describe("ALREADY CONFIGURED via APP_PATH env var. Do NOT ask the user for this. Only provide if the user explicitly wants to override the configured default."),
       outputDir: z.string().optional().describe("ALREADY CONFIGURED via env (SymbolicatedCrashLogsFolder). Do NOT ask the user for this. Only provide to override."),
-      arch: z.string().optional().describe("Architecture override"),
-      allThreads: z.boolean().optional().describe("Deprecated: all threads are always symbolicated by symbolicatecrash. This parameter is ignored."),
     }),
     outputSchema: z.object({
       succeeded: z.number(),
@@ -244,12 +189,10 @@ server.registerTool(
     const appticsDir = getAppticsCrashesDir(config);
     const otherDir = getOtherCrashesDir(config);
     const dsymPath = input.dsymPath ?? config.DSYM_PATH;
-    const appPath = input.appPath ?? config.APP_PATH;
     const outputDir = input.outputDir ?? getSymbolicatedDir(config);
     if (input.crashDir) assertPathUnderBase(input.crashDir, config.CRASH_ANALYSIS_PARENT);
     if (input.outputDir) assertPathUnderBase(input.outputDir, config.CRASH_ANALYSIS_PARENT);
     if (input.dsymPath) assertNoTraversal(input.dsymPath);
-    if (input.appPath) assertNoTraversal(input.appPath);
 
     if (!dsymPath) {
       const result = {
@@ -299,7 +242,7 @@ server.registerTool(
     const results: BatchResult[] = [];
 
     for (const dir of dirsToProcess) {
-      const batchResult = await runBatch(dir, dsymPath, appPath, outputDir, input.arch, input.allThreads ?? false);
+      const batchResult = await runBatch(dir, dsymPath, outputDir);
       succeeded += batchResult.succeeded;
       failed += batchResult.failed;
       total += batchResult.total;
@@ -314,7 +257,7 @@ server.registerTool(
   }
 );
 
-// ── Tool 6: diagnose_frames ──────────────────────────────────────────────────
+// ── Tool 5: diagnose_frames ──────────────────────────────────────────────────
 server.registerTool(
   "diagnose_frames",
   {
@@ -352,7 +295,7 @@ server.registerTool(
   }
 );
 
-// ── Tool 7: analyze_crashes ──────────────────────────────────────────────────
+// ── Tool 6: analyze_crashes ──────────────────────────────────────────────────
 server.registerTool(
   "analyze_crashes",
   {
@@ -386,41 +329,108 @@ server.registerTool(
   }
 );
 
-// ── Tool 8: notify_cliq ──────────────────────────────────────────────────────
+// ── Tool 7: notify_cliq ──────────────────────────────────────────────────────
 server.registerTool(
   "notify_cliq",
   {
     description:
-      "Send crash analysis report to configured Zoho Cliq channel webhook. Requires ZOHO_CLIQ_WEBHOOK_URL in env.",
+      "Analyze symbolicated crashes and send the report to Zoho Cliq. By default sends all crash types; set unfixedOnly to send only unfixed crashes. Set notify to false for a dry-run (returns report without sending). Requires ZOHO_CLIQ_WEBHOOK_URL in env.",
     inputSchema: z.object({
-      report: z.string().describe("JSON string of the crash analysis report"),
+      crashDir: z.string().optional().describe("Directory of symbolicated crash files (default: SymbolicatedCrashLogsFolder)"),
+      unfixedOnly: z.boolean().optional().describe("When true, only unfixed crash types are included in the report (default: false)"),
+      notify: z.boolean().optional().describe("Actually send to Cliq (default: true). Set false for dry-run."),
     }),
     outputSchema: z.object({
       success: z.boolean(),
       message: z.string(),
+      totalCrashTypes: z.number(),
+      totalFixed: z.number().optional(),
+      totalUnfixed: z.number().optional(),
+      reportSent: z.boolean(),
+      report: z.any().optional(),
     }),
   },
   async (input) => {
     const config = getConfig();
-    let report;
-    const MAX_REPORT_SIZE = 10 * 1024 * 1024; // 10 MB
-    if (input.report.length > MAX_REPORT_SIZE) {
-      const result = { success: false, message: `Report payload too large (${input.report.length} bytes, max ${MAX_REPORT_SIZE})` };
+    const crashDir = input.crashDir ?? getSymbolicatedDir(config);
+    if (input.crashDir) assertPathUnderBase(input.crashDir, config.CRASH_ANALYSIS_PARENT);
+    const unfixedOnly = input.unfixedOnly ?? false;
+    const shouldNotify = input.notify !== false;
+
+    // Load fix statuses
+    const tracker = new FixTracker(config.CRASH_ANALYSIS_PARENT);
+    const fixStatuses: Record<string, { fixed: boolean; note?: string }> = {};
+    for (const entry of tracker.getAll()) {
+      fixStatuses[entry.signature] = { fixed: entry.fixed, note: entry.note };
+    }
+
+    // Analyze directory with fix statuses
+    const fullReport = analyzeDirectory(crashDir, fixStatuses);
+
+    let reportToSend = fullReport;
+    let totalFixed: number | undefined;
+    let totalUnfixed: number | undefined;
+
+    if (unfixedOnly) {
+      const fixedGroups = fullReport.crash_groups.filter((g) => g.fix_status?.fixed === true);
+      const unfixedGroups = fullReport.crash_groups.filter(
+        (g) => !g.fix_status || g.fix_status.fixed === false
+      );
+      totalFixed = fixedGroups.length;
+      totalUnfixed = unfixedGroups.length;
+      reportToSend = {
+        ...fullReport,
+        report_type: "unfixed-only",
+        crash_groups: unfixedGroups.map((g, idx) => ({ ...g, rank: idx + 1 })),
+        total_crashes: unfixedGroups.reduce((sum, g) => sum + g.count, 0),
+        unique_crash_types: unfixedGroups.length,
+      };
+    }
+
+    if (!shouldNotify) {
+      const result = {
+        success: true,
+        message: unfixedOnly
+          ? `Dry-run: ${totalUnfixed} unfixed crash type(s), ${totalFixed} fixed. No notification sent.`
+          : `Dry-run: ${reportToSend.unique_crash_types} crash type(s). No notification sent.`,
+        totalCrashTypes: reportToSend.unique_crash_types,
+        totalFixed,
+        totalUnfixed,
+        reportSent: false,
+        report: reportToSend,
+      };
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
         structuredContent: result,
       };
     }
-    try {
-      report = JSON.parse(input.report);
-    } catch {
-      const result = { success: false, message: "Invalid JSON in report parameter." };
+
+    if (reportToSend.unique_crash_types === 0) {
+      const result = {
+        success: true,
+        message: unfixedOnly ? "No unfixed crashes to report." : "No crashes to report.",
+        totalCrashTypes: 0,
+        totalFixed,
+        totalUnfixed,
+        reportSent: false,
+        report: reportToSend,
+      };
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
         structuredContent: result,
       };
     }
-    const result = await sendCrashReportToCliq(report, config);
+
+    const cliqResult = await sendCrashReportToCliq(reportToSend, config);
+    const result = {
+      success: cliqResult.success,
+      message: cliqResult.message,
+      totalCrashTypes: reportToSend.unique_crash_types,
+      totalFixed,
+      totalUnfixed,
+      reportSent: cliqResult.success,
+      report: reportToSend,
+    };
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
       structuredContent: result,
@@ -428,7 +438,7 @@ server.registerTool(
   }
 );
 
-// ── Tool 9: set_fix_status ───────────────────────────────────────────────────
+// ── Tool 8: set_fix_status ───────────────────────────────────────────────────
 server.registerTool(
   "set_fix_status",
   {
@@ -458,32 +468,7 @@ server.registerTool(
   }
 );
 
-// ── Tool 10: remove_fix_status ───────────────────────────────────────────────
-server.registerTool(
-  "remove_fix_status",
-  {
-    description: "Remove fix tracking for a crash signature.",
-    inputSchema: z.object({
-      signature: z.string().describe("Crash signature string"),
-    }),
-    outputSchema: z.object({
-      success: z.boolean(),
-      removed: z.boolean(),
-    }),
-  },
-  async (input) => {
-    const config = getConfig();
-    const tracker = new FixTracker(config.CRASH_ANALYSIS_PARENT);
-    const removed = tracker.remove(input.signature);
-    const result = { success: true, removed };
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-      structuredContent: result,
-    };
-  }
-);
-
-// ── Tool 11: list_fix_statuses ───────────────────────────────────────────────
+// ── Tool 9: list_fix_statuses ────────────────────────────────────────────────
 server.registerTool(
   "list_fix_statuses",
   {
@@ -520,7 +505,7 @@ server.registerTool(
   }
 );
 
-// ── Tool 12: run_full_pipeline ───────────────────────────────────────────────
+// ── Tool 10: run_full_pipeline ───────────────────────────────────────────────
 server.registerTool(
   "run_full_pipeline",
   {
@@ -552,7 +537,6 @@ server.registerTool(
 
     // Step 2: Symbolicate
     const dsymPath = config.DSYM_PATH;
-    const appPath = config.APP_PATH;
     let symbolicationResult: object = { skipped: true, reason: "DSYM_PATH not configured" };
 
     if (dsymPath) {
@@ -573,7 +557,7 @@ server.registerTool(
         let total = 0;
         const results: BatchResult[] = [];
         for (const dir of [basicDir, appticsDir, otherDir]) {
-          const r = await runBatch(dir, dsymPath, appPath, symbolicatedDir);
+          const r = await runBatch(dir, dsymPath, symbolicatedDir);
           succeeded += r.succeeded;
           failed += r.failed;
           total += r.total;
@@ -611,7 +595,7 @@ server.registerTool(
   }
 );
 
-// ── Tool 13: setup_folders ───────────────────────────────────────────────────
+// ── Tool 11: setup_folders ───────────────────────────────────────────────────
 server.registerTool(
   "setup_folders",
   {
@@ -745,104 +729,7 @@ server.registerTool(
   }
 );
 
-// ── Tool 14: notify_unfixed_cliq ─────────────────────────────────────────────
-server.registerTool(
-  "notify_unfixed_cliq",
-  {
-    description:
-      "Analyze symbolicated crashes, filter to only UNFIXED crash types, and send the filtered report to Zoho Cliq. Crashes marked as 'fixed in development' via set_fix_status are excluded.",
-    inputSchema: z.object({
-      crashDir: z.string().optional().describe("Directory of symbolicated crash files (default: SymbolicatedCrashLogsFolder)"),
-      notify: z.boolean().optional().describe("Actually send to Cliq (default: true). Set false for dry-run."),
-    }),
-    outputSchema: z.object({
-      success: z.boolean(),
-      message: z.string(),
-      totalUnfixed: z.number(),
-      totalFixed: z.number(),
-      reportSent: z.boolean(),
-      unfixedReport: z.any().optional(),
-    }),
-  },
-  async (input) => {
-    const config = getConfig();
-    const crashDir = input.crashDir ?? getSymbolicatedDir(config);
-    const shouldNotify = input.notify !== false;
-
-    // Load fix statuses
-    const tracker = new FixTracker(config.CRASH_ANALYSIS_PARENT);
-    const fixStatuses: Record<string, { fixed: boolean; note?: string }> = {};
-    for (const entry of tracker.getAll()) {
-      fixStatuses[entry.signature] = { fixed: entry.fixed, note: entry.note };
-    }
-
-    // Analyze directory with fix statuses
-    const fullReport = analyzeDirectory(crashDir, fixStatuses);
-
-    // Separate fixed vs unfixed
-    const fixedGroups = fullReport.crash_groups.filter(
-      (g) => g.fix_status?.fixed === true
-    );
-    const unfixedGroups = fullReport.crash_groups.filter(
-      (g) => !g.fix_status || g.fix_status.fixed === false
-    );
-
-    // Rebuild report with only unfixed groups
-    const unfixedReport = {
-      ...fullReport,
-      report_type: "unfixed-only",
-      crash_groups: unfixedGroups.map((g, idx) => ({ ...g, rank: idx + 1 })),
-      total_crashes: unfixedGroups.reduce((sum, g) => sum + g.count, 0),
-      unique_crash_types: unfixedGroups.length,
-    };
-
-    if (!shouldNotify) {
-      const result = {
-        success: true,
-        message: `Dry-run: ${unfixedGroups.length} unfixed crash type(s), ${fixedGroups.length} fixed. No notification sent.`,
-        totalUnfixed: unfixedGroups.length,
-        totalFixed: fixedGroups.length,
-        reportSent: false,
-        unfixedReport,
-      };
-      return {
-        content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-        structuredContent: result,
-      };
-    }
-
-    if (unfixedGroups.length === 0) {
-      const result = {
-        success: true,
-        message: "No unfixed crashes to report.",
-        totalUnfixed: 0,
-        totalFixed: fixedGroups.length,
-        reportSent: false,
-        unfixedReport,
-      };
-      return {
-        content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-        structuredContent: result,
-      };
-    }
-
-    const cliqResult = await sendCrashReportToCliq(unfixedReport, config);
-    const result = {
-      success: cliqResult.success,
-      message: cliqResult.message,
-      totalUnfixed: unfixedGroups.length,
-      totalFixed: fixedGroups.length,
-      reportSent: cliqResult.success,
-      unfixedReport,
-    };
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-      structuredContent: result,
-    };
-  }
-);
-
-// ── Tool 15: report_to_zoho_projects ─────────────────────────────────────────
+// ── Tool 12: report_to_zoho_projects ─────────────────────────────────────────
 server.registerTool(
   "report_to_zoho_projects",
   {
@@ -906,6 +793,318 @@ server.registerTool(
       fieldIds
     );
 
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      structuredContent: result,
+    };
+  }
+);
+
+// ── Tool 13: read_crash ───────────────────────────────────────────────────────
+server.registerTool(
+  "read_crash",
+  {
+    description:
+      "Parse and summarize a single .crash or .ips file. Returns structured metadata: exception type, exception codes, hardware model, OS version, app version, crashed thread, top stack frames, and source.",
+    inputSchema: z.object({
+      crashPath: z.string().describe("Path to the .crash or .ips file to read"),
+    }),
+    outputSchema: z.object({
+      file: z.string(),
+      exception_type: z.string(),
+      exception_codes: z.string(),
+      hardware_model: z.string(),
+      os_version: z.string(),
+      app_version: z.string(),
+      crashed_thread: z.object({
+        id: z.number(),
+        name: z.string(),
+        display: z.string(),
+      }),
+      top_frames: z.array(z.string()),
+      source: z.string(),
+    }),
+  },
+  async (input) => {
+    assertNoTraversal(input.crashPath);
+    const meta = readCrash(input.crashPath);
+    if (!meta) {
+      throw new Error(`Could not read or parse crash file: ${input.crashPath}`);
+    }
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(meta, null, 2) }],
+      structuredContent: meta,
+    };
+  }
+);
+
+// ── Tool 14: search_crashes ───────────────────────────────────────────────────
+server.registerTool(
+  "search_crashes",
+  {
+    description:
+      "Search through crash files in a directory for crashes matching a keyword or pattern. Searches across exception type, exception codes, top stack frames, and raw file content (case-insensitive).",
+    inputSchema: z.object({
+      query: z.string().describe("Search term (case-insensitive). E.g. 'EXC_BAD_ACCESS', 'ViewController', 'SIGABRT'"),
+      crashDir: z.string().optional().describe("Directory of crash files to search (default: SymbolicatedCrashLogsFolder)"),
+    }),
+    outputSchema: z.object({
+      total: z.number(),
+      matches: z.array(
+        z.object({
+          file: z.string(),
+          exception_type: z.string(),
+          crashed_thread: z.object({
+            id: z.number(),
+            name: z.string(),
+            display: z.string(),
+          }),
+          top_frames: z.array(z.string()),
+          matched_in: z.array(z.string()),
+        })
+      ),
+    }),
+  },
+  async (input) => {
+    const config = getConfig();
+    const crashDir = input.crashDir ?? getSymbolicatedDir(config);
+    if (input.crashDir) assertPathUnderBase(input.crashDir, config.CRASH_ANALYSIS_PARENT);
+    const result = searchCrashes(input.query, crashDir);
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      structuredContent: result,
+    };
+  }
+);
+
+// ── Tool 15: clean_old_crashes ────────────────────────────────────────────────
+server.registerTool(
+  "clean_old_crashes",
+  {
+    description:
+      "Delete .crash and .ips files older than a given date from MainCrashLogsFolder (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs) and SymbolicatedCrashLogsFolder. Crash date is read from the file header (Date/Time field); falls back to filesystem modification time if not found. Use dryRun to preview what would be deleted.",
+    inputSchema: z.object({
+      beforeDate: z.string().describe("ISO date string — files with crash dates before this date will be deleted (e.g. 2026-03-01)"),
+      dryRun: z.boolean().optional().describe("When true, reports what would be deleted without actually deleting (default: false)"),
+    }),
+    outputSchema: z.object({
+      deleted: z.number(),
+      skipped: z.number(),
+      totalScanned: z.number(),
+      files: z.array(
+        z.object({
+          file: z.string(),
+          crashDate: z.string(),
+          deleted: z.boolean(),
+        })
+      ),
+    }),
+  },
+  async (input) => {
+    const config = getConfig();
+    const dryRun = input.dryRun ?? false;
+
+    const dirs = [
+      getXcodeCrashesDir(config),
+      getAppticsCrashesDir(config),
+      getOtherCrashesDir(config),
+      getSymbolicatedDir(config),
+    ];
+
+    const result = cleanOldCrashes(input.beforeDate, dirs, dryRun);
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      structuredContent: result,
+    };
+  }
+);
+
+// ── Tool 16: verify_dsym ──────────────────────────────────────────────────────
+server.registerTool(
+  "verify_dsym",
+  {
+    description:
+      "Validate a .dSYM bundle and check if its UUIDs match those in crash files. Runs dwarfdump --uuid on the dSYM and parses Binary Images sections from crash files. Requires macOS with Xcode CLI tools.",
+    inputSchema: z.object({
+      dsymPath: z.string().optional().describe("Path to .dSYM bundle (defaults to DSYM_PATH env var)"),
+      crashPath: z.string().optional().describe("Path to a single .crash or .ips file to compare UUIDs against"),
+      crashDir: z.string().optional().describe("Directory of crash files to compare UUIDs against (all .crash/.ips files in the directory)"),
+    }),
+    outputSchema: z.object({
+      valid: z.boolean(),
+      dsymPath: z.string(),
+      dsymUuids: z.array(z.object({ arch: z.string(), uuid: z.string() })),
+      crashFileUuids: z.array(z.object({ file: z.string(), uuid: z.string() })).optional(),
+      matches: z.array(z.object({ uuid: z.string(), arch: z.string(), matchedFiles: z.array(z.string()) })).optional(),
+      mismatches: z.array(z.string()).optional(),
+      detail: z.string(),
+    }),
+  },
+  async (input) => {
+    const config = getConfig();
+    const dsymPath = input.dsymPath ?? config.DSYM_PATH;
+
+    if (!dsymPath) {
+      const result = {
+        valid: false,
+        dsymPath: "",
+        dsymUuids: [],
+        detail: "dsymPath not provided and DSYM_PATH env var not set.",
+      };
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
+    }
+
+    assertNoTraversal(dsymPath);
+
+    if (!fs.existsSync(dsymPath)) {
+      const result = {
+        valid: false,
+        dsymPath,
+        dsymUuids: [],
+        detail: `dSYM not found at: ${dsymPath}`,
+      };
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
+    }
+
+    // Run dwarfdump --uuid to extract UUIDs from the dSYM
+    let dwarfOutput = "";
+    try {
+      const { stdout } = await execFileAsync("dwarfdump", ["--uuid", dsymPath]);
+      dwarfOutput = stdout;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const result = {
+        valid: false,
+        dsymPath,
+        dsymUuids: [],
+        detail: `dwarfdump failed: ${msg}`,
+      };
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
+    }
+
+    // Parse dwarfdump output: "UUID: <uuid> (<arch>) <path>"
+    const uuidLineRe = /UUID:\s+([0-9A-F-]+)\s+\(([^)]+)\)/gi;
+    const dsymUuids: Array<{ arch: string; uuid: string }> = [];
+    let match: RegExpExecArray | null;
+    while ((match = uuidLineRe.exec(dwarfOutput)) !== null) {
+      dsymUuids.push({ uuid: match[1].toUpperCase(), arch: match[2] });
+    }
+
+    if (dsymUuids.length === 0) {
+      const result = {
+        valid: false,
+        dsymPath,
+        dsymUuids: [],
+        detail: "dwarfdump produced no UUID output — the dSYM may be malformed.",
+      };
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
+    }
+
+    // Collect crash files to compare
+    const crashFiles: string[] = [];
+    if (input.crashPath) {
+      assertNoTraversal(input.crashPath);
+      crashFiles.push(input.crashPath);
+    }
+    if (input.crashDir) {
+      assertPathUnderBase(input.crashDir, config.CRASH_ANALYSIS_PARENT);
+      if (fs.existsSync(input.crashDir)) {
+        fs.readdirSync(input.crashDir)
+          .filter((f) => f.endsWith(".crash") || f.endsWith(".ips"))
+          .forEach((f) => crashFiles.push(path.join(input.crashDir!, f)));
+      }
+    }
+
+    if (crashFiles.length === 0) {
+      // Just validate the dSYM structure — no crash comparison
+      const result = {
+        valid: true,
+        dsymPath,
+        dsymUuids,
+        detail: `dSYM is valid. Found ${dsymUuids.length} UUID(s): ${dsymUuids.map((u) => `${u.arch}=${u.uuid}`).join(", ")}. No crash files provided for UUID comparison.`,
+      };
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
+    }
+
+    // Parse Binary Images sections from crash files to extract UUIDs
+    const binaryImgRe = /^\s*0x[0-9a-fA-F]+\s+-\s+0x[0-9a-fA-F]+\s+\S+\s+\S+\s+<([0-9a-f]{32})>/gim;
+    const crashFileUuids: Array<{ file: string; uuid: string }> = [];
+
+    for (const crashFile of crashFiles) {
+      let content = "";
+      try {
+        content = fs.readFileSync(crashFile, "utf-8");
+      } catch {
+        continue;
+      }
+      const seen = new Set<string>();
+      let m: RegExpExecArray | null;
+      binaryImgRe.lastIndex = 0;
+      while ((m = binaryImgRe.exec(content)) !== null) {
+        // Convert from hex string to UUID format XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
+        const raw = m[1].toUpperCase();
+        const uuid = `${raw.slice(0, 8)}-${raw.slice(8, 12)}-${raw.slice(12, 16)}-${raw.slice(16, 20)}-${raw.slice(20)}`;
+        if (!seen.has(uuid)) {
+          seen.add(uuid);
+          crashFileUuids.push({ file: path.basename(crashFile), uuid });
+        }
+      }
+    }
+
+    // Compare: which dSYM UUIDs match crash file UUIDs
+    const dsymUuidSet = new Set(dsymUuids.map((u) => u.uuid));
+    const crashUuidSet = new Set(crashFileUuids.map((u) => u.uuid));
+
+    const matches: Array<{ uuid: string; arch: string; matchedFiles: string[] }> = [];
+    const mismatches: string[] = [];
+
+    for (const { uuid, arch } of dsymUuids) {
+      const matchedFiles = crashFileUuids
+        .filter((c) => c.uuid === uuid)
+        .map((c) => c.file);
+      if (matchedFiles.length > 0) {
+        matches.push({ uuid, arch, matchedFiles });
+      } else {
+        mismatches.push(`${arch} UUID ${uuid} not found in any provided crash file`);
+      }
+    }
+
+    // Check for crash UUIDs not in dSYM
+    for (const { uuid, file } of crashFileUuids) {
+      if (!dsymUuidSet.has(uuid)) {
+        mismatches.push(`Crash file ${file} UUID ${uuid} not found in dSYM`);
+      }
+    }
+
+    const valid = matches.length > 0 && mismatches.length === 0;
+    const detail = matches.length > 0
+      ? `${matches.length} UUID match(es) found. ${mismatches.length > 0 ? `${mismatches.length} mismatch(es): ${mismatches.slice(0, 3).join("; ")}` : "All UUIDs matched."}`
+      : `No UUID matches found. ${mismatches.length} mismatch(es). Symbolication will likely fail — ensure the correct dSYM for this build is used.`;
+
+    const result = {
+      valid,
+      dsymPath,
+      dsymUuids,
+      crashFileUuids,
+      matches,
+      mismatches,
+      detail,
+    };
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
       structuredContent: result,

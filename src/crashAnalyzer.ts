@@ -144,7 +144,7 @@ export function analyzeCrashFile(filepath: string): (CrashMetadata & { source: s
   }
 }
 
-function detectSource(filepath: string): string {
+export function detectSource(filepath: string): string {
   const lower = filepath.toLowerCase();
   if (lower.includes("xccrashpoint") || lower.includes("xcode") || lower.includes("xcodecrashlogs")) return "xcode-organizer";
   if (lower.includes("apptics")) return "apptics";
@@ -223,4 +223,180 @@ export function analyzeDirectory(
     unique_crash_types: sortedGroups.length,
     crash_groups: sortedGroups,
   };
+}
+
+// ── readCrash ─────────────────────────────────────────────────────────────────
+
+export interface ReadCrashResult {
+  file: string;
+  exception_type: string;
+  exception_codes: string;
+  hardware_model: string;
+  os_version: string;
+  app_version: string;
+  crashed_thread: CrashedThread;
+  top_frames: string[];
+  source: string;
+}
+
+export function readCrash(crashPath: string): ReadCrashResult | null {
+  try {
+    const content = fs.readFileSync(crashPath, "utf-8");
+    const lines = content.split("\n");
+    const meta = parseCrashMetadata(lines);
+    const source = detectSource(crashPath);
+    return {
+      file: path.basename(crashPath),
+      exception_type: meta.exceptionType,
+      exception_codes: meta.exceptionCodes,
+      hardware_model: meta.hardwareModel,
+      os_version: meta.osVersion,
+      app_version: meta.appVersion,
+      crashed_thread: meta.crashedThread,
+      top_frames: meta.topFrames,
+      source,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ── searchCrashes ─────────────────────────────────────────────────────────────
+
+export interface SearchMatch {
+  file: string;
+  exception_type: string;
+  crashed_thread: CrashedThread;
+  top_frames: string[];
+  matched_in: string[];
+}
+
+export interface SearchResult {
+  total: number;
+  matches: SearchMatch[];
+}
+
+export function searchCrashes(query: string, crashDir: string): SearchResult {
+  const matches: SearchMatch[] = [];
+  if (!fs.existsSync(crashDir)) {
+    return { total: 0, matches: [] };
+  }
+
+  const files = fs.readdirSync(crashDir).filter((f) => f.endsWith(".crash") || f.endsWith(".ips"));
+  const lowerQuery = query.toLowerCase();
+
+  for (const file of files) {
+    const filepath = path.join(crashDir, file);
+    let content: string;
+    try {
+      content = fs.readFileSync(filepath, "utf-8");
+    } catch {
+      continue;
+    }
+
+    const lines = content.split("\n");
+    const meta = parseCrashMetadata(lines);
+    const matchedIn: string[] = [];
+
+    if (meta.exceptionType.toLowerCase().includes(lowerQuery)) {
+      matchedIn.push("exception_type");
+    }
+    if (meta.exceptionCodes.toLowerCase().includes(lowerQuery)) {
+      matchedIn.push("exception_codes");
+    }
+    if (meta.topFrames.some((frame) => frame.toLowerCase().includes(lowerQuery))) {
+      matchedIn.push("top_frames");
+    }
+    if (matchedIn.length === 0 && content.toLowerCase().includes(lowerQuery)) {
+      matchedIn.push("file_content");
+    }
+
+    if (matchedIn.length > 0) {
+      matches.push({
+        file,
+        exception_type: meta.exceptionType,
+        crashed_thread: meta.crashedThread,
+        top_frames: meta.topFrames,
+        matched_in: matchedIn,
+      });
+    }
+  }
+
+  return { total: matches.length, matches };
+}
+
+// ── cleanOldCrashes ───────────────────────────────────────────────────────────
+
+const CRASH_DATE_RE = /^Date\/Time:\s+(.+)/m;
+
+export interface CleanFileEntry {
+  file: string;
+  crashDate: string;
+  deleted: boolean;
+}
+
+export interface CleanResult {
+  deleted: number;
+  skipped: number;
+  totalScanned: number;
+  files: CleanFileEntry[];
+}
+
+function parseCrashDate(content: string, filePath: string): Date {
+  const match = CRASH_DATE_RE.exec(content);
+  if (match) {
+    const parsed = new Date(match[1].trim());
+    if (!isNaN(parsed.getTime())) return parsed;
+  }
+  return fs.statSync(filePath).mtime;
+}
+
+export function cleanOldCrashes(beforeDate: string, dirs: string[], dryRun = false): CleanResult {
+  const before = new Date(beforeDate);
+  const files: CleanFileEntry[] = [];
+  let deleted = 0;
+  let skipped = 0;
+  let totalScanned = 0;
+
+  for (const dir of dirs) {
+    if (!fs.existsSync(dir)) continue;
+    const dirFiles = fs.readdirSync(dir).filter((f) => f.endsWith(".crash") || f.endsWith(".ips"));
+
+    for (const file of dirFiles) {
+      const filepath = path.join(dir, file);
+      totalScanned++;
+      let content = "";
+      try {
+        content = fs.readFileSync(filepath, "utf-8");
+      } catch {
+        // fallback to mtime
+      }
+      const crashDate = parseCrashDate(content, filepath);
+      const shouldDelete = crashDate < before;
+      const entry: CleanFileEntry = {
+        file: filepath,
+        crashDate: crashDate.toISOString(),
+        deleted: false,
+      };
+
+      if (shouldDelete) {
+        if (!dryRun) {
+          try {
+            fs.unlinkSync(filepath);
+            entry.deleted = true;
+          } catch {
+            // skip if cannot delete
+          }
+        } else {
+          entry.deleted = true; // would be deleted in a real run
+        }
+        deleted++;
+      } else {
+        skipped++;
+      }
+      files.push(entry);
+    }
+  }
+
+  return { deleted, skipped, totalScanned, files };
 }

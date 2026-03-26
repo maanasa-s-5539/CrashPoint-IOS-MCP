@@ -11,7 +11,7 @@ Also includes a standalone **CLI** (`crashpoint-ios-cli`) for scheduled runs wit
 CrashPoint iOS MCP gives your AI assistant the ability to:
 
 1. **Export** `.crash` files from Xcode Organizer `.xccrashpoint` bundles
-2. **Symbolicate** crashes using `atos` and your `.dSYM` bundle
+2. **Symbolicate** crashes using Xcode's `symbolicatecrash` tool and your `.dSYM` bundle
 3. **Analyze & group** symbolicated crashes by unique signature, device, iOS version, and app version
 4. **Report** crash analysis to your Zoho Cliq channel (including fix status and source labels)
 5. **Track fixes** locally so your team can mark crash types as resolved
@@ -20,11 +20,11 @@ CrashPoint iOS MCP gives your AI assistant the ability to:
 
 ## Prerequisites
 
-- **macOS** (required for `atos` symbolication)
+- **macOS** (required for Xcode's `symbolicatecrash` and `dwarfdump`)
 - **Node.js 18+**
 - **Xcode CLI tools** (`xcode-select --install`)
 - A `.dSYM` bundle for your app
-- A `.app` bundle for your app
+- A `.app` bundle for your app (optional)
 - Xcode Organizer crash data (`.xccrashpoint` files)
 
 ---
@@ -142,22 +142,82 @@ bash scripts/setup_symlinks.sh
 
 ## Available MCP Tools
 
-| Tool | Description |
+| # | Tool | Description |
+|---|---|---|
+| 1 | `list_versions` | List all app versions found in `.xccrashpoint` files |
+| 2 | `export_crashes` | Export `.crash` files from `.xccrashpoint` packages to `MainCrashLogsFolder/XCodeCrashLogs`. Add `dryRun: true` to preview without writing |
+| 3 | `symbolicate_one` | Symbolicate a single `.crash` file using Xcode's `symbolicatecrash` tool |
+| 4 | `symbolicate_batch` | Batch symbolicate all crashes in `MainCrashLogsFolder` (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs) |
+| 5 | `diagnose_frames` | Frame-by-frame diff: shows which frames were resolved vs missed |
+| 6 | `analyze_crashes` | Group & deduplicate crashes by signature; includes fix status |
+| 7 | `notify_cliq` | Analyze crashes and send report to Zoho Cliq. Supports `unfixedOnly` flag and dry-run |
+| 8 | `set_fix_status` | Mark a crash signature as fixed (`fixed: true`) or unfixed (`fixed: false`) |
+| 9 | `list_fix_statuses` | Show all locally tracked fix statuses |
+| 10 | `run_full_pipeline` | Run the complete pipeline: export → symbolicate → analyze → (optionally notify) |
+| 11 | `setup_folders` | Create folder structure + optional branch symlinks + copy existing crash files |
+| 12 | `report_to_zoho_projects` | Create/update bugs in Zoho Projects for each unique crash group |
+| 13 | `read_crash` | Parse and summarize a single `.crash` or `.ips` file — returns structured metadata |
+| 14 | `search_crashes` | Search crash files for a keyword or pattern (exception type, frames, file content) |
+| 15 | `clean_old_crashes` | Delete `.crash`/`.ips` files older than a given date across all crash directories |
+| 16 | `verify_dsym` | Validate a `.dSYM` bundle and check if its UUIDs match those in crash files |
+
+### `export_crashes` Parameters
+
+| Parameter | Description |
 |---|---|
-| `list_versions` | List all app versions found in `.xccrashpoint` files |
-| `preview_export` | Dry-run: show what would be exported without writing files |
-| `export_crashes` | Export `.crash` files from `.xccrashpoint` packages to `MainCrashLogsFolder/XCodeCrashLogs` |
-| `symbolicate_one` | Symbolicate a single `.crash` file using `atos` |
-| `symbolicate_batch` | Batch symbolicate all crashes in `MainCrashLogsFolder` (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs) |
-| `diagnose_frames` | Frame-by-frame diff: shows which frames were resolved vs missed |
-| `analyze_crashes` | Group & deduplicate crashes by signature; includes fix status |
-| `notify_cliq` | Send crash analysis report to Zoho Cliq (includes source labels + fix status) |
-| `set_fix_status` | Mark a crash signature as fixed or unfixed |
-| `remove_fix_status` | Remove fix tracking for a crash signature |
-| `list_fix_statuses` | Show all locally tracked fix statuses |
-| `run_full_pipeline` | Run the complete pipeline: export → symbolicate → analyze → (optionally notify) |
-| `setup_folders` | Create folder structure + optional branch symlinks + copy existing crash files |
-| `notify_unfixed_cliq` | Analyze crashes, filter to unfixed only, and send filtered report to Cliq |
+| `inputDir` | Directory to search for `.xccrashpoint` files (default: `CRASH_INPUT_DIR` or `CRASH_ANALYSIS_PARENT`) |
+| `outputDir` | Destination directory (default: `MainCrashLogsFolder/XCodeCrashLogs`) |
+| `versions` | Comma-separated version filter |
+| `recursive` | Search subdirectories recursively |
+| `startDate` | ISO date string to filter crashes from (e.g. `2026-03-01`) |
+| `endDate` | ISO date string to filter crashes until |
+| `dryRun` | When `true`, shows what would be exported without writing any files |
+
+### `notify_cliq` Parameters
+
+| Parameter | Description |
+|---|---|
+| `crashDir` | Directory of symbolicated crash files (default: `SymbolicatedCrashLogsFolder`) |
+| `unfixedOnly` | When `true`, only unfixed crash types are included (default: `false`) |
+| `notify` | When `false`, performs a dry-run — returns the report without sending to Cliq (default: `true`) |
+
+### `set_fix_status` Parameters
+
+| Parameter | Description |
+|---|---|
+| `signature` | Crash signature string |
+| `fixed` | `true` to mark as fixed, `false` to mark as unfixed |
+| `note` | Optional note (e.g. PR reference) |
+
+> **Note:** Use `set_fix_status` with `fixed: false` to mark a crash as unfixed. There is no separate "remove" tool — marking as unfixed is the recommended approach.
+
+### `read_crash` Parameters
+
+| Parameter | Description |
+|---|---|
+| `crashPath` | Path to the `.crash` or `.ips` file to read (required) |
+
+### `search_crashes` Parameters
+
+| Parameter | Description |
+|---|---|
+| `query` | Search term (case-insensitive). E.g. `EXC_BAD_ACCESS`, `ViewController`, `SIGABRT` |
+| `crashDir` | Directory of crash files to search (default: `SymbolicatedCrashLogsFolder`) |
+
+### `clean_old_crashes` Parameters
+
+| Parameter | Description |
+|---|---|
+| `beforeDate` | ISO date string — files with crash dates before this date will be deleted (e.g. `2026-03-01`) |
+| `dryRun` | When `true`, reports what would be deleted without actually deleting (default: `false`) |
+
+### `verify_dsym` Parameters
+
+| Parameter | Description |
+|---|---|
+| `dsymPath` | Path to `.dSYM` bundle (defaults to `DSYM_PATH` env var) |
+| `crashPath` | Path to a single `.crash` or `.ips` file to compare UUIDs against |
+| `crashDir` | Directory of crash files to compare UUIDs against |
 
 ### `setup_folders` Parameters
 
@@ -179,6 +239,9 @@ The CLI lets you run the crash analysis pipeline without an MCP client (useful f
 # Export crash logs from Xcode Organizer
 node dist/cli.js export
 
+# Dry-run export: preview what would be exported without writing files
+node dist/cli.js export --dry-run
+
 # Export crashes filtered by date range
 node dist/cli.js export --start-date 2026-03-01 --end-date 2026-03-20
 
@@ -191,17 +254,17 @@ node dist/cli.js analyze
 # Analyze and save to file
 node dist/cli.js analyze --crash-dir /path/to/dir -o report.json
 
-# Send a saved report to Zoho Cliq
-node dist/cli.js notify --report report.json
+# Send crash report to Zoho Cliq (analyzes crashes first)
+node dist/cli.js notify
 
-# Analyze crashes, filter to unfixed only, and send filtered report to Cliq
-node dist/cli.js notify-unfixed
+# Send only unfixed crashes to Cliq
+node dist/cli.js notify --unfixed-only
 
-# Dry-run: analyze and filter but don't send to Cliq
-node dist/cli.js notify-unfixed --dry-run
+# Dry-run: analyze but don't send to Cliq
+node dist/cli.js notify --dry-run
 
 # Analyze unfixed crashes and save the filtered report to a file
-node dist/cli.js notify-unfixed -o unfixed_report.json
+node dist/cli.js notify --unfixed-only -o unfixed_report.json
 
 # Create folder structure with symlinks
 node dist/cli.js setup --master-branch /path/to/master --dev-branch /path/to/dev --dsym /path/to/MyApp.dSYM --app /path/to/MyApp.app
@@ -218,6 +281,21 @@ node dist/cli.js list-versions
 # Run full pipeline
 node dist/cli.js pipeline --notify
 
+# Read and summarize a single crash file
+node dist/cli.js read --crash /path/to/file.crash
+
+# Search for crashes matching a keyword
+node dist/cli.js search --query "EXC_BAD_ACCESS"
+node dist/cli.js search --query "ViewController" --crash-dir /path/to/crashes
+
+# Delete crash files older than a given date (dry-run first)
+node dist/cli.js clean --before-date 2026-03-01 --dry-run
+node dist/cli.js clean --before-date 2026-03-01
+
+# Validate a dSYM bundle and check UUID matches
+node dist/cli.js verify-dsym --crash /path/to/file.crash
+node dist/cli.js verify-dsym --crash-dir /path/to/crashes/ --dsym /path/to/MyApp.dSYM
+
 # Mark a crash signature as fixed
 node dist/cli.js set-fix "EXC_BAD_ACCESS SIGSEGV" --note "Fixed in PR #42"
 
@@ -226,9 +304,6 @@ node dist/cli.js unset-fix "EXC_BAD_ACCESS SIGSEGV"
 
 # List all fix statuses
 node dist/cli.js list-fixes
-
-# Remove fix tracking
-node dist/cli.js remove-fix "EXC_BAD_ACCESS SIGSEGV"
 ```
 
 If installed globally, you can also use:
@@ -381,7 +456,7 @@ When crashes are analyzed, each group shows its fix status if one has been set:
 
 Fix statuses are stored in `{CRASH_ANALYSIS_PARENT}/fix_status.json` (local only, gitignored).
 
-Use the `set_fix_status` MCP tool to mark crash signatures as fixed or unfixed.
+Use the `set_fix_status` MCP tool to mark crash signatures as fixed (`fixed: true`) or unfixed (`fixed: false`).
 
 ---
 
@@ -404,6 +479,7 @@ This file is local-only (gitignored) and tracks which crash types your team has 
 ## Symbolication Notes
 
 - Symbolicated files are written to `SymbolicatedCrashLogsFolder/` with the same filename
+- Symbolication uses Xcode's `symbolicatecrash` tool, which automatically processes all threads and all binaries
 
 ---
 

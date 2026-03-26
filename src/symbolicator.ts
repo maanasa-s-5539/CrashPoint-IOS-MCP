@@ -41,10 +41,7 @@ const FRAME_REGEX = /^\s*(\d+)\s+(\S+)\s+(0x[0-9a-fA-F]+)/;
 export async function symbolicateOne(
   crashPath: string,
   dsymPath: string,
-  appPath: string | undefined,  // kept for backward compatibility; ignored by symbolicatecrash
   outputPath: string,
-  archOverride?: string,  // kept for backward compatibility; ignored by symbolicatecrash
-  allThreads = false  // kept for backward compatibility; symbolicatecrash always processes all threads
 ): Promise<SymbolicateResult> {
   if (!fs.existsSync(crashPath)) {
     return { success: false, detail: `Crash file not found: ${crashPath}` };
@@ -80,10 +77,7 @@ export async function symbolicateOne(
 export async function runBatch(
   crashDir: string,
   dsymPath: string,
-  appPath: string | undefined,
   outputDir: string,
-  archOverride?: string,
-  allThreads = false
 ): Promise<{ succeeded: number; failed: number; total: number; results: BatchResult[] }> {
   if (!fs.existsSync(crashDir)) {
     return { succeeded: 0, failed: 0, total: 0, results: [] };
@@ -99,7 +93,7 @@ export async function runBatch(
   for (const file of files) {
     const crashPath = path.join(crashDir, file);
     const outputPath = path.join(outputDir, file);
-    const res = await symbolicateOne(crashPath, dsymPath, appPath, outputPath, archOverride, allThreads);
+    const res = await symbolicateOne(crashPath, dsymPath, outputPath);
     results.push({ file, ...res });
     if (res.success) succeeded++;
     else failed++;
