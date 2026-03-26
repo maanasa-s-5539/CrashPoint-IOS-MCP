@@ -12,16 +12,12 @@ const DEVELOPER_DIR = "/Applications/Xcode.app/Contents/Developer";
 export interface SymbolicateResult {
   success: boolean;
   detail: string;
-  symbolicatedCount: number;
-  totalAppFrames: number;
 }
 
 export interface BatchResult {
   file: string;
   success: boolean;
   detail: string;
-  symbolicatedCount: number;
-  totalAppFrames: number;
 }
 
 export interface FrameDiag {
@@ -51,13 +47,13 @@ export async function symbolicateOne(
   allThreads = false  // kept for backward compatibility; symbolicatecrash always processes all threads
 ): Promise<SymbolicateResult> {
   if (!fs.existsSync(crashPath)) {
-    return { success: false, detail: `Crash file not found: ${crashPath}`, symbolicatedCount: 0, totalAppFrames: 0 };
+    return { success: false, detail: `Crash file not found: ${crashPath}` };
   }
   if (!fs.existsSync(dsymPath)) {
-    return { success: false, detail: `dSYM not found: ${dsymPath}`, symbolicatedCount: 0, totalAppFrames: 0 };
+    return { success: false, detail: `dSYM not found: ${dsymPath}` };
   }
   if (!fs.existsSync(SYMBOLICATE_CRASH)) {
-    return { success: false, detail: `symbolicatecrash not found at: ${SYMBOLICATE_CRASH}`, symbolicatedCount: 0, totalAppFrames: 0 };
+    return { success: false, detail: `symbolicatecrash not found at: ${SYMBOLICATE_CRASH}` };
   }
 
   if (fs.existsSync(dsymPath)) {
@@ -74,13 +70,10 @@ export async function symbolicateOne(
     return {
       success: true,
       detail: `Symbolicated output written to ${outputPath}`,
-      // symbolicatecrash handles all frames internally; per-frame counts are not available
-      symbolicatedCount: 0,
-      totalAppFrames: 0,
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    return { success: false, detail: `symbolicatecrash failed: ${msg}`, symbolicatedCount: 0, totalAppFrames: 0 };
+    return { success: false, detail: `symbolicatecrash failed: ${msg}` };
   }
 }
 
