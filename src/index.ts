@@ -24,6 +24,7 @@ import { sendCrashReportToCliq } from "./cliqNotifier.js";
 import { FixTracker } from "./fixTracker.js";
 import { assertPathUnderBase, assertNoTraversal, assertSafeSymlinkTarget } from "./pathSafety.js";
 import { reportToZohoProjectsViaMcp, getFieldIdsFromConfig } from "./zohoProjectsMcpBridge.js";
+import { ProcessedManifest } from "./processedManifest.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -73,6 +74,7 @@ server.registerTool(
       startDate: z.string().optional().describe("ISO date string to filter crashes from (e.g. 2026-03-01)"),
       endDate: z.string().optional().describe("ISO date string to filter crashes until (e.g. 2026-03-20)"),
       dryRun: z.boolean().optional().describe("When true, shows what would be exported without writing any files"),
+      includeProcessedCrashes: z.boolean().optional().describe("When true, re-processes crashes that were already exported. Default is false (skip already-processed crashes)."),
     }),
     outputSchema: z.object({
       exported: z.number(),
@@ -98,8 +100,9 @@ server.registerTool(
     const versions = input.versions?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
     const recursive = input.recursive ?? false;
     const dryRun = input.dryRun ?? false;
+    const manifest = input.includeProcessedCrashes ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT);
 
-    const result = exportCrashLogs(inputDir, outputDir, versions, recursive, dryRun, input.startDate, input.endDate);
+    const result = exportCrashLogs(inputDir, outputDir, versions, recursive, dryRun, input.startDate, input.endDate, manifest);
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
       structuredContent: result,
@@ -169,6 +172,7 @@ server.registerTool(
       crashDir: z.string().optional().describe("ALREADY CONFIGURED via env (MainCrashLogsFolder/XCodeCrashLogs). Do NOT ask the user for this. Only provide to override."),
       dsymPath: z.string().optional().describe("ALREADY CONFIGURED via DSYM_PATH env var. Do NOT ask the user for this. Only provide if the user explicitly wants to override the configured default."),
       outputDir: z.string().optional().describe("ALREADY CONFIGURED via env (SymbolicatedCrashLogsFolder). Do NOT ask the user for this. Only provide to override."),
+      includeProcessedCrashes: z.boolean().optional().describe("When true, re-symbolicate crashes that were already processed. Default is false (skip already-processed crashes)."),
     }),
     outputSchema: z.object({
       succeeded: z.number(),
@@ -193,6 +197,7 @@ server.registerTool(
     if (input.crashDir) assertPathUnderBase(input.crashDir, config.CRASH_ANALYSIS_PARENT);
     if (input.outputDir) assertPathUnderBase(input.outputDir, config.CRASH_ANALYSIS_PARENT);
     if (input.dsymPath) assertNoTraversal(input.dsymPath);
+    const manifest = input.includeProcessedCrashes ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT);
 
     if (!dsymPath) {
       const result = {
@@ -242,7 +247,7 @@ server.registerTool(
     const results: BatchResult[] = [];
 
     for (const dir of dirsToProcess) {
-      const batchResult = await runBatch(dir, dsymPath, outputDir);
+      const batchResult = await runBatch(dir, dsymPath, outputDir, manifest);
       succeeded += batchResult.succeeded;
       failed += batchResult.failed;
       total += batchResult.total;
@@ -303,6 +308,7 @@ server.registerTool(
       "Group and deduplicate symbolicated crashes by unique signature. Returns a JSON crash analysis report.",
     inputSchema: z.object({
       crashDir: z.string().optional().describe("Directory of symbolicated crash files"),
+      includeProcessedCrashes: z.boolean().optional().describe("When true, re-analyzes crashes that were already processed. Default is false (skip already-processed crashes)."),
     }),
     outputSchema: z.object({
       report_date: z.string(),
@@ -321,7 +327,8 @@ server.registerTool(
     for (const entry of tracker.getAll()) {
       fixStatuses[entry.signature] = { fixed: entry.fixed, note: entry.note };
     }
-    const result = analyzeDirectory(crashDir, fixStatuses);
+    const manifest = input.includeProcessedCrashes ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT);
+    const result = analyzeDirectory(crashDir, fixStatuses, manifest);
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
       structuredContent: result,
@@ -516,6 +523,7 @@ server.registerTool(
       versions: z.string().optional().describe("Comma-separated version filter for export"),
       startDate: z.string().optional().describe("ISO date string to filter crashes from (e.g. 2026-03-01)"),
       endDate: z.string().optional().describe("ISO date string to filter crashes until (e.g. 2026-03-20)"),
+      includeProcessedCrashes: z.boolean().optional().describe("When true, re-processes crashes that were already exported/symbolicated/analyzed. Default is false (skip already-processed crashes)."),
     }),
     outputSchema: z.object({
       export_result: z.any(),
@@ -531,9 +539,10 @@ server.registerTool(
     const symbolicatedDir = getSymbolicatedDir(config);
     const versions =
       input.versions?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
+    const manifest = input.includeProcessedCrashes ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT);
 
     // Step 1: Export
-    const exportResult = exportCrashLogs(inputDir, basicDir, versions, false, false, input.startDate, input.endDate);
+    const exportResult = exportCrashLogs(inputDir, basicDir, versions, false, false, input.startDate, input.endDate, manifest);
 
     // Step 2: Symbolicate
     const dsymPath = config.DSYM_PATH;
@@ -557,7 +566,7 @@ server.registerTool(
         let total = 0;
         const results: BatchResult[] = [];
         for (const dir of [basicDir, appticsDir, otherDir]) {
-          const r = await runBatch(dir, dsymPath, symbolicatedDir);
+          const r = await runBatch(dir, dsymPath, symbolicatedDir, manifest);
           succeeded += r.succeeded;
           failed += r.failed;
           total += r.total;
@@ -573,7 +582,15 @@ server.registerTool(
     for (const entry of tracker.getAll()) {
       fixStatuses[entry.signature] = { fixed: entry.fixed, note: entry.note };
     }
-    const analysisReport = analyzeDirectory(symbolicatedDir, fixStatuses);
+    const analysisReport = analyzeDirectory(symbolicatedDir, fixStatuses, manifest);
+    const reportFile = path.join(config.CRASH_ANALYSIS_PARENT, `report_${Date.now()}.json`);
+    try {
+      fs.mkdirSync(config.CRASH_ANALYSIS_PARENT, { recursive: true });
+      fs.writeFileSync(reportFile, JSON.stringify(analysisReport, null, 2), "utf-8");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`Warning: failed to save report to ${reportFile}: ${msg}`);
+    }
 
     // Step 4: Optionally notify
     let notificationSent: boolean | undefined;
@@ -911,7 +928,7 @@ server.registerTool(
       getSymbolicatedDir(config),
     ];
 
-    const result = cleanOldCrashes(input.beforeDate, dirs, dryRun);
+    const result = cleanOldCrashes(input.beforeDate, dirs, dryRun, config.CRASH_ANALYSIS_PARENT);
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
       structuredContent: result,

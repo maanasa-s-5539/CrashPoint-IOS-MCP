@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { ProcessedManifest } from "./processedManifest.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -78,6 +79,7 @@ export async function runBatch(
   crashDir: string,
   dsymPath: string,
   outputDir: string,
+  manifest?: ProcessedManifest,
 ): Promise<{ succeeded: number; failed: number; total: number; results: BatchResult[] }> {
   if (!fs.existsSync(crashDir)) {
     return { succeeded: 0, failed: 0, total: 0, results: [] };
@@ -93,10 +95,20 @@ export async function runBatch(
   for (const file of files) {
     const crashPath = path.join(crashDir, file);
     const outputPath = path.join(outputDir, file);
+
+    if (manifest && manifest.isProcessed(crashPath)) {
+      results.push({ file, success: true, detail: "skipped (already processed)" });
+      continue;
+    }
+
     const res = await symbolicateOne(crashPath, dsymPath, outputPath);
     results.push({ file, ...res });
-    if (res.success) succeeded++;
-    else failed++;
+    if (res.success) {
+      succeeded++;
+      manifest?.markProcessed(crashPath);
+    } else {
+      failed++;
+    }
   }
 
   return { succeeded, failed, total: files.length, results };

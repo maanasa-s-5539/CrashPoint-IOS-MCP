@@ -12,6 +12,7 @@ import { sendCrashReportToCliq } from "./cliqNotifier.js";
 import { FixTracker } from "./fixTracker.js";
 import { listAvailableVersions } from "./crashExporter.js";
 import { assertPathUnderBase, assertNoTraversal, assertSafeSymlinkTarget } from "./pathSafety.js";
+import { ProcessedManifest } from "./processedManifest.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -52,7 +53,9 @@ async function cmdExport(flags: Record<string, string | boolean>): Promise<void>
   const startDate = flags["start-date"] as string | undefined;
   const endDate = flags["end-date"] as string | undefined;
   const dryRun = flags["dry-run"] === true;
-  const result = exportCrashLogs(inputDir, outputDir, versions, false, dryRun, startDate, endDate);
+  const includeProcessed = flags["include-processed"] === true;
+  const manifest = includeProcessed ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT);
+  const result = exportCrashLogs(inputDir, outputDir, versions, false, dryRun, startDate, endDate, manifest);
   console.log(JSON.stringify(result, null, 2));
 }
 
@@ -63,6 +66,8 @@ async function cmdBatch(flags: Record<string, string | boolean>): Promise<void> 
   const otherDir = getOtherCrashesDir(config);
   const outputDir = getSymbolicatedDir(config);
   const dsymPath = config.DSYM_PATH;
+  const includeProcessed = flags["include-processed"] === true;
+  const manifest = includeProcessed ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT);
 
   if (!dsymPath) {
     console.error("Error: DSYM_PATH env var is required for batch symbolication.");
@@ -88,7 +93,7 @@ async function cmdBatch(flags: Record<string, string | boolean>): Promise<void> 
   const results: BatchResult[] = [];
 
   for (const dir of [crashDir, appticsDir, otherDir]) {
-    const r = await runBatch(dir, dsymPath, outputDir);
+    const r = await runBatch(dir, dsymPath, outputDir, manifest);
     succeeded += r.succeeded;
     failed += r.failed;
     total += r.total;
@@ -102,6 +107,8 @@ async function cmdAnalyze(flags: Record<string, string | boolean>): Promise<void
   const config = getConfig();
   const crashDir = (flags["crash-dir"] as string) ?? getSymbolicatedDir(config);
   const outputFile = (flags["o"] as string) ?? undefined;
+  const includeProcessed = flags["include-processed"] === true;
+  const manifest = includeProcessed ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT);
 
   if (outputFile) {
     assertPathUnderBase(outputFile, config.CRASH_ANALYSIS_PARENT);
@@ -113,7 +120,7 @@ async function cmdAnalyze(flags: Record<string, string | boolean>): Promise<void
     fixStatuses[entry.signature] = { fixed: entry.fixed, note: entry.note };
   }
 
-  const report = analyzeDirectory(crashDir, fixStatuses);
+  const report = analyzeDirectory(crashDir, fixStatuses, manifest);
 
   const json = JSON.stringify(report, null, 2);
   if (outputFile) {
@@ -345,6 +352,8 @@ async function cmdPipeline(flags: Record<string, string | boolean>): Promise<voi
   const symbolicatedDir = path.join(config.CRASH_ANALYSIS_PARENT, "SymbolicatedCrashLogsFolder");
   const dsymPath = config.DSYM_PATH;
   const notify = flags["notify"] === true;
+  const includeProcessed = flags["include-processed"] === true;
+  const manifest = includeProcessed ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT);
   const versions = flags["versions"]
     ? (flags["versions"] as string).split(",").map((v) => v.trim()).filter(Boolean)
     : (config.CRASH_VERSIONS?.split(",").map((v) => v.trim()).filter(Boolean) ?? []);
@@ -353,7 +362,7 @@ async function cmdPipeline(flags: Record<string, string | boolean>): Promise<voi
 
   // Step 1: export
   const { exportCrashLogs } = await import("./crashExporter.js");
-  const exportResult = exportCrashLogs(inputDir, basicDir, versions, false, false, startDate, endDate);
+  const exportResult = exportCrashLogs(inputDir, basicDir, versions, false, false, startDate, endDate, manifest);
   console.log("Export:", JSON.stringify(exportResult));
 
   // Step 2: symbolicate
@@ -373,7 +382,7 @@ async function cmdPipeline(flags: Record<string, string | boolean>): Promise<voi
       let total = 0;
       const results: BatchResult[] = [];
       for (const dir of [basicDir, appticsDir, otherDir]) {
-        const r = await runBatch(dir, dsymPath, symbolicatedDir);
+        const r = await runBatch(dir, dsymPath, symbolicatedDir, manifest);
         succeeded += r.succeeded;
         failed += r.failed;
         total += r.total;
@@ -392,8 +401,11 @@ async function cmdPipeline(flags: Record<string, string | boolean>): Promise<voi
   for (const entry of tracker.getAll()) {
     fixStatuses[entry.signature] = { fixed: entry.fixed, note: entry.note };
   }
-  const report = analyzeDirectory(symbolicatedDir, fixStatuses);
+  const report = analyzeDirectory(symbolicatedDir, fixStatuses, manifest);
+  const reportFile = path.join(config.CRASH_ANALYSIS_PARENT, `report_${Date.now()}.json`);
+  fs.writeFileSync(reportFile, JSON.stringify(report, null, 2), "utf-8");
   console.log("Analysis:", JSON.stringify(report));
+  console.log(`Report saved to: ${reportFile}`);
 
   // Step 4: notify
   if (notify) {
@@ -469,7 +481,7 @@ function cmdClean(flags: Record<string, string | boolean>): void {
     getSymbolicatedDir(config),
   ];
 
-  const result = cleanOldCrashes(beforeDate, dirs, dryRun);
+  const result = cleanOldCrashes(beforeDate, dirs, dryRun, config.CRASH_ANALYSIS_PARENT);
   console.log(JSON.stringify(result, null, 2));
   if (dryRun) {
     console.log(`Dry-run: ${result.deleted} file(s) would be deleted, ${result.skipped} skipped.`);

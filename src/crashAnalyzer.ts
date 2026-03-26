@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { ProcessedManifest } from "./processedManifest.js";
 
 export interface CrashedThread {
   id: number;
@@ -154,7 +155,8 @@ export function detectSource(filepath: string): string {
 
 export function analyzeDirectory(
   crashDir: string,
-  fixStatuses?: Record<string, { fixed: boolean; note?: string }>
+  fixStatuses?: Record<string, { fixed: boolean; note?: string }>,
+  manifest?: ProcessedManifest
 ): CrashReport {
   const groups = new Map<string, CrashGroup>();
   let totalCrashes = 0;
@@ -173,6 +175,11 @@ export function analyzeDirectory(
 
   for (const file of files) {
     const filepath = path.join(crashDir, file);
+
+    if (manifest && manifest.isProcessed(filepath)) {
+      continue;
+    }
+
     const meta = analyzeCrashFile(filepath);
     if (!meta) continue;
 
@@ -203,6 +210,8 @@ export function analyzeDirectory(
     increment(group.ios_versions, meta.osVersion);
     increment(group.app_versions, meta.appVersion);
     increment(group.sources, meta.source);
+
+    manifest?.markProcessed(filepath);
   }
 
   const sortedGroups = Array.from(groups.values())
@@ -351,7 +360,7 @@ function parseCrashDate(content: string, filePath: string): Date {
   return fs.statSync(filePath).mtime;
 }
 
-export function cleanOldCrashes(beforeDate: string, dirs: string[], dryRun = false): CleanResult {
+export function cleanOldCrashes(beforeDate: string, dirs: string[], dryRun = false, parentDir?: string): CleanResult {
   const before = new Date(beforeDate);
   const files: CleanFileEntry[] = [];
   let deleted = 0;
@@ -389,6 +398,43 @@ export function cleanOldCrashes(beforeDate: string, dirs: string[], dryRun = fal
           }
         } else {
           entry.deleted = true; // would be deleted in a real run
+        }
+        deleted++;
+      } else {
+        skipped++;
+      }
+      files.push(entry);
+    }
+  }
+
+  // Also clean report_<timestamp>.json files from parentDir
+  const REPORT_RE = /^report_(\d+)\.json$/;
+  if (parentDir && fs.existsSync(parentDir)) {
+    const reportFiles = fs.readdirSync(parentDir).filter((f) => REPORT_RE.test(f));
+    for (const file of reportFiles) {
+      const match = REPORT_RE.exec(file);
+      if (!match) continue;
+      const ts = parseInt(match[1], 10);
+      const fileDate = new Date(ts);
+      const filepath = path.join(parentDir, file);
+      totalScanned++;
+      const shouldDelete = fileDate < before;
+      const entry: CleanFileEntry = {
+        file: filepath,
+        crashDate: fileDate.toISOString(),
+        deleted: false,
+      };
+
+      if (shouldDelete) {
+        if (!dryRun) {
+          try {
+            fs.unlinkSync(filepath);
+            entry.deleted = true;
+          } catch {
+            // skip if cannot delete
+          }
+        } else {
+          entry.deleted = true;
         }
         deleted++;
       } else {

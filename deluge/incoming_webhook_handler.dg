@@ -1,8 +1,0 @@
-// CrashReportBot -- Post message to Sprints iOS crashes channel
-// This is a reference Deluge script for posting to a Cliq channel.
-// The MCP server now posts directly to the channel webhook URL,
-// so this script is only needed if you want to trigger posts from
-// other Deluge workflows.
-
-// Example usage:
-// zoho.cliq.postToChannel("sprintsiosalllivecrashes", "Here goes your test message.");
