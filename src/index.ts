@@ -168,8 +168,6 @@ server.registerTool(
     outputSchema: z.object({
       success: z.boolean(),
       detail: z.string(),
-      symbolicatedCount: z.number(),
-      totalAppFrames: z.number(),
     }),
   },
   async (input) => {
@@ -184,8 +182,6 @@ server.registerTool(
       const result = {
         success: false,
         detail: "dsymPath not provided and DSYM_PATH env var not set.",
-        symbolicatedCount: 0,
-        totalAppFrames: 0,
       };
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
@@ -238,8 +234,6 @@ server.registerTool(
           file: z.string(),
           success: z.boolean(),
           detail: z.string(),
-          symbolicatedCount: z.number(),
-          totalAppFrames: z.number(),
         })
       ),
     }),

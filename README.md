@@ -49,35 +49,9 @@ Copy `.env.example` to `.env` and fill in your values:
 cp .env.example .env
 ```
 
-### Claude Desktop
+### Cursor / Claude Desktop
 
-Add to your `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "crashpoint-ios": {
-      "command": "npx",
-      "args": ["github:maanasa-s-5539/CrashPoint-IOS-MCP"],
-      "env": {
-        "CRASH_ANALYSIS_PARENT": "/path/to/ParentHolderFolder",
-        "DSYM_PATH": "/path/to/MyApp.dSYM",
-        "APP_PATH": "/path/to/MyApp.app",
-        "APP_NAME": "MyApp",
-        "MASTER_BRANCH_PATH": "/path/to/app-ios-master",
-        "DEV_BRANCH_PATH": "/path/to/app-ios-dev",
-        "ZOHO_CLIQ_WEBHOOK_URL": "https://cliq.zoho.com/..."
-      }
-    }
-  }
-}
-```
-
-**macOS location:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-
-### Cursor
-
-Create or update `.cursor/mcp.json` in your project:
+Add the following configuration to your MCP client:
 
 ```json
 {
@@ -98,6 +72,10 @@ Create or update `.cursor/mcp.json` in your project:
   }
 }
 ```
+
+**Config file paths:**
+- **Claude Desktop (macOS):** `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Cursor:** `.cursor/mcp.json` in your project root
 
 ---
 
@@ -342,9 +320,9 @@ CrashPoint can create a bug in Zoho Projects for each unique crash group. It con
 
 Once CrashPoint iOS MCP and the Zoho Projects MCP are both connected to your MCP host (Claude Desktop or Cursor), the host can invoke the `report_to_zoho_projects` tool to create bugs in Zoho Projects for analyzed crash groups. The MCP host handles the authenticated Zoho Projects connection.
 
-### Claude Desktop Configuration
+### Cursor / Claude Desktop Configuration
 
-Add the Zoho Projects env vars to your Claude Desktop config. **Do not include OAuth credentials** — the Zoho Projects MCP server handles its own authentication separately:
+Add the Zoho Projects env vars to your MCP client config (the same config file used above in the [Configuration](#configuration) section). **Do not include OAuth credentials** — the Zoho Projects MCP server handles its own authentication separately:
 
 ```json
 {
@@ -372,6 +350,10 @@ Add the Zoho Projects env vars to your Claude Desktop config. **Do not include O
   }
 }
 ```
+
+**Config file paths:**
+- **Claude Desktop (macOS):** `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Cursor:** `.cursor/mcp.json` in your project root
 
 ---
 
