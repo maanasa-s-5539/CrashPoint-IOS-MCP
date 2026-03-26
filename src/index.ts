@@ -924,11 +924,11 @@ server.registerTool(
   "verify_dsym",
   {
     description:
-      "Validate a .dSYM bundle and check if its UUIDs match those in crash files. Runs dwarfdump --uuid on the dSYM and parses Binary Images sections from crash files. Requires macOS with Xcode CLI tools.",
+      "Validate a .dSYM bundle and check if its UUIDs match those in crash files. Runs dwarfdump --uuid on the dSYM and parses Binary Images sections from crash files. Requires macOS with Xcode CLI tools. When no dsymPath is given, resolves the dSYM_File symlink in CRASH_ANALYSIS_PARENT. When no crashPath/crashDir is given, auto-collects crash files from all MainCrashLogsFolder subfolders (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs). dsymPath and crashPath/crashDir must be provided together, or neither.",
     inputSchema: z.object({
-      dsymPath: z.string().optional().describe("Path to .dSYM bundle (defaults to DSYM_PATH env var)"),
-      crashPath: z.string().optional().describe("Path to a single .crash or .ips file to compare UUIDs against"),
-      crashDir: z.string().optional().describe("Directory of crash files to compare UUIDs against (all .crash/.ips files in the directory)"),
+      dsymPath: z.string().optional().describe("Path to .dSYM bundle (defaults to DSYM_PATH env var, then dSYM_File symlink in CRASH_ANALYSIS_PARENT). Must be provided together with crashPath/crashDir, or omitted entirely."),
+      crashPath: z.string().optional().describe("Path to a single .crash or .ips file to compare UUIDs against. Must be provided together with dsymPath, or omitted entirely."),
+      crashDir: z.string().optional().describe("Directory of crash files to compare UUIDs against (all .crash/.ips files in the directory). Must be provided together with dsymPath, or omitted entirely."),
     }),
     outputSchema: z.object({
       valid: z.boolean(),
@@ -942,19 +942,58 @@ server.registerTool(
   },
   async (input) => {
     const config = getConfig();
-    const dsymPath = input.dsymPath ?? config.DSYM_PATH;
 
-    if (!dsymPath) {
+    const hasDsymInput = Boolean(input.dsymPath);
+    const hasCrashInput = Boolean(input.crashPath || input.crashDir);
+
+    // Both-or-neither: if only one side is provided, error out
+    if (hasDsymInput && !hasCrashInput) {
       const result = {
         valid: false,
-        dsymPath: "",
+        dsymPath: input.dsymPath ?? "",
         dsymUuids: [],
-        detail: "dsymPath not provided and DSYM_PATH env var not set.",
+        detail: "dsymPath was provided but no crashPath or crashDir was given. Either supply both or neither.",
       };
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
         structuredContent: result,
       };
+    }
+    if (!hasDsymInput && hasCrashInput) {
+      const result = {
+        valid: false,
+        dsymPath: "",
+        dsymUuids: [],
+        detail: "crashPath/crashDir was provided but no dsymPath was given. Either supply both or neither.",
+      };
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
+    }
+
+    // Resolve dSYM path
+    let dsymPath: string;
+    if (input.dsymPath) {
+      dsymPath = input.dsymPath;
+    } else if (config.DSYM_PATH) {
+      dsymPath = config.DSYM_PATH;
+    } else {
+      const symlinkPath = path.join(config.CRASH_ANALYSIS_PARENT, "dSYM_File");
+      try {
+        dsymPath = fs.realpathSync(symlinkPath);
+      } catch {
+        const result = {
+          valid: false,
+          dsymPath: "",
+          dsymUuids: [],
+          detail: "dsymPath not provided, DSYM_PATH env var not set, and no dSYM_File symlink found in CRASH_ANALYSIS_PARENT. Run setup to create the symlink.",
+        };
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      }
     }
 
     assertNoTraversal(dsymPath);
@@ -972,10 +1011,18 @@ server.registerTool(
       };
     }
 
+    // Resolve symlink before passing to dwarfdump
+    let resolvedDsymPath: string;
+    try {
+      resolvedDsymPath = fs.realpathSync(dsymPath);
+    } catch {
+      resolvedDsymPath = dsymPath;
+    }
+
     // Run dwarfdump --uuid to extract UUIDs from the dSYM
     let dwarfOutput = "";
     try {
-      const { stdout } = await execFileAsync("dwarfdump", ["--uuid", dsymPath]);
+      const { stdout } = await execFileAsync("dwarfdump", ["--uuid", resolvedDsymPath]);
       dwarfOutput = stdout;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -1014,16 +1061,33 @@ server.registerTool(
 
     // Collect crash files to compare
     const crashFiles: string[] = [];
-    if (input.crashPath) {
-      assertNoTraversal(input.crashPath);
-      crashFiles.push(input.crashPath);
-    }
-    if (input.crashDir) {
-      assertPathUnderBase(input.crashDir, config.CRASH_ANALYSIS_PARENT);
-      if (fs.existsSync(input.crashDir)) {
-        fs.readdirSync(input.crashDir)
-          .filter((f) => f.endsWith(".crash") || f.endsWith(".ips"))
-          .forEach((f) => crashFiles.push(path.join(input.crashDir!, f)));
+    if (hasCrashInput) {
+      // User explicitly provided crash inputs
+      if (input.crashPath) {
+        assertNoTraversal(input.crashPath);
+        crashFiles.push(input.crashPath);
+      }
+      if (input.crashDir) {
+        assertPathUnderBase(input.crashDir, config.CRASH_ANALYSIS_PARENT);
+        if (fs.existsSync(input.crashDir)) {
+          fs.readdirSync(input.crashDir)
+            .filter((f) => f.endsWith(".crash") || f.endsWith(".ips"))
+            .forEach((f) => crashFiles.push(path.join(input.crashDir!, f)));
+        }
+      }
+    } else {
+      // Default: collect from all three subdirectories of MainCrashLogsFolder
+      const dirs = [
+        getXcodeCrashesDir(config),
+        getAppticsCrashesDir(config),
+        getOtherCrashesDir(config),
+      ];
+      for (const dir of dirs) {
+        if (fs.existsSync(dir)) {
+          fs.readdirSync(dir)
+            .filter((f) => f.endsWith(".crash") || f.endsWith(".ips"))
+            .forEach((f) => crashFiles.push(path.join(dir, f)));
+        }
       }
     }
 
@@ -1033,7 +1097,7 @@ server.registerTool(
         valid: true,
         dsymPath,
         dsymUuids,
-        detail: `dSYM is valid. Found ${dsymUuids.length} UUID(s): ${dsymUuids.map((u) => `${u.arch}=${u.uuid}`).join(", ")}. No crash files provided for UUID comparison.`,
+        detail: `dSYM is valid. Found ${dsymUuids.length} UUID(s): ${dsymUuids.map((u) => `${u.arch}=${u.uuid}`).join(", ")}. No crash files found for UUID comparison.`,
       };
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],

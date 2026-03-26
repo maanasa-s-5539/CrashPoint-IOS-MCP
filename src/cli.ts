@@ -480,11 +480,37 @@ function cmdClean(flags: Record<string, string | boolean>): void {
 
 async function cmdVerifyDsym(flags: Record<string, string | boolean>): Promise<void> {
   const config = getConfig();
-  const dsymPath = (flags["dsym"] as string) ?? config.DSYM_PATH;
+  const flagDsym = flags["dsym"] as string | undefined;
+  const crashPath = flags["crash"] as string | undefined;
+  const crashDir = flags["crash-dir"] as string | undefined;
 
-  if (!dsymPath) {
-    console.error("Error: --dsym or DSYM_PATH env var is required.");
+  const hasDsymFlag = Boolean(flagDsym);
+  const hasCrashFlag = Boolean(crashPath || crashDir);
+
+  // Both-or-neither: if only one side is provided, error out
+  if (hasDsymFlag && !hasCrashFlag) {
+    console.error("Error: --dsym requires --crash or --crash-dir to also be provided. Either supply both or neither.");
     process.exit(1);
+  }
+  if (!hasDsymFlag && hasCrashFlag) {
+    console.error("Error: --crash/--crash-dir requires --dsym to also be provided. Either supply both or neither.");
+    process.exit(1);
+  }
+
+  // Resolve dSYM path
+  let dsymPath: string;
+  if (flagDsym) {
+    dsymPath = flagDsym;
+  } else if (config.DSYM_PATH) {
+    dsymPath = config.DSYM_PATH;
+  } else {
+    const symlinkPath = path.join(config.CRASH_ANALYSIS_PARENT, "dSYM_File");
+    try {
+      dsymPath = fs.realpathSync(symlinkPath);
+    } catch {
+      console.error("Error: No dSYM path available. Provide --dsym, set DSYM_PATH env var, or run setup to create the dSYM_File symlink in CRASH_ANALYSIS_PARENT.");
+      process.exit(1);
+    }
   }
 
   assertNoTraversal(dsymPath);
@@ -494,9 +520,17 @@ async function cmdVerifyDsym(flags: Record<string, string | boolean>): Promise<v
     process.exit(1);
   }
 
+  // Resolve symlink before passing to dwarfdump
+  let resolvedDsymPath: string;
+  try {
+    resolvedDsymPath = fs.realpathSync(dsymPath);
+  } catch {
+    resolvedDsymPath = dsymPath;
+  }
+
   let dwarfOutput = "";
   try {
-    const { stdout } = await execFileAsync("dwarfdump", ["--uuid", dsymPath]);
+    const { stdout } = await execFileAsync("dwarfdump", ["--uuid", resolvedDsymPath]);
     dwarfOutput = stdout;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -511,24 +545,39 @@ async function cmdVerifyDsym(flags: Record<string, string | boolean>): Promise<v
     dsymUuids.push({ uuid: match[1].toUpperCase(), arch: match[2] });
   }
 
-  const crashPath = flags["crash"] as string | undefined;
-  const crashDir = flags["crash-dir"] as string | undefined;
-
+  // Collect crash files
   const crashFiles: string[] = [];
-  if (crashPath) {
-    assertNoTraversal(crashPath);
-    crashFiles.push(crashPath);
-  }
-  if (crashDir) {
-    if (fs.existsSync(crashDir)) {
-      fs.readdirSync(crashDir)
-        .filter((f) => f.endsWith(".crash") || f.endsWith(".ips"))
-        .forEach((f) => crashFiles.push(path.join(crashDir, f)));
+  if (hasCrashFlag) {
+    // User explicitly provided crash flags
+    if (crashPath) {
+      assertNoTraversal(crashPath);
+      crashFiles.push(crashPath);
+    }
+    if (crashDir) {
+      if (fs.existsSync(crashDir)) {
+        fs.readdirSync(crashDir)
+          .filter((f) => f.endsWith(".crash") || f.endsWith(".ips"))
+          .forEach((f) => crashFiles.push(path.join(crashDir, f)));
+      }
+    }
+  } else {
+    // Default: collect from all three subdirectories of MainCrashLogsFolder
+    const dirs = [
+      getXcodeCrashesDir(config),
+      getAppticsCrashesDir(config),
+      getOtherCrashesDir(config),
+    ];
+    for (const dir of dirs) {
+      if (fs.existsSync(dir)) {
+        fs.readdirSync(dir)
+          .filter((f) => f.endsWith(".crash") || f.endsWith(".ips"))
+          .forEach((f) => crashFiles.push(path.join(dir, f)));
+      }
     }
   }
 
   if (crashFiles.length === 0) {
-    console.log(JSON.stringify({ valid: true, dsymPath, dsymUuids, detail: `dSYM is valid. Found ${dsymUuids.length} UUID(s). No crash files provided for UUID comparison.` }, null, 2));
+    console.log(JSON.stringify({ valid: true, dsymPath, dsymUuids, detail: `dSYM is valid. Found ${dsymUuids.length} UUID(s). No crash files found for UUID comparison.` }, null, 2));
     return;
   }
 
@@ -632,8 +681,11 @@ Commands:
     --before-date <date> ISO date — files with crash dates before this are deleted (required)
     --dry-run           Preview what would be deleted without deleting
   verify-dsym           Validate a .dSYM bundle and check UUID matches against crash files
-    --dsym <path>       Path to .dSYM bundle (overrides env)
-    --crash <path>      Path to a single .crash file to compare UUIDs against
+                        With no flags: dSYM is resolved from the dSYM_File symlink in CRASH_ANALYSIS_PARENT,
+                        and crashes are collected from all MainCrashLogsFolder subfolders automatically.
+                        --dsym and --crash/--crash-dir must be provided together, or neither.
+    --dsym <path>       Path to .dSYM bundle (overrides DSYM_PATH env var and dSYM_File symlink)
+    --crash <path>      Path to a single .crash or .ips file to compare UUIDs against
     --crash-dir <dir>   Directory of crash files to compare UUIDs against
   set-fix <signature>   Mark crash signature as fixed
     --note <text>       Optional note
