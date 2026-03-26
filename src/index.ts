@@ -156,14 +156,14 @@ server.registerTool(
   "symbolicate_one",
   {
     description:
-      "Symbolicate a single .crash file using atos. Requires macOS with Xcode CLI tools. dsymPath and appPath are pre-configured via environment variables — do NOT ask the user for them unless they explicitly want to override.",
+      "Symbolicate a single .crash file using Xcode's symbolicatecrash tool. All threads and all binaries (including system frameworks) are automatically symbolicated. Requires macOS with Xcode installed. dsymPath and appPath are pre-configured via environment variables — do NOT ask the user for them unless they explicitly want to override.",
     inputSchema: z.object({
       crashPath: z.string().describe("Path to the .crash or .ips file"),
       dsymPath: z.string().optional().describe("ALREADY CONFIGURED via DSYM_PATH env var. Do NOT ask the user for this. Only provide if the user explicitly wants to override the configured default."),
       appPath: z.string().optional().describe("ALREADY CONFIGURED via APP_PATH env var. Do NOT ask the user for this. Only provide if the user explicitly wants to override the configured default."),
       outputPath: z.string().optional().describe("Where to write the symbolicated file"),
       arch: z.string().optional().describe("Architecture override (e.g. arm64)"),
-      allThreads: z.boolean().optional().describe("Symbolicate all threads (default: crashed thread only)"),
+      allThreads: z.boolean().optional().describe("Deprecated: all threads are always symbolicated by symbolicatecrash. This parameter is ignored."),
     }),
     outputSchema: z.object({
       success: z.boolean(),
@@ -220,14 +220,14 @@ server.registerTool(
   "symbolicate_batch",
   {
     description:
-      "Symbolicate ALL .crash and .ips files in MainCrashLogsFolder (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs), output to SymbolicatedCrashLogsFolder. All paths (dSYM, app, crash directory, output directory) are pre-configured via environment variables — do NOT ask the user for them unless they explicitly want to override.",
+      "Symbolicate ALL .crash and .ips files in MainCrashLogsFolder (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs) using Xcode's symbolicatecrash tool, output to SymbolicatedCrashLogsFolder. All threads and all binaries (including system frameworks) are automatically symbolicated. All paths (dSYM, app, crash directory, output directory) are pre-configured via environment variables — do NOT ask the user for them unless they explicitly want to override.",
     inputSchema: z.object({
       crashDir: z.string().optional().describe("ALREADY CONFIGURED via env (MainCrashLogsFolder/XCodeCrashLogs). Do NOT ask the user for this. Only provide to override."),
       dsymPath: z.string().optional().describe("ALREADY CONFIGURED via DSYM_PATH env var. Do NOT ask the user for this. Only provide if the user explicitly wants to override the configured default."),
       appPath: z.string().optional().describe("ALREADY CONFIGURED via APP_PATH env var. Do NOT ask the user for this. Only provide if the user explicitly wants to override the configured default."),
       outputDir: z.string().optional().describe("ALREADY CONFIGURED via env (SymbolicatedCrashLogsFolder). Do NOT ask the user for this. Only provide to override."),
       arch: z.string().optional().describe("Architecture override"),
-      allThreads: z.boolean().optional().describe("Symbolicate all threads"),
+      allThreads: z.boolean().optional().describe("Deprecated: all threads are always symbolicated by symbolicatecrash. This parameter is ignored."),
     }),
     outputSchema: z.object({
       succeeded: z.number(),

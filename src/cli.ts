@@ -451,7 +451,7 @@ Commands:
     --start-date <date> ISO date string to filter crashes from (e.g. 2026-03-01)
     --end-date <date>   ISO date string to filter crashes until (e.g. 2026-03-20)
   batch                 Symbolicate all crash files in MainCrashLogsFolder (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs)
-    --all-threads       Symbolicate all threads (not just crashed thread)
+    --all-threads       (no-op) All threads are always symbolicated via symbolicatecrash
   analyze               Group and deduplicate crashes into a report
     --crash-dir <dir>   Directory of crash files (default: SymbolicatedCrashLogsFolder)
     -o <output.json>    Write report JSON to file (default: stdout)
@@ -472,7 +472,7 @@ Commands:
     --dsym <path>       Path to .dSYM bundle (overrides env)
     --app <path>        Path to .app bundle (overrides env)
     --output <path>     Write symbolicated output to file (default: stdout)
-    --all-threads       Symbolicate all threads (not just crashed thread)
+    --all-threads       (no-op) All threads are always symbolicated via symbolicatecrash
   diagnose              Frame-by-frame symbolication quality check
     --crash <path>      Path to original .crash file (required)
     --symbolicated <path>  Path to symbolicated .crash file (required)
@@ -482,7 +482,7 @@ Commands:
     --recursive         Search recursively
   pipeline              Full export → symbolicate → analyze → (optionally) notify
     --notify            Send Cliq notification after analysis
-    --all-threads       Symbolicate all threads (not just crashed thread)
+    --all-threads       (no-op) All threads are always symbolicated via symbolicatecrash
     --versions v1,v2    Comma-separated version filter
     --start-date <date> ISO date string to filter crashes from (e.g. 2026-03-01)
     --end-date <date>   ISO date string to filter crashes until (e.g. 2026-03-20)
