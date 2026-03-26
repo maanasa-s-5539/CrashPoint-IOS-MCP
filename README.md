@@ -102,8 +102,6 @@ Add the following configuration to your MCP client:
 | `ZOHO_BUG_SEVERITY_MAJOR` | Optional | Zoho bug severity field value ID for Major |
 | `ZOHO_BUG_SEVERITY_MINOR` | Optional | Zoho bug severity field value ID for Minor |
 | `ZOHO_BUG_SEVERITY_NONE` | Optional | Zoho bug severity field value ID for None |
-| `ZOHO_BUG_CF_OCCURRENCES` | Optional | Zoho custom field ID for number of crash occurrences |
-| `ZOHO_BUG_CF_APP_VERSION` | Optional | Zoho custom field ID for App Version of the crash |
 
 ---
 
@@ -359,13 +357,7 @@ CrashPoint can create a bug in Zoho Projects for each unique crash group. It con
    ZOHO_BUG_SEVERITY_MAJOR=1139168000000007055
    ZOHO_BUG_SEVERITY_MINOR=1139168000000007057
    ZOHO_BUG_SEVERITY_NONE=1139168000000007059
-
-   # Optional: custom field IDs for crash metadata
-   ZOHO_BUG_CF_OCCURRENCES=<your_custom_field_id>
-   ZOHO_BUG_CF_APP_VERSION=<your_custom_field_id>
    ```
-
-   If a field ID env var is left blank, bugs will be created without that field set.
 
 ### Severity Mapping
 
