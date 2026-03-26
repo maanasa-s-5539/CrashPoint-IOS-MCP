@@ -13,8 +13,6 @@ export interface ZohoBugFieldIds {
   severityMajor?: string;
   severityMinor?: string;
   severityNone?: string;
-  cfOccurrences?: string;
-  cfAppVersion?: string;
 }
 
 export function getFieldIdsFromConfig(config: CrashPointConfig): ZohoBugFieldIds {
@@ -26,8 +24,6 @@ export function getFieldIdsFromConfig(config: CrashPointConfig): ZohoBugFieldIds
     severityMajor: config.ZOHO_BUG_SEVERITY_MAJOR,
     severityMinor: config.ZOHO_BUG_SEVERITY_MINOR,
     severityNone: config.ZOHO_BUG_SEVERITY_NONE,
-    cfOccurrences: config.ZOHO_BUG_CF_OCCURRENCES,
-    cfAppVersion: config.ZOHO_BUG_CF_APP_VERSION,
   };
 }
 
@@ -164,19 +160,18 @@ export interface ZohoProjectsReportResult {
 
 // ── Existing Bug Fetcher ──────────────────────────────────────────────────────
 
+const OCCURRENCES_PATTERN = /Occurrences:\s*(\d+)/;
+
 interface ExistingBug {
   id: string;
   title: string;
-  appVersion?: string;
-  occurrences?: number;
+  description?: string;
 }
 
 export async function fetchExistingBugs(
   client: Client,
   portalId: string,
-  projectId: string,
-  cfAppVersionFieldId?: string,
-  cfOccurrencesFieldId?: string
+  projectId: string
 ): Promise<ExistingBug[]> {
   try {
     const result = await client.callTool({
@@ -225,23 +220,10 @@ export async function fetchExistingBugs(
     }
 
     return bugsData.map((bug) => {
-      const customFields = (bug.custom_fields ?? bug.customfields ?? {}) as Record<string, unknown>;
-      const appVersion = cfAppVersionFieldId
-        ? String(customFields[cfAppVersionFieldId] ?? "").trim() || undefined
-        : undefined;
-      const occurrencesRaw = cfOccurrencesFieldId
-        ? customFields[cfOccurrencesFieldId]
-        : undefined;
-      const occurrences =
-        occurrencesRaw !== undefined
-          ? (isNaN(Number(occurrencesRaw)) ? 0 : Number(occurrencesRaw))
-          : undefined;
-
       return {
         id: String(bug.id ?? bug.bug_id ?? ""),
         title: String(bug.title ?? ""),
-        appVersion,
-        occurrences,
+        description: bug.description !== undefined ? String(bug.description) : undefined,
       };
     });
   } catch {
@@ -308,9 +290,7 @@ export async function reportToZohoProjectsViaMcp(
   const existingBugs = await fetchExistingBugs(
     client,
     portalId,
-    projectId,
-    fieldIds.cfAppVersion,
-    fieldIds.cfOccurrences
+    projectId
   );
 
   const bugs: ZohoBugResult[] = [];
@@ -322,71 +302,53 @@ export async function reportToZohoProjectsViaMcp(
       const severity = mapSeverityId(group, fieldIds);
       const status = mapStatusId(group, fieldIds);
 
-      // Determine the top app version for this crash group
-      const topAppVersion =
-        Object.entries(group.app_versions).sort(([, a], [, b]) => b - a)[0]?.[0];
-
-      // Check for a duplicate: match on title + app version (case-insensitive)
+      // Check for a duplicate: match on title (case-insensitive)
       const normalizedTitle = title.trim().toLowerCase();
-      const normalizedVersion = topAppVersion?.trim().toLowerCase();
-      const existingBug = existingBugs.find((eb) => {
-        const titleMatch = eb.title.trim().toLowerCase() === normalizedTitle;
-        if (!titleMatch) return false;
-        if (fieldIds.cfAppVersion) {
-          // App version field is configured — must match on both title and version
-          return (eb.appVersion?.trim().toLowerCase() ?? "") === (normalizedVersion ?? "");
-        }
-        // App version field not configured — title match alone is sufficient
-        return true;
-      });
+      const existingBug = existingBugs.find((eb) => eb.title.trim().toLowerCase() === normalizedTitle);
 
       if (existingBug) {
-        // Duplicate found — accumulate occurrences and update the existing bug
-        const existingOccurrences = existingBug.occurrences ?? 0;
+        // Duplicate found — parse occurrences from existing description and accumulate
+        const existingOccurrences = (() => {
+          const match = existingBug.description?.match(OCCURRENCES_PATTERN);
+          return match ? parseInt(match[1], 10) : 0;
+        })();
         const newOccurrences = existingOccurrences + group.count;
 
-        if (fieldIds.cfOccurrences && existingBug.id) {
-          try {
-            await client.callTool({
-              name: "updateIssue",
-              arguments: {
-                portal_id: portalId,
-                project_id: projectId,
-                bug_id: existingBug.id,
-                custom_fields: {
-                  [fieldIds.cfOccurrences]: String(newOccurrences),
-                },
-              },
-            });
-            bugs.push({
-              success: true,
-              title,
-              severityLabel: severity.label,
-              statusLabel: status.label,
-              skipped: true,
-              skipReason: `Duplicate bug already exists (matched on title and app version). Updated occurrences from ${existingOccurrences} to ${newOccurrences}.`,
-            });
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            bugs.push({
-              success: false,
-              title,
-              severityLabel: severity.label,
-              statusLabel: status.label,
-              skipped: true,
-              skipReason: `Duplicate detected but failed to update occurrences: ${msg}`,
-              error: msg,
-            });
-          }
-        } else {
-          // cfOccurrences not configured or no bug id — still skip, just don't update
+        const baseDescription = buildDescription(group, report);
+        const updatedDescription = baseDescription.replace(
+          OCCURRENCES_PATTERN,
+          `Occurrences: ${newOccurrences}`
+        );
+
+        try {
+          await client.callTool({
+            name: "updateIssue",
+            arguments: {
+              portal_id: portalId,
+              project_id: projectId,
+              bug_id: existingBug.id,
+              description: updatedDescription,
+              ...(severity.id !== undefined ? { severity_id: severity.id } : {}),
+            },
+          });
           bugs.push({
             success: true,
             title,
             severityLabel: severity.label,
             statusLabel: status.label,
             skipped: true,
-            skipReason: `Duplicate bug already exists (matched on title${fieldIds.cfAppVersion ? " and app version" : ""}). Occurrences field not configured; no update performed.`,
+            skipReason: `Duplicate bug already exists (matched on title). Updated description with accumulated occurrences from ${existingOccurrences} to ${newOccurrences}.`,
+          });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          bugs.push({
+            success: false,
+            title,
+            severityLabel: severity.label,
+            statusLabel: status.label,
+            skipped: true,
+            skipReason: `Duplicate detected but failed to update description: ${msg}`,
+            error: msg,
           });
         }
         continue;
@@ -404,16 +366,6 @@ export async function reportToZohoProjectsViaMcp(
       }
       if (severity.id !== undefined) {
         toolArgs.severity_id = severity.id;
-      }
-      if (fieldIds.cfOccurrences) {
-        toolArgs.custom_fields = toolArgs.custom_fields || {};
-        (toolArgs.custom_fields as Record<string, unknown>)[fieldIds.cfOccurrences] = String(group.count);
-      }
-      if (fieldIds.cfAppVersion) {
-        if (topAppVersion) {
-          toolArgs.custom_fields = toolArgs.custom_fields || {};
-          (toolArgs.custom_fields as Record<string, unknown>)[fieldIds.cfAppVersion] = topAppVersion;
-        }
       }
 
       try {

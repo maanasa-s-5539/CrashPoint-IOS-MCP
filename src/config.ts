@@ -25,8 +25,6 @@ const envSchema = z.object({
   ZOHO_BUG_SEVERITY_MAJOR: z.string().optional().describe("Zoho bug severity field value ID for Major"),
   ZOHO_BUG_SEVERITY_MINOR: z.string().optional().describe("Zoho bug severity field value ID for Minor"),
   ZOHO_BUG_SEVERITY_NONE: z.string().optional().describe("Zoho bug severity field value ID for None"),
-  ZOHO_BUG_CF_OCCURRENCES: z.string().optional().describe("Zoho bug custom field ID for number of crash occurrences"),
-  ZOHO_BUG_CF_APP_VERSION: z.string().optional().describe("Zoho bug custom field ID for App Version"),
 });
 
 export type CrashPointConfig = z.infer<typeof envSchema>;
