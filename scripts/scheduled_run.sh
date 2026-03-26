@@ -25,7 +25,7 @@ fi
 
 : "${CRASH_ANALYSIS_PARENT:?CRASH_ANALYSIS_PARENT env var must be set}"
 
-REPORT_FILE="$CRASH_ANALYSIS_PARENT/crash_report_$(date +%Y%m%d_%H%M%S).json"
+REPORT_FILE="$CRASH_ANALYSIS_PARENT/report_$(date +%s)000.json"
 
 echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] Starting scheduled crash analysis..."
 
