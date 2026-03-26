@@ -2,14 +2,18 @@
 
 import fs from "fs";
 import path from "path";
+import { execFile } from "child_process";
+import { promisify } from "util";
 import { getConfig, getXcodeCrashesDir, getMainCrashLogsDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir, hasCrashFiles } from "./config.js";
 import { exportCrashLogs } from "./crashExporter.js";
 import { runBatch, symbolicateOne, diagnoseFrames, BatchResult } from "./symbolicator.js";
-import { analyzeDirectory } from "./crashAnalyzer.js";
+import { analyzeDirectory, readCrash, searchCrashes, cleanOldCrashes } from "./crashAnalyzer.js";
 import { sendCrashReportToCliq } from "./cliqNotifier.js";
 import { FixTracker } from "./fixTracker.js";
 import { listAvailableVersions } from "./crashExporter.js";
 import { assertPathUnderBase, assertNoTraversal, assertSafeSymlinkTarget } from "./pathSafety.js";
+
+const execFileAsync = promisify(execFile);
 
 const [, , command, ...args] = process.argv;
 
@@ -47,7 +51,8 @@ async function cmdExport(flags: Record<string, string | boolean>): Promise<void>
   const versions = config.CRASH_VERSIONS?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
   const startDate = flags["start-date"] as string | undefined;
   const endDate = flags["end-date"] as string | undefined;
-  const result = exportCrashLogs(inputDir, outputDir, versions, false, false, startDate, endDate);
+  const dryRun = flags["dry-run"] === true;
+  const result = exportCrashLogs(inputDir, outputDir, versions, false, dryRun, startDate, endDate);
   console.log(JSON.stringify(result, null, 2));
 }
 
@@ -58,8 +63,6 @@ async function cmdBatch(flags: Record<string, string | boolean>): Promise<void> 
   const otherDir = getOtherCrashesDir(config);
   const outputDir = getSymbolicatedDir(config);
   const dsymPath = config.DSYM_PATH;
-  const appPath = config.APP_PATH;
-  const allThreads = flags["all-threads"] === true;
 
   if (!dsymPath) {
     console.error("Error: DSYM_PATH env var is required for batch symbolication.");
@@ -85,7 +88,7 @@ async function cmdBatch(flags: Record<string, string | boolean>): Promise<void> 
   const results: BatchResult[] = [];
 
   for (const dir of [crashDir, appticsDir, otherDir]) {
-    const r = await runBatch(dir, dsymPath, appPath, outputDir, undefined, allThreads);
+    const r = await runBatch(dir, dsymPath, outputDir);
     succeeded += r.succeeded;
     failed += r.failed;
     total += r.total;
@@ -118,33 +121,9 @@ async function cmdAnalyze(flags: Record<string, string | boolean>): Promise<void
 }
 
 async function cmdNotify(flags: Record<string, string | boolean>): Promise<void> {
-  const reportFile = flags["report"] as string;
-  if (!reportFile) {
-    console.error("Error: --report <path> is required for notify command.");
-    process.exit(1);
-  }
-
-  let report;
-  try {
-    const raw = fs.readFileSync(reportFile, "utf-8");
-    report = JSON.parse(raw);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`Error reading report file: ${msg}`);
-    process.exit(1);
-  }
-
-  const config = getConfig();
-  const result = await sendCrashReportToCliq(report, config);
-  console.log(JSON.stringify(result, null, 2));
-  if (!result.success) {
-    process.exit(1);
-  }
-}
-
-async function cmdNotifyUnfixed(flags: Record<string, string | boolean>): Promise<void> {
   const config = getConfig();
   const crashDir = (flags["crash-dir"] as string) ?? getSymbolicatedDir(config);
+  const unfixedOnly = flags["unfixed-only"] === true;
   const dryRun = flags["dry-run"] === true;
   const outputFile = (flags["o"] as string) ?? undefined;
 
@@ -156,42 +135,44 @@ async function cmdNotifyUnfixed(flags: Record<string, string | boolean>): Promis
 
   const fullReport = analyzeDirectory(crashDir, fixStatuses);
 
-  const fixedGroups = fullReport.crash_groups.filter((g) => g.fix_status?.fixed === true);
-  const unfixedGroups = fullReport.crash_groups.filter(
-    (g) => !g.fix_status || g.fix_status.fixed === false
-  );
+  let reportToSend = fullReport;
 
-  const unfixedReport = {
-    ...fullReport,
-    report_type: "unfixed-only",
-    crash_groups: unfixedGroups.map((g, idx) => ({ ...g, rank: idx + 1 })),
-    total_crashes: unfixedGroups.reduce((sum, g) => sum + g.count, 0),
-    unique_crash_types: unfixedGroups.length,
-  };
-
-  if (outputFile) {
-    fs.writeFileSync(outputFile, JSON.stringify(unfixedReport, null, 2), "utf-8");
-    console.log(`Filtered report written to ${path.resolve(outputFile)}`);
+  if (unfixedOnly) {
+    const fixedGroups = fullReport.crash_groups.filter((g) => g.fix_status?.fixed === true);
+    const unfixedGroups = fullReport.crash_groups.filter(
+      (g) => !g.fix_status || g.fix_status.fixed === false
+    );
+    reportToSend = {
+      ...fullReport,
+      report_type: "unfixed-only",
+      crash_groups: unfixedGroups.map((g, idx) => ({ ...g, rank: idx + 1 })),
+      total_crashes: unfixedGroups.reduce((sum, g) => sum + g.count, 0),
+      unique_crash_types: unfixedGroups.length,
+    };
+    console.log(
+      `Unfixed: ${unfixedGroups.length} type(s), Fixed: ${fixedGroups.length} type(s)`
+    );
   }
 
-  console.log(
-    `Unfixed: ${unfixedGroups.length} type(s), Fixed: ${fixedGroups.length} type(s)`
-  );
+  if (outputFile) {
+    fs.writeFileSync(outputFile, JSON.stringify(reportToSend, null, 2), "utf-8");
+    console.log(`Report written to ${path.resolve(outputFile)}`);
+  }
 
   if (dryRun) {
     if (!outputFile) {
-      console.log(JSON.stringify(unfixedReport, null, 2));
+      console.log(JSON.stringify(reportToSend, null, 2));
     }
     console.log("Dry-run: no notification sent.");
     return;
   }
 
-  if (unfixedGroups.length === 0) {
-    console.log("No unfixed crashes to report. Skipping Cliq notification.");
+  if (reportToSend.unique_crash_types === 0) {
+    console.log(unfixedOnly ? "No unfixed crashes to report. Skipping Cliq notification." : "No crashes to report. Skipping Cliq notification.");
     return;
   }
 
-  const result = await sendCrashReportToCliq(unfixedReport, config);
+  const result = await sendCrashReportToCliq(reportToSend, config);
   console.log(JSON.stringify(result, null, 2));
   if (!result.success) {
     process.exit(1);
@@ -307,16 +288,14 @@ async function cmdSymbolicateOne(flags: Record<string, string | boolean>): Promi
   }
   const config = getConfig();
   const dsymPath = (flags["dsym"] as string) ?? config.DSYM_PATH;
-  const appPath = (flags["app"] as string) ?? config.APP_PATH;
   const outputPath = (flags["output"] as string) ?? path.join(config.CRASH_ANALYSIS_PARENT, "SymbolicatedCrashLogsFolder", path.basename(crashPath));
-  const allThreads = flags["all-threads"] === true;
 
   if (!dsymPath) {
     console.error("Error: --dsym or DSYM_PATH env var is required.");
     process.exit(1);
   }
 
-  const result = await symbolicateOne(crashPath, dsymPath, appPath, outputPath, undefined, allThreads);
+  const result = await symbolicateOne(crashPath, dsymPath, outputPath);
   console.log(JSON.stringify(result, null, 2));
   if (result.success) {
     console.log(`Symbolicated output written to ${path.resolve(outputPath)}`);
@@ -351,9 +330,7 @@ async function cmdPipeline(flags: Record<string, string | boolean>): Promise<voi
   const basicDir = getXcodeCrashesDir(config);
   const symbolicatedDir = path.join(config.CRASH_ANALYSIS_PARENT, "SymbolicatedCrashLogsFolder");
   const dsymPath = config.DSYM_PATH;
-  const appPath = config.APP_PATH;
   const notify = flags["notify"] === true;
-  const allThreads = flags["all-threads"] === true;
   const versions = flags["versions"]
     ? (flags["versions"] as string).split(",").map((v) => v.trim()).filter(Boolean)
     : (config.CRASH_VERSIONS?.split(",").map((v) => v.trim()).filter(Boolean) ?? []);
@@ -382,7 +359,7 @@ async function cmdPipeline(flags: Record<string, string | boolean>): Promise<voi
       let total = 0;
       const results: BatchResult[] = [];
       for (const dir of [basicDir, appticsDir, otherDir]) {
-        const r = await runBatch(dir, dsymPath, appPath, symbolicatedDir, undefined, allThreads);
+        const r = await runBatch(dir, dsymPath, symbolicatedDir);
         succeeded += r.succeeded;
         failed += r.failed;
         total += r.total;
@@ -435,11 +412,160 @@ function cmdListFixes(): void {
   console.log(JSON.stringify(tracker.getAll(), null, 2));
 }
 
-function cmdRemoveFix(signature: string): void {
+function cmdRead(flags: Record<string, string | boolean>): void {
+  const crashPath = flags["crash"] as string;
+  if (!crashPath) {
+    console.error("Error: --crash <path> is required for read command.");
+    process.exit(1);
+  }
+  assertNoTraversal(crashPath);
+  const meta = readCrash(crashPath);
+  if (!meta) {
+    console.error(`Error: Could not read or parse crash file: ${crashPath}`);
+    process.exit(1);
+  }
+  console.log(JSON.stringify(meta, null, 2));
+}
+
+function cmdSearch(flags: Record<string, string | boolean>): void {
+  const query = flags["query"] as string;
+  if (!query) {
+    console.error("Error: --query <term> is required for search command.");
+    process.exit(1);
+  }
   const config = getConfig();
-  const tracker = new FixTracker(config.CRASH_ANALYSIS_PARENT);
-  tracker.remove(signature);
-  console.log(`Removed fix tracking for: ${signature}`);
+  const crashDir = (flags["crash-dir"] as string) ?? getSymbolicatedDir(config);
+  const result = searchCrashes(query, crashDir);
+  console.log(JSON.stringify(result, null, 2));
+}
+
+function cmdClean(flags: Record<string, string | boolean>): void {
+  const beforeDate = flags["before-date"] as string;
+  if (!beforeDate) {
+    console.error("Error: --before-date <ISO date> is required for clean command.");
+    process.exit(1);
+  }
+  const dryRun = flags["dry-run"] === true;
+  const config = getConfig();
+
+  const dirs = [
+    getXcodeCrashesDir(config),
+    getAppticsCrashesDir(config),
+    getOtherCrashesDir(config),
+    getSymbolicatedDir(config),
+  ];
+
+  const result = cleanOldCrashes(beforeDate, dirs, dryRun);
+  console.log(JSON.stringify(result, null, 2));
+  if (dryRun) {
+    console.log(`Dry-run: ${result.deleted} file(s) would be deleted, ${result.skipped} skipped.`);
+  } else {
+    console.log(`Deleted ${result.deleted} file(s), skipped ${result.skipped}.`);
+  }
+}
+
+async function cmdVerifyDsym(flags: Record<string, string | boolean>): Promise<void> {
+  const config = getConfig();
+  const dsymPath = (flags["dsym"] as string) ?? config.DSYM_PATH;
+
+  if (!dsymPath) {
+    console.error("Error: --dsym or DSYM_PATH env var is required.");
+    process.exit(1);
+  }
+
+  assertNoTraversal(dsymPath);
+
+  if (!fs.existsSync(dsymPath)) {
+    console.error(`Error: dSYM not found at: ${dsymPath}`);
+    process.exit(1);
+  }
+
+  let dwarfOutput = "";
+  try {
+    const { stdout } = await execFileAsync("dwarfdump", ["--uuid", dsymPath]);
+    dwarfOutput = stdout;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`Error: dwarfdump failed: ${msg}`);
+    process.exit(1);
+  }
+
+  const uuidLineRe = /UUID:\s+([0-9A-F-]+)\s+\(([^)]+)\)/gi;
+  const dsymUuids: Array<{ arch: string; uuid: string }> = [];
+  let match: RegExpExecArray | null;
+  while ((match = uuidLineRe.exec(dwarfOutput)) !== null) {
+    dsymUuids.push({ uuid: match[1].toUpperCase(), arch: match[2] });
+  }
+
+  const crashPath = flags["crash"] as string | undefined;
+  const crashDir = flags["crash-dir"] as string | undefined;
+
+  const crashFiles: string[] = [];
+  if (crashPath) {
+    assertNoTraversal(crashPath);
+    crashFiles.push(crashPath);
+  }
+  if (crashDir) {
+    if (fs.existsSync(crashDir)) {
+      fs.readdirSync(crashDir)
+        .filter((f) => f.endsWith(".crash") || f.endsWith(".ips"))
+        .forEach((f) => crashFiles.push(path.join(crashDir, f)));
+    }
+  }
+
+  if (crashFiles.length === 0) {
+    console.log(JSON.stringify({ valid: true, dsymPath, dsymUuids, detail: `dSYM is valid. Found ${dsymUuids.length} UUID(s). No crash files provided for UUID comparison.` }, null, 2));
+    return;
+  }
+
+  const binaryImgRe = /^\s*0x[0-9a-fA-F]+\s+-\s+0x[0-9a-fA-F]+\s+\S+\s+\S+\s+<([0-9a-f]{32})>/gim;
+  const crashFileUuids: Array<{ file: string; uuid: string }> = [];
+
+  for (const cf of crashFiles) {
+    let content = "";
+    try {
+      content = fs.readFileSync(cf, "utf-8");
+    } catch {
+      continue;
+    }
+    const seen = new Set<string>();
+    let m: RegExpExecArray | null;
+    binaryImgRe.lastIndex = 0;
+    while ((m = binaryImgRe.exec(content)) !== null) {
+      const raw = m[1].toUpperCase();
+      const uuid = `${raw.slice(0, 8)}-${raw.slice(8, 12)}-${raw.slice(12, 16)}-${raw.slice(16, 20)}-${raw.slice(20)}`;
+      if (!seen.has(uuid)) {
+        seen.add(uuid);
+        crashFileUuids.push({ file: path.basename(cf), uuid });
+      }
+    }
+  }
+
+  const matches: Array<{ uuid: string; arch: string; matchedFiles: string[] }> = [];
+  const mismatches: string[] = [];
+
+  for (const { uuid, arch } of dsymUuids) {
+    const matchedFiles = crashFileUuids.filter((c) => c.uuid === uuid).map((c) => c.file);
+    if (matchedFiles.length > 0) {
+      matches.push({ uuid, arch, matchedFiles });
+    } else {
+      mismatches.push(`${arch} UUID ${uuid} not found in any provided crash file`);
+    }
+  }
+
+  const dsymUuidSet = new Set(dsymUuids.map((u) => u.uuid));
+  for (const { uuid, file } of crashFileUuids) {
+    if (!dsymUuidSet.has(uuid)) {
+      mismatches.push(`Crash file ${file} UUID ${uuid} not found in dSYM`);
+    }
+  }
+
+  const valid = matches.length > 0 && mismatches.length === 0;
+  const detail = matches.length > 0
+    ? `${matches.length} UUID match(es) found. ${mismatches.length > 0 ? `${mismatches.length} mismatch(es).` : "All UUIDs matched."}`
+    : `No UUID matches found. Symbolication will likely fail — ensure the correct dSYM for this build is used.`;
+
+  console.log(JSON.stringify({ valid, dsymPath, dsymUuids, crashFileUuids, matches, mismatches, detail }, null, 2));
 }
 
 function printUsage(): void {
@@ -448,31 +574,29 @@ CrashPoint iOS CLI — node dist/cli.js <command> [options]
 
 Commands:
   export                Export .crash files from .xccrashpoint packages into MainCrashLogsFolder/XCodeCrashLogs
+    --dry-run           Preview what would be exported without writing files
     --start-date <date> ISO date string to filter crashes from (e.g. 2026-03-01)
     --end-date <date>   ISO date string to filter crashes until (e.g. 2026-03-20)
   batch                 Symbolicate all crash files in MainCrashLogsFolder (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs)
-    --all-threads       (no-op) All threads are always symbolicated via symbolicatecrash
+                        using Xcode's symbolicatecrash tool
   analyze               Group and deduplicate crashes into a report
     --crash-dir <dir>   Directory of crash files (default: SymbolicatedCrashLogsFolder)
     -o <output.json>    Write report JSON to file (default: stdout)
-  notify                Send a crash report JSON to Zoho Cliq
-    --report <file>     Path to crash report JSON file
-  notify-unfixed        Analyze crashes, filter to unfixed only, and send filtered report to Cliq
+  notify                Analyze crashes and send report to Zoho Cliq
     --crash-dir <dir>   Directory of symbolicated crash files (default: SymbolicatedCrashLogsFolder)
-    --dry-run           Analyze and filter but don't send to Cliq
-    -o <output.json>    Write the filtered report JSON to a file
+    --unfixed-only      Send only unfixed crash types to Cliq
+    --dry-run           Analyze but don't send to Cliq
+    -o <output.json>    Write the report JSON to a file
   setup                 Create full folder structure + symlinks
     --master-branch     Path to master/live branch checkout
     --dev-branch        Path to development branch checkout
     --dsym              Path to .dSYM bundle
     --app               Path to .app bundle
     --crash-logs        Directory to copy existing crash files from
-  symbolicate-one       Symbolicate a single crash file
+  symbolicate-one       Symbolicate a single crash file using Xcode's symbolicatecrash tool
     --crash <path>      Path to .crash file (required)
     --dsym <path>       Path to .dSYM bundle (overrides env)
-    --app <path>        Path to .app bundle (overrides env)
-    --output <path>     Write symbolicated output to file (default: stdout)
-    --all-threads       (no-op) All threads are always symbolicated via symbolicatecrash
+    --output <path>     Write symbolicated output to file
   diagnose              Frame-by-frame symbolication quality check
     --crash <path>      Path to original .crash file (required)
     --symbolicated <path>  Path to symbolicated .crash file (required)
@@ -482,15 +606,25 @@ Commands:
     --recursive         Search recursively
   pipeline              Full export → symbolicate → analyze → (optionally) notify
     --notify            Send Cliq notification after analysis
-    --all-threads       (no-op) All threads are always symbolicated via symbolicatecrash
     --versions v1,v2    Comma-separated version filter
     --start-date <date> ISO date string to filter crashes from (e.g. 2026-03-01)
     --end-date <date>   ISO date string to filter crashes until (e.g. 2026-03-20)
+  read                  Parse and summarize a single crash file
+    --crash <path>      Path to .crash or .ips file (required)
+  search                Search crash files for a keyword or pattern
+    --query <term>      Search term (required, case-insensitive)
+    --crash-dir <dir>   Directory to search (default: SymbolicatedCrashLogsFolder)
+  clean                 Delete crash files older than a given date
+    --before-date <date> ISO date — files with crash dates before this are deleted (required)
+    --dry-run           Preview what would be deleted without deleting
+  verify-dsym           Validate a .dSYM bundle and check UUID matches against crash files
+    --dsym <path>       Path to .dSYM bundle (overrides env)
+    --crash <path>      Path to a single .crash file to compare UUIDs against
+    --crash-dir <dir>   Directory of crash files to compare UUIDs against
   set-fix <signature>   Mark crash signature as fixed
     --note <text>       Optional note
   unset-fix <signature> Mark crash signature as unfixed
   list-fixes            List all tracked fix statuses
-  remove-fix <signature> Remove fix tracking entry
 
 Environment variables: see .env.example
 `);
@@ -513,9 +647,6 @@ Environment variables: see .env.example
       case "notify":
         await cmdNotify(flags);
         break;
-      case "notify-unfixed":
-        await cmdNotifyUnfixed(flags);
-        break;
       case "setup":
         await cmdSetup(flags);
         break;
@@ -530,6 +661,18 @@ Environment variables: see .env.example
         break;
       case "pipeline":
         await cmdPipeline(flags);
+        break;
+      case "read":
+        cmdRead(flags);
+        break;
+      case "search":
+        cmdSearch(flags);
+        break;
+      case "clean":
+        cmdClean(flags);
+        break;
+      case "verify-dsym":
+        await cmdVerifyDsym(flags);
         break;
       case "set-fix": {
         const signature = args[0];
@@ -552,15 +695,6 @@ Environment variables: see .env.example
       case "list-fixes":
         cmdListFixes();
         break;
-      case "remove-fix": {
-        const signature = args[0];
-        if (!signature) {
-          console.error("Error: remove-fix requires a signature argument.");
-          process.exit(1);
-        }
-        cmdRemoveFix(signature);
-        break;
-      }
       default:
         printUsage();
         if (command) {
