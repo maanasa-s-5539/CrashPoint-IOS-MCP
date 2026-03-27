@@ -151,11 +151,11 @@ The manifest is used by `export_crashes`, `symbolicate_batch`, `analyze_crashes`
 | 2 | `list_versions` | List all app versions found in `.xccrashpoint` files |
 | 3 | `export_crashes` | Export `.crash` files from `.xccrashpoint` packages to `MainCrashLogsFolder/XCodeCrashLogs`. Add `dryRun: true` to preview without writing |
 | 4 | `symbolicate_batch` | Symbolicate crash files. Pass optional `file` param for a single file, or batch-process all of `MainCrashLogsFolder` (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs) |
-| 5 | `analyze_crashes` | Group & deduplicate crashes by signature; includes fix status. Pass optional `csvOutputPath` to also export a CSV |
-| 6 | `fix_status` | Unified fix tracking: `action='set'` to mark fixed/unfixed, `action='unset'` to clear, `action='list'` to view all |
-| 7 | `run_full_pipeline` | Run the complete pipeline: export → symbolicate → analyze |
-| 8 | `clean_old_crashes` | Delete `.crash`/`.ips` files older than a given date across all crash directories |
-| 9 | `verify_dsym` | Validate a `.dSYM` bundle and check if its UUIDs match those in crash files |
+| 5 | `verify_dsym` | Validate a `.dSYM` bundle and check if its UUIDs match those in crash files |
+| 6 | `analyze_crashes` | Group & deduplicate crashes by signature; includes fix status. Pass optional `csvOutputPath` to also export a CSV |
+| 7 | `fix_status` | Unified fix tracking: `action='set'` to mark fixed/unfixed, `action='unset'` to clear, `action='list'` to view all |
+| 8 | `run_full_pipeline` | Run the complete pipeline: export → symbolicate → analyze |
+| 9 | `clean_old_crashes` | Delete `.crash`/`.ips` files older than a given date across all crash directories |
 
 ### `export_crashes` Parameters
 
@@ -207,9 +207,9 @@ The manifest is used by `export_crashes`, `symbolicate_batch`, `analyze_crashes`
 
 | Parameter | Description |
 |---|---|
-| `dsymPath` | Path to `.dSYM` bundle (defaults to `DSYM_PATH` env var) |
-| `crashPath` | Path to a single `.crash` or `.ips` file to compare UUIDs against |
-| `crashDir` | Directory of crash files to compare UUIDs against |
+| `dsymPath` | Path to `.dSYM` bundle (defaults to `DSYM_PATH` env var). Must be provided together with `crashPath`/`crashDir`, or omitted entirely. |
+| `crashPath` | Path to a single `.crash` or `.ips` file to compare UUIDs against. Must be provided together with `dsymPath`, or omitted entirely. |
+| `crashDir` | Directory of crash files to compare UUIDs against. Must be provided together with `dsymPath`, or omitted entirely. |
 
 ### `setup_folders` Parameters
 
@@ -266,18 +266,13 @@ node dist/cli.js clean --before-date 2026-03-01 --dry-run
 node dist/cli.js clean --before-date 2026-03-01
 
 # Validate a dSYM bundle and check UUID matches
-node dist/cli.js verify-dsym --crash /path/to/file.crash
+node dist/cli.js verify-dsym
 node dist/cli.js verify-dsym --crash-dir /path/to/crashes/ --dsym /path/to/MyApp.dSYM
 
 # Manage fix statuses (unified command)
 node dist/cli.js fix-status --action set --signature "EXC_BAD_ACCESS SIGSEGV" --note "Fixed in PR #42"
 node dist/cli.js fix-status --action unset --signature "EXC_BAD_ACCESS SIGSEGV"
 node dist/cli.js fix-status --action list
-
-# Legacy fix status commands (still supported)
-node dist/cli.js set-fix "EXC_BAD_ACCESS SIGSEGV" --note "Fixed in PR #42"
-node dist/cli.js unset-fix "EXC_BAD_ACCESS SIGSEGV"
-node dist/cli.js list-fixes
 ```
 
 If installed globally, you can also use:

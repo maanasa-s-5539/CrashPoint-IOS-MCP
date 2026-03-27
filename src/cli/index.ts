@@ -9,7 +9,7 @@ export { cmdListVersions } from "./cmdListVersions.js";
 export { cmdPipeline } from "./cmdPipeline.js";
 export { cmdClean } from "./cmdClean.js";
 export { cmdVerifyDsym } from "./cmdVerifyDsym.js";
-export { cmdFixStatus, cmdSetFix, cmdUnsetFix, cmdListFixes } from "./cmdFixStatus.js";
+export { cmdFixStatus } from "./cmdFixStatus.js";
 
 import { parseFlags } from "./parseFlags.js";
 import { cmdExport } from "./cmdExport.js";
@@ -20,7 +20,7 @@ import { cmdListVersions } from "./cmdListVersions.js";
 import { cmdPipeline } from "./cmdPipeline.js";
 import { cmdClean } from "./cmdClean.js";
 import { cmdVerifyDsym } from "./cmdVerifyDsym.js";
-import { cmdFixStatus, cmdSetFix, cmdUnsetFix, cmdListFixes } from "./cmdFixStatus.js";
+import { cmdFixStatus } from "./cmdFixStatus.js";
 
 const [, , command, ...args] = process.argv;
 
@@ -67,10 +67,6 @@ Commands:
     --action <set|unset|list>  Action to perform (required)
     --signature <sig>   Crash signature (required for set/unset)
     --note <text>       Optional note (for set action)
-  set-fix <signature>   Mark crash signature as fixed (legacy — use fix-status --action set)
-    --note <text>       Optional note
-  unset-fix <signature> Mark crash signature as unfixed (legacy — use fix-status --action unset)
-  list-fixes            List all tracked fix statuses (legacy — use fix-status --action list)
 
 Environment variables: see .env.example
 `);
@@ -107,27 +103,6 @@ Environment variables: see .env.example
         break;
       case "fix-status":
         cmdFixStatus(flags);
-        break;
-      case "set-fix": {
-        const signature = args[0];
-        if (!signature) {
-          console.error("Error: set-fix requires a signature argument.");
-          process.exit(1);
-        }
-        cmdSetFix(signature, parseFlags(args.slice(1)));
-        break;
-      }
-      case "unset-fix": {
-        const signature = args[0];
-        if (!signature) {
-          console.error("Error: unset-fix requires a signature argument.");
-          process.exit(1);
-        }
-        cmdUnsetFix(signature);
-        break;
-      }
-      case "list-fixes":
-        cmdListFixes();
         break;
       default:
         printUsage();
