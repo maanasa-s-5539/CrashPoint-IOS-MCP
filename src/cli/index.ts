@@ -9,7 +9,6 @@ export { cmdSymbolicateOne } from "./cmdSymbolicateOne.js";
 export { cmdDiagnose } from "./cmdDiagnose.js";
 export { cmdListVersions } from "./cmdListVersions.js";
 export { cmdPipeline } from "./cmdPipeline.js";
-export { cmdRead } from "./cmdRead.js";
 export { cmdSearch } from "./cmdSearch.js";
 export { cmdClean } from "./cmdClean.js";
 export { cmdVerifyDsym } from "./cmdVerifyDsym.js";
@@ -24,7 +23,6 @@ import { cmdSymbolicateOne } from "./cmdSymbolicateOne.js";
 import { cmdDiagnose } from "./cmdDiagnose.js";
 import { cmdListVersions } from "./cmdListVersions.js";
 import { cmdPipeline } from "./cmdPipeline.js";
-import { cmdRead } from "./cmdRead.js";
 import { cmdSearch } from "./cmdSearch.js";
 import { cmdClean } from "./cmdClean.js";
 import { cmdVerifyDsym } from "./cmdVerifyDsym.js";
@@ -67,8 +65,6 @@ Commands:
     --versions v1,v2    Comma-separated version filter
     --start-date <date> ISO date string to filter crashes from (e.g. 2026-03-01)
     --end-date <date>   ISO date string to filter crashes until (e.g. 2026-03-20)
-  read                  Parse and summarize a single crash file
-    --crash <path>      Path to .crash or .ips file (required)
   search                Search crash files for a keyword or pattern
     --query <term>      Search term (required, case-insensitive)
     --crash-dir <dir>   Directory to search (default: SymbolicatedCrashLogsFolder)
@@ -119,9 +115,6 @@ Environment variables: see .env.example
         break;
       case "pipeline":
         await cmdPipeline(flags);
-        break;
-      case "read":
-        cmdRead(flags);
         break;
       case "search":
         cmdSearch(flags);

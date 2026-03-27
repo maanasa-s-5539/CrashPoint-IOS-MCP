@@ -154,10 +154,9 @@ bash scripts/setup_symlinks.sh
 | 10 | `run_full_pipeline` | Run the complete pipeline: export → symbolicate → analyze → (optionally notify) |
 | 11 | `setup_folders` | Create folder structure + optional branch symlinks + copy existing crash files |
 | 12 | `report_to_zoho_projects` | Create/update bugs in Zoho Projects for each unique crash group |
-| 13 | `read_crash` | Parse and summarize a single `.crash` or `.ips` file — returns structured metadata |
-| 14 | `search_crashes` | Search crash files for a keyword or pattern (exception type, frames, file content) |
-| 15 | `clean_old_crashes` | Delete `.crash`/`.ips` files older than a given date across all crash directories |
-| 16 | `verify_dsym` | Validate a `.dSYM` bundle and check if its UUIDs match those in crash files |
+| 13 | `search_crashes` | Search crash files for a keyword or pattern (exception type, frames, file content) |
+| 14 | `clean_old_crashes` | Delete `.crash`/`.ips` files older than a given date across all crash directories |
+| 15 | `verify_dsym` | Validate a `.dSYM` bundle and check if its UUIDs match those in crash files |
 
 ### `export_crashes` Parameters
 
@@ -188,12 +187,6 @@ bash scripts/setup_symlinks.sh
 | `note` | Optional note (e.g. PR reference) |
 
 > **Note:** Use `set_fix_status` with `fixed: false` to mark a crash as unfixed. There is no separate "remove" tool — marking as unfixed is the recommended approach.
-
-### `read_crash` Parameters
-
-| Parameter | Description |
-|---|---|
-| `crashPath` | Path to the `.crash` or `.ips` file to read (required) |
 
 ### `search_crashes` Parameters
 
@@ -277,10 +270,7 @@ node dist/cli.js diagnose --crash /path/to/original.crash --symbolicated /path/t
 node dist/cli.js list-versions
 
 # Run full pipeline
-node dist/cli.js pipeline --notify
-
-# Read and summarize a single crash file
-node dist/cli.js read --crash /path/to/file.crash
+node dist/cli.js pipeline
 
 # Search for crashes matching a keyword
 node dist/cli.js search --query "EXC_BAD_ACCESS"

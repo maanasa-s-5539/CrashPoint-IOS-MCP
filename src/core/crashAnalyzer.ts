@@ -236,42 +236,6 @@ export function analyzeDirectory(
   };
 }
 
-// ── readCrash ─────────────────────────────────────────────────────────────────
-
-export interface ReadCrashResult {
-  file: string;
-  exception_type: string;
-  exception_codes: string;
-  hardware_model: string;
-  os_version: string;
-  app_version: string;
-  crashed_thread: CrashedThread;
-  top_frames: string[];
-  source: string;
-}
-
-export function readCrash(crashPath: string): ReadCrashResult | null {
-  try {
-    const content = fs.readFileSync(crashPath, "utf-8");
-    const lines = content.split("\n");
-    const meta = parseCrashMetadata(lines);
-    const source = detectSource(crashPath);
-    return {
-      file: path.basename(crashPath),
-      exception_type: meta.exceptionType,
-      exception_codes: meta.exceptionCodes,
-      hardware_model: meta.hardwareModel,
-      os_version: meta.osVersion,
-      app_version: meta.appVersion,
-      crashed_thread: meta.crashedThread,
-      top_frames: meta.topFrames,
-      source,
-    };
-  } catch {
-    return null;
-  }
-}
-
 // ── searchCrashes ─────────────────────────────────────────────────────────────
 
 export interface SearchMatch {

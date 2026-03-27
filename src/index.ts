@@ -2,8 +2,8 @@
 export type { CrashPointConfig } from "./config.js";
 export { getConfig, getMainCrashLogsDir, getXcodeCrashesDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir, hasCrashFiles } from "./config.js";
 
-export type { CrashGroup, CrashReport, CrashMetadata, CrashedThread, ReadCrashResult, SearchMatch, SearchResult, CleanFileEntry, CleanResult } from "./core/crashAnalyzer.js";
-export { analyzeDirectory, readCrash, searchCrashes, cleanOldCrashes, filterUnfixedGroups, parseCrashMetadata, buildSignature, analyzeCrashFile, detectSource } from "./core/crashAnalyzer.js";
+export type { CrashGroup, CrashReport, CrashMetadata, CrashedThread, SearchMatch, SearchResult, CleanFileEntry, CleanResult } from "./core/crashAnalyzer.js";
+export { analyzeDirectory, searchCrashes, cleanOldCrashes, filterUnfixedGroups, parseCrashMetadata, buildSignature, analyzeCrashFile, detectSource } from "./core/crashAnalyzer.js";
 
 export { exportCrashLogs, listAvailableVersions } from "./core/crashExporter.js";
 
