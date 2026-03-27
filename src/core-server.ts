@@ -16,13 +16,14 @@ import {
 import {
   symbolicateOne,
   runBatch,
+  runBatchAll,
   BatchResult,
 } from "./core/symbolicator.js";
 import { analyzeDirectory, cleanOldCrashes } from "./core/crashAnalyzer.js";
-import { FixTracker, loadFixStatuses } from "./fixTracker.js";
+import { FixTracker, loadFixStatuses } from "./state/fixTracker.js";
 import { assertPathUnderBase, assertNoTraversal } from "./pathSafety.js";
 import { exportReportToCsv } from "./core/csvExporter.js";
-import { ProcessedManifest } from "./processedManifest.js";
+import { ProcessedManifest } from "./state/processedManifest.js";
 import { setupWorkspace } from "./core/setup.js";
 
 const execFileAsync = promisify(execFile);
@@ -43,13 +44,11 @@ server.registerTool(
       devBranchPath: z.string().optional().describe("ALREADY CONFIGURED via DEV_BRANCH_PATH env var. Do NOT ask the user. Only provide to override. Creates CurrentDevelopmentBranch symlink."),
       dsymPath: z.string().optional().describe("ALREADY CONFIGURED via DSYM_PATH env var. Do NOT ask the user. Only provide to override. Creates dSYM_File symlink."),
       appPath: z.string().optional().describe("ALREADY CONFIGURED via APP_PATH env var. Do NOT ask the user. Only provide to override. Creates app_File symlink."),
-      existingCrashLogsDir: z.string().optional().describe("If provided, copies .crash and .ips files from this directory into MainCrashLogsFolder/XCodeCrashLogs"),
     }),
     outputSchema: z.object({
       parentDir: z.string(),
       created: z.array(z.string()),
       symlinks: z.array(z.object({ link: z.string(), target: z.string(), status: z.string() })),
-      copiedFiles: z.number().optional(),
       warnings: z.array(z.string()),
     }),
   },
@@ -59,7 +58,6 @@ server.registerTool(
       devBranchPath: input.devBranchPath,
       dsymPath: input.dsymPath,
       appPath: input.appPath,
-      existingCrashLogsDir: input.existingCrashLogsDir,
     });
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
@@ -231,20 +229,22 @@ server.registerTool(
       };
     }
 
-    const dirsToProcess = inputIsDefault
-      ? [crashDir, appticsDir, otherDir]
-      : [crashDir];
-
     let succeeded = 0;
     let failed = 0;
     let total = 0;
     const results: BatchResult[] = [];
 
-    for (const dir of dirsToProcess) {
-      const batchResult = await runBatch(dir, dsymPath, outputDir, manifest);
-      succeeded += batchResult.succeeded;
-      failed += batchResult.failed;
-      total += batchResult.total;
+    if (inputIsDefault) {
+      const r = await runBatchAll(dsymPath, manifest);
+      succeeded = r.succeeded;
+      failed = r.failed;
+      total = r.total;
+      results.push(...r.results);
+    } else {
+      const batchResult = await runBatch(crashDir, dsymPath, outputDir, manifest);
+      succeeded = batchResult.succeeded;
+      failed = batchResult.failed;
+      total = batchResult.total;
       results.push(...batchResult.results);
     }
 
@@ -666,18 +666,7 @@ server.registerTool(
           reason: "No .crash or .ips files found in any crash logs folder",
         };
       } else {
-        let succeeded = 0;
-        let failed = 0;
-        let total = 0;
-        const results: BatchResult[] = [];
-        for (const dir of [basicDir, appticsDir, otherDir]) {
-          const r = await runBatch(dir, dsymPath, symbolicatedDir, manifest);
-          succeeded += r.succeeded;
-          failed += r.failed;
-          total += r.total;
-          results.push(...r.results);
-        }
-        symbolicationResult = { succeeded, failed, total, results };
+        symbolicationResult = await runBatchAll(dsymPath, manifest);
       }
     }
 

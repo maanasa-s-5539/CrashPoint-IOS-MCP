@@ -2,7 +2,8 @@ import fs from "fs";
 import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { ProcessedManifest, extractIncidentId } from "../processedManifest.js";
+import { ProcessedManifest, extractIncidentId } from "../state/processedManifest.js";
+import { getConfig, getXcodeCrashesDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir } from "../config.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -98,4 +99,28 @@ export async function runBatch(
   return { succeeded, failed, total: files.length, results };
 }
 
+export async function runBatchAll(
+  dsymPath: string,
+  manifest?: ProcessedManifest,
+): Promise<{ succeeded: number; failed: number; total: number; results: BatchResult[] }> {
+  const config = getConfig();
+  const xcodeCrashDir = getXcodeCrashesDir(config);
+  const appticsDir = getAppticsCrashesDir(config);
+  const otherDir = getOtherCrashesDir(config);
+  const outputDir = getSymbolicatedDir(config);
 
+  let succeeded = 0;
+  let failed = 0;
+  let total = 0;
+  const results: BatchResult[] = [];
+
+  for (const dir of [xcodeCrashDir, appticsDir, otherDir]) {
+    const r = await runBatch(dir, dsymPath, outputDir, manifest);
+    succeeded += r.succeeded;
+    failed += r.failed;
+    total += r.total;
+    results.push(...r.results);
+  }
+
+  return { succeeded, failed, total, results };
+}

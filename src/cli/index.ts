@@ -45,7 +45,6 @@ Commands:
     --dev-branch        Path to development branch checkout
     --dsym              Path to .dSYM bundle
     --app               Path to .app bundle
-    --crash-logs        Directory to copy existing crash files from
   list-versions         List versions found in .xccrashpoint files
     --input-dir <dir>   Directory to search (default: CRASH_INPUT_DIR or CRASH_ANALYSIS_PARENT)
     --recursive         Search recursively

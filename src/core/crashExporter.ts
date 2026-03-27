@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { ProcessedManifest, extractIncidentId } from "../processedManifest.js";
+import { ProcessedManifest, extractIncidentId } from "../state/processedManifest.js";
 
 export interface ExportEntry {
   source: string;

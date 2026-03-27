@@ -128,18 +128,7 @@ ParentHolderFolder/                   ← CRASH_ANALYSIS_PARENT
 
 Run `setup_folders` (MCP tool) or `node dist/cli.js setup` to create this structure.
 
----
-
-## Processed Manifest
-
-CrashPoint tracks which crash files have already been processed using a `processed_manifest.json` file located at `ParentHolderFolder/processed_manifest.json`.
-
-- **Key:** the crash file's `Incident Identifier` UUID (parsed from the crash file header)
-- **Value:** `{ "processedAt": "<ISO timestamp>" }`
-- **Purpose:** Prevents re-exporting and re-symbolicating the same crash files across sessions
-- **Override:** Pass `includeProcessedCrashes: true` (MCP) or `--include-processed` (CLI) to reprocess all files
-
-The manifest is used by `export_crashes`, `symbolicate_batch`, `analyze_crashes`, and `run_full_pipeline`.
+The `processed_manifest.json` tracks which crash files have already been processed (keyed by `Incident Identifier` UUID). This prevents re-exporting and re-symbolicating the same crashes across sessions. Pass `includeProcessedCrashes: true` (MCP) or `--include-processed` (CLI) to override and reprocess all files.
 
 ---
 
@@ -219,7 +208,6 @@ The manifest is used by `export_crashes`, `symbolicate_batch`, `analyze_crashes`
 | `devBranchPath` | Path to dev branch checkout → creates `CurrentDevelopmentBranch` symlink |
 | `dsymPath` | Path to .dSYM bundle → creates `dSYM_File` symlink |
 | `appPath` | Path to .app bundle → creates `app_File` symlink |
-| `existingCrashLogsDir` | Copy `.crash` and `.ips` files from this directory into `MainCrashLogsFolder/XCodeCrashLogs` |
 
 ---
 
@@ -228,6 +216,20 @@ The manifest is used by `export_crashes`, `symbolicate_batch`, `analyze_crashes`
 The CLI lets you run the crash analysis pipeline without an MCP client (useful for scheduled runs):
 
 ```bash
+# Delete crash files older than a given date (dry-run first)
+node dist/cli.js clean --before-date 2026-03-01 --dry-run
+node dist/cli.js clean --before-date 2026-03-01
+
+# Create folder structure with symlinks
+node dist/cli.js setup --master-branch /path/to/master --dev-branch /path/to/dev --dsym /path/to/MyApp.dSYM --app /path/to/MyApp.app
+
+# List versions in .xccrashpoint files
+node dist/cli.js list-versions
+
+# Validate a dSYM bundle and check UUID matches
+node dist/cli.js verify-dsym
+node dist/cli.js verify-dsym --crash-dir /path/to/crashes/ --dsym /path/to/MyApp.dSYM
+
 # Export crash logs from Xcode Organizer
 node dist/cli.js export
 
@@ -252,27 +254,13 @@ node dist/cli.js analyze --crash-dir /path/to/dir -o report.json
 # Analyze and also export CSV
 node dist/cli.js analyze -o report.json --csv report.csv
 
-# Create folder structure with symlinks
-node dist/cli.js setup --master-branch /path/to/master --dev-branch /path/to/dev --dsym /path/to/MyApp.dSYM --app /path/to/MyApp.app
-
-# List versions in .xccrashpoint files
-node dist/cli.js list-versions
-
-# Run full pipeline
-node dist/cli.js pipeline
-
-# Delete crash files older than a given date (dry-run first)
-node dist/cli.js clean --before-date 2026-03-01 --dry-run
-node dist/cli.js clean --before-date 2026-03-01
-
-# Validate a dSYM bundle and check UUID matches
-node dist/cli.js verify-dsym
-node dist/cli.js verify-dsym --crash-dir /path/to/crashes/ --dsym /path/to/MyApp.dSYM
-
 # Manage fix statuses (unified command)
 node dist/cli.js fix-status --action set --signature "EXC_BAD_ACCESS SIGSEGV" --note "Fixed in PR #42"
 node dist/cli.js fix-status --action unset --signature "EXC_BAD_ACCESS SIGSEGV"
 node dist/cli.js fix-status --action list
+
+# Run full pipeline (export → symbolicate → analyze)
+node dist/cli.js pipeline
 ```
 
 If installed globally, you can also use:
@@ -285,33 +273,13 @@ crashpoint-ios-cli analyze -o report.json
 
 ## Crash Source Tracking
 
-Each crash file is tagged with its source:
-
-| Source | Description |
-|---|---|
-| `xcode-organizer` | Exported from Xcode Organizer `.xccrashpoint` bundles |
-| `apptics` | Crash reports from Apptics SDK |
-| `ips-file` | Raw `.ips` crash files |
-| `manual` | Manually placed crash files |
-
-Source breakdowns appear in the MCP analysis output (e.g. `Xcode Organizer(3), Apptics(1)`).
+Each crash file is automatically tagged with its source based on its file path and type. These source breakdowns appear per crash group in the analysis report (e.g. `"sources": { "xcode-organizer": 3, "apptics": 1 }`).
 
 ---
 
-## Fix Status in Reports
+## Fix Tracking
 
-When crashes are analyzed, each group shows its fix status if one has been set:
-
-- `[FIXED] Fixed in dev — Fixed in PR #42`
-- `[NOT FIXED] Not yet fixed`
-
-Fix statuses are stored in `{CRASH_ANALYSIS_PARENT}/fix_status.json` (local only, gitignored).
-
-Use the `fix_status` MCP tool (or `fix-status` CLI command) to manage crash fix statuses.
-
----
-
-## Local Fix Tracking
+Crash fix statuses are stored in `{CRASH_ANALYSIS_PARENT}/fix_status.json` (local only, gitignored).
 
 ```json
 {
@@ -322,8 +290,6 @@ Use the `fix_status` MCP tool (or `fix-status` CLI command) to manage crash fix 
   }
 }
 ```
-
-This file is local-only (gitignored) and tracks which crash types your team has resolved.
 
 ---
 

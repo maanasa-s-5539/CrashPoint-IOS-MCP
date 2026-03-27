@@ -8,7 +8,7 @@ export { analyzeDirectory, cleanOldCrashes, filterUnfixedGroups, parseCrashMetad
 export { exportCrashLogs, listAvailableVersions } from "./core/crashExporter.js";
 
 export type { BatchResult } from "./core/symbolicator.js";
-export { symbolicateOne, runBatch } from "./core/symbolicator.js";
+export { symbolicateOne, runBatch, runBatchAll } from "./core/symbolicator.js";
 
 export type { CsvExportResult } from "./core/csvExporter.js";
 export { exportReportToCsv, reportToCsvString } from "./core/csvExporter.js";
@@ -16,9 +16,9 @@ export { exportReportToCsv, reportToCsvString } from "./core/csvExporter.js";
 export type { SetupOptions, SetupResult } from "./core/setup.js";
 export { setupWorkspace } from "./core/setup.js";
 
-export type { FixStatus, FixStatusStore, FixStatusEntry } from "./fixTracker.js";
-export { FixTracker, loadFixStatuses } from "./fixTracker.js";
+export type { FixStatus, FixStatusStore, FixStatusEntry } from "./state/fixTracker.js";
+export { FixTracker, loadFixStatuses } from "./state/fixTracker.js";
 
 export { assertPathUnderBase, assertNoTraversal, assertSafeSymlinkTarget } from "./pathSafety.js";
 
-export { ProcessedManifest, extractIncidentId } from "./processedManifest.js";
+export { ProcessedManifest, extractIncidentId } from "./state/processedManifest.js";

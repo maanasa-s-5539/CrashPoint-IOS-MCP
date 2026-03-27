@@ -8,14 +8,12 @@ export interface SetupOptions {
   devBranchPath?: string;
   dsymPath?: string;
   appPath?: string;
-  existingCrashLogsDir?: string;
 }
 
 export interface SetupResult {
   parentDir: string;
   created: string[];
   symlinks: Array<{ link: string; target: string; status: string }>;
-  copiedFiles?: number;
   warnings: string[];
 }
 
@@ -99,24 +97,5 @@ export function setupWorkspace(options: SetupOptions = {}): SetupResult {
     symlinks.push({ link: linkPath, target: resolvedTarget, status });
   }
 
-  let copiedFiles: number | undefined;
-  if (options.existingCrashLogsDir) {
-    copiedFiles = 0;
-    try {
-      const srcFiles = fs.readdirSync(options.existingCrashLogsDir).filter(
-        (f) => f.endsWith(".crash") || f.endsWith(".ips")
-      );
-      for (const file of srcFiles) {
-        const src = path.join(options.existingCrashLogsDir, file);
-        const dest = path.join(xcodeCrashDir, file);
-        fs.copyFileSync(src, dest);
-        copiedFiles++;
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      warnings.push(`Could not copy from existingCrashLogsDir: ${msg}`);
-    }
-  }
-
-  return { parentDir, created, symlinks, copiedFiles, warnings };
+  return { parentDir, created, symlinks, warnings };
 }

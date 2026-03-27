@@ -1,5 +1,5 @@
 import { getConfig } from "../config.js";
-import { FixTracker } from "../fixTracker.js";
+import { FixTracker } from "../state/fixTracker.js";
 
 export function cmdFixStatus(flags: Record<string, string | boolean>): void {
   const action = flags["action"] as string;

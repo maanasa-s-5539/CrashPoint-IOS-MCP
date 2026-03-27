@@ -2,7 +2,7 @@ import path from "path";
 import { getConfig, getXcodeCrashesDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir, hasCrashFiles } from "../config.js";
 import { symbolicateOne, runBatch, BatchResult } from "../core/symbolicator.js";
 import { assertNoTraversal } from "../pathSafety.js";
-import { ProcessedManifest } from "../processedManifest.js";
+import { ProcessedManifest } from "../state/processedManifest.js";
 
 export async function cmdBatch(flags: Record<string, string | boolean>): Promise<void> {
   const config = getConfig();

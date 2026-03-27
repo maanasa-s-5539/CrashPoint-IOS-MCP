@@ -3,9 +3,9 @@ import path from "path";
 import { getConfig, getSymbolicatedDir } from "../config.js";
 import { analyzeDirectory } from "../core/crashAnalyzer.js";
 import { exportReportToCsv } from "../core/csvExporter.js";
-import { loadFixStatuses } from "../fixTracker.js";
+import { loadFixStatuses } from "../state/fixTracker.js";
 import { assertPathUnderBase } from "../pathSafety.js";
-import { ProcessedManifest } from "../processedManifest.js";
+import { ProcessedManifest } from "../state/processedManifest.js";
 
 export async function cmdAnalyze(flags: Record<string, string | boolean>): Promise<void> {
   const config = getConfig();
