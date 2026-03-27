@@ -1,7 +1,7 @@
 import { setupWorkspace } from "../core/setup.js";
 
-export async function cmdSetup(flags: Record<string, string | boolean>): Promise<void> {
-  const result = await setupWorkspace({
+export function cmdSetup(flags: Record<string, string | boolean>): void {
+  const result = setupWorkspace({
     masterBranchPath: flags["master-branch"] as string | undefined,
     devBranchPath: flags["dev-branch"] as string | undefined,
     dsymPath: flags["dsym"] as string | undefined,

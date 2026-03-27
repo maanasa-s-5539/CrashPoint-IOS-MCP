@@ -54,7 +54,7 @@ server.registerTool(
     }),
   },
   async (input) => {
-    const result = await setupWorkspace({
+    const result = setupWorkspace({
       masterBranchPath: input.masterBranchPath,
       devBranchPath: input.devBranchPath,
       dsymPath: input.dsymPath,
@@ -592,7 +592,7 @@ server.registerTool(
     }
 
     if (input.action === "set") {
-      const fixed = input.fixed !== false;
+      const fixed = input.fixed ?? true;
       const status = tracker.setFixed(input.signature, fixed, input.note);
       const result = {
         success: true,

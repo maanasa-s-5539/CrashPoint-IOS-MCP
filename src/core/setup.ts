@@ -19,7 +19,7 @@ export interface SetupResult {
   warnings: string[];
 }
 
-export async function setupWorkspace(options: SetupOptions = {}): Promise<SetupResult> {
+export function setupWorkspace(options: SetupOptions = {}): SetupResult {
   const config = getConfig();
   const parentDir = config.CRASH_ANALYSIS_PARENT;
   const mainCrashDir = getMainCrashLogsDir(config);

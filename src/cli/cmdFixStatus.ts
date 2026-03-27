@@ -25,7 +25,7 @@ export function cmdFixStatus(flags: Record<string, string | boolean>): void {
   }
 
   if (action === "set") {
-    const fixed = flags["fixed"] !== false;
+    const fixed = (flags["fixed"] as boolean | undefined) ?? true;
     tracker.setFixed(signature, fixed, note);
     console.log(`Marked as ${fixed ? "fixed" : "unfixed"}: ${signature}${note ? ` (note: ${note})` : ""}`);
   } else {
