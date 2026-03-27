@@ -4,7 +4,6 @@ export { parseFlags } from "./parseFlags.js";
 export { cmdExport } from "./cmdExport.js";
 export { cmdBatch } from "./cmdBatch.js";
 export { cmdAnalyze } from "./cmdAnalyze.js";
-export { cmdNotify } from "./cmdNotify.js";
 export { cmdSetup } from "./cmdSetup.js";
 export { cmdSymbolicateOne } from "./cmdSymbolicateOne.js";
 export { cmdDiagnose } from "./cmdDiagnose.js";
@@ -20,7 +19,6 @@ import { parseFlags } from "./parseFlags.js";
 import { cmdExport } from "./cmdExport.js";
 import { cmdBatch } from "./cmdBatch.js";
 import { cmdAnalyze } from "./cmdAnalyze.js";
-import { cmdNotify } from "./cmdNotify.js";
 import { cmdSetup } from "./cmdSetup.js";
 import { cmdSymbolicateOne } from "./cmdSymbolicateOne.js";
 import { cmdDiagnose } from "./cmdDiagnose.js";
@@ -48,11 +46,6 @@ Commands:
   analyze               Group and deduplicate crashes into a report
     --crash-dir <dir>   Directory of crash files (default: SymbolicatedCrashLogsFolder)
     -o <output.json>    Write report JSON to file (default: stdout)
-  notify                Analyze crashes and send report to Zoho Cliq
-    --crash-dir <dir>   Directory of symbolicated crash files (default: SymbolicatedCrashLogsFolder)
-    --unfixed-only      Send only unfixed crash types to Cliq
-    --dry-run           Analyze but don't send to Cliq
-    -o <output.json>    Write the report JSON to a file
   setup                 Create full folder structure + symlinks
     --master-branch     Path to master/live branch checkout
     --dev-branch        Path to development branch checkout
@@ -70,8 +63,7 @@ Commands:
   list-versions         List versions found in .xccrashpoint files
     --input-dir <dir>   Directory to search (default: CRASH_INPUT_DIR or CRASH_ANALYSIS_PARENT)
     --recursive         Search recursively
-  pipeline              Full export → symbolicate → analyze → (optionally) notify
-    --notify            Send Cliq notification after analysis
+  pipeline              Full export → symbolicate → analyze
     --versions v1,v2    Comma-separated version filter
     --start-date <date> ISO date string to filter crashes from (e.g. 2026-03-01)
     --end-date <date>   ISO date string to filter crashes until (e.g. 2026-03-20)
@@ -112,9 +104,6 @@ Environment variables: see .env.example
         break;
       case "analyze":
         await cmdAnalyze(flags);
-        break;
-      case "notify":
-        await cmdNotify(flags);
         break;
       case "setup":
         await cmdSetup(flags);

@@ -1,10 +1,10 @@
 {
-  "name": "crashpoint-ios-mcp",
+  "name": "@maanasa-s-5539/crashpoint-ios-mcp",
   "version": "1.0.0",
-  "description": "MCP server for iOS/macOS crash log export, symbolication, analysis, Zoho Cliq reporting & Zoho Projects bug creation.",
+  "description": "Standalone MCP server for iOS/macOS crash log export, symbolication, analysis & CSV reporting.",
   "license": "MIT",
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node18 --outfile=dist/index.js && esbuild src/core-server.ts --bundle --platform=node --target=node18 --outfile=dist/core-server.js && esbuild src/integrations-server.ts --bundle --platform=node --target=node18 --outfile=dist/integrations-server.js && esbuild src/cli/index.ts --bundle --platform=node --target=node18 --outfile=dist/cli.js",
+    "build": "tsc --declaration --emitDeclarationOnly --outDir dist && esbuild src/core-server.ts --bundle --platform=node --target=node18 --outfile=dist/core-server.js && esbuild src/cli/index.ts --bundle --platform=node --target=node18 --outfile=dist/cli.js",
     "typecheck": "tsc --noEmit",
     "prepare": "npm run build"
   },
@@ -21,12 +21,55 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "main": "dist/index.js",
+  "main": "dist/core-server.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/core-server.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./core/crashAnalyzer": {
+      "types": "./dist/core/crashAnalyzer.d.ts",
+      "import": "./dist/core/crashAnalyzer.js"
+    },
+    "./core/crashExporter": {
+      "types": "./dist/core/crashExporter.d.ts",
+      "import": "./dist/core/crashExporter.js"
+    },
+    "./core/symbolicator": {
+      "types": "./dist/core/symbolicator.d.ts",
+      "import": "./dist/core/symbolicator.js"
+    },
+    "./core/csvExporter": {
+      "types": "./dist/core/csvExporter.d.ts",
+      "import": "./dist/core/csvExporter.js"
+    },
+    "./config": {
+      "types": "./dist/config.d.ts",
+      "import": "./dist/config.js"
+    },
+    "./fixTracker": {
+      "types": "./dist/fixTracker.d.ts",
+      "import": "./dist/fixTracker.js"
+    },
+    "./pathSafety": {
+      "types": "./dist/pathSafety.d.ts",
+      "import": "./dist/pathSafety.js"
+    },
+    "./processedManifest": {
+      "types": "./dist/processedManifest.d.ts",
+      "import": "./dist/processedManifest.js"
+    }
+  },
+  "files": [
+    "dist/"
+  ],
   "bin": {
-    "crashpoint-ios-mcp": "dist/index.js",
     "crashpoint-ios-core": "dist/core-server.js",
-    "crashpoint-ios-integrations": "dist/integrations-server.js",
     "crashpoint-ios-cli": "dist/cli.js"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
   },
   "repository": {
     "type": "git",
@@ -39,10 +82,7 @@
     "symbolication",
     "atos",
     "MCP",
-    "Xcode",
-    "Zoho",
-    "Cliq",
-    "Projects"
+    "Xcode"
   ],
   "author": "maanasa-s-5539",
   "bugs": {
