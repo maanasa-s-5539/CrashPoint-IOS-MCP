@@ -52,17 +52,21 @@
       "types": "./dist/config.d.ts",
       "import": "./dist/config.js"
     },
-    "./fixTracker": {
-      "types": "./dist/fixTracker.d.ts",
-      "import": "./dist/fixTracker.js"
+    "./state/fixTracker": {
+      "types": "./dist/state/fixTracker.d.ts",
+      "import": "./dist/state/fixTracker.js"
+    },
+    "./state/processedManifest": {
+      "types": "./dist/state/processedManifest.d.ts",
+      "import": "./dist/state/processedManifest.js"
+    },
+    "./state": {
+      "types": "./dist/state/index.d.ts",
+      "import": "./dist/state/index.js"
     },
     "./pathSafety": {
       "types": "./dist/pathSafety.d.ts",
       "import": "./dist/pathSafety.js"
-    },
-    "./processedManifest": {
-      "types": "./dist/processedManifest.d.ts",
-      "import": "./dist/processedManifest.js"
     }
   },
   "files": [

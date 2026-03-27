@@ -2,10 +2,10 @@ import fs from "fs";
 import path from "path";
 import { getConfig, getXcodeCrashesDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir, hasCrashFiles } from "../config.js";
 import { exportCrashLogs } from "../core/crashExporter.js";
-import { runBatch, BatchResult } from "../core/symbolicator.js";
+import { runBatchAll } from "../core/symbolicator.js";
 import { analyzeDirectory } from "../core/crashAnalyzer.js";
-import { loadFixStatuses } from "../fixTracker.js";
-import { ProcessedManifest } from "../processedManifest.js";
+import { loadFixStatuses } from "../state/fixTracker.js";
+import { ProcessedManifest } from "../state/processedManifest.js";
 
 export async function cmdPipeline(flags: Record<string, string | boolean>): Promise<void> {
   const config = getConfig();
@@ -37,18 +37,7 @@ export async function cmdPipeline(flags: Record<string, string | boolean>): Prom
         reason: "No .crash or .ips files found in MainCrashLogsFolder/XCodeCrashLogs, MainCrashLogsFolder/AppticsCrashLogs, or MainCrashLogsFolder/OtherCrashLogs",
       };
     } else {
-      let succeeded = 0;
-      let failed = 0;
-      let total = 0;
-      const results: BatchResult[] = [];
-      for (const dir of [basicDir, appticsDir, otherDir]) {
-        const r = await runBatch(dir, dsymPath, symbolicatedDir, manifest);
-        succeeded += r.succeeded;
-        failed += r.failed;
-        total += r.total;
-        results.push(...r.results);
-      }
-      symbolicationResult = { succeeded, failed, total, results };
+      symbolicationResult = await runBatchAll(dsymPath, manifest);
     }
     console.log("Symbolication:", JSON.stringify(symbolicationResult));
   } else {

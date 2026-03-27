@@ -6,7 +6,6 @@ export function cmdSetup(flags: Record<string, string | boolean>): void {
     devBranchPath: flags["dev-branch"] as string | undefined,
     dsymPath: flags["dsym"] as string | undefined,
     appPath: flags["app"] as string | undefined,
-    existingCrashLogsDir: flags["crash-logs"] as string | undefined,
   });
   console.log(JSON.stringify(result, null, 2));
 }

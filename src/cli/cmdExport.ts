@@ -1,6 +1,6 @@
 import { getConfig, getXcodeCrashesDir } from "../config.js";
 import { exportCrashLogs } from "../core/crashExporter.js";
-import { ProcessedManifest } from "../processedManifest.js";
+import { ProcessedManifest } from "../state/processedManifest.js";
 
 export async function cmdExport(flags: Record<string, string | boolean>): Promise<void> {
   const config = getConfig();

@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { ProcessedManifest, extractIncidentId } from "../processedManifest.js";
+import { ProcessedManifest, extractIncidentId } from "../state/processedManifest.js";
 
 export interface CrashedThread {
   id: number;
@@ -234,70 +234,6 @@ export function analyzeDirectory(
     unique_crash_types: sortedGroups.length,
     crash_groups: sortedGroups,
   };
-}
-
-// ── searchCrashes ─────────────────────────────────────────────────────────────
-
-export interface SearchMatch {
-  file: string;
-  exception_type: string;
-  crashed_thread: CrashedThread;
-  top_frames: string[];
-  matched_in: string[];
-}
-
-export interface SearchResult {
-  total: number;
-  matches: SearchMatch[];
-}
-
-export function searchCrashes(query: string, crashDir: string): SearchResult {
-  const matches: SearchMatch[] = [];
-  if (!fs.existsSync(crashDir)) {
-    return { total: 0, matches: [] };
-  }
-
-  const files = fs.readdirSync(crashDir).filter((f) => f.endsWith(".crash") || f.endsWith(".ips"));
-  const lowerQuery = query.toLowerCase();
-
-  for (const file of files) {
-    const filepath = path.join(crashDir, file);
-    let content: string;
-    try {
-      content = fs.readFileSync(filepath, "utf-8");
-    } catch {
-      continue;
-    }
-
-    const lines = content.split("\n");
-    const meta = parseCrashMetadata(lines);
-    const matchedIn: string[] = [];
-
-    if (meta.exceptionType.toLowerCase().includes(lowerQuery)) {
-      matchedIn.push("exception_type");
-    }
-    if (meta.exceptionCodes.toLowerCase().includes(lowerQuery)) {
-      matchedIn.push("exception_codes");
-    }
-    if (meta.topFrames.some((frame) => frame.toLowerCase().includes(lowerQuery))) {
-      matchedIn.push("top_frames");
-    }
-    if (matchedIn.length === 0 && content.toLowerCase().includes(lowerQuery)) {
-      matchedIn.push("file_content");
-    }
-
-    if (matchedIn.length > 0) {
-      matches.push({
-        file,
-        exception_type: meta.exceptionType,
-        crashed_thread: meta.crashedThread,
-        top_frames: meta.topFrames,
-        matched_in: matchedIn,
-      });
-    }
-  }
-
-  return { total: matches.length, matches };
 }
 
 // ── cleanOldCrashes ───────────────────────────────────────────────────────────
