@@ -17,21 +17,6 @@ CrashPoint iOS MCP gives your AI assistant the ability to:
 
 ---
 
-## Pipeline Flow
-
-```mermaid
-flowchart LR
-    A[".xccrashpoint\n(Xcode Organizer)"] -->|export_crashes| B["MainCrashLogsFolder/\nXCodeCrashLogs"]
-    C["AppticsCrashLogs\n(manual)"] --> D
-    E["OtherCrashLogs\n(manual)"] --> D
-    B --> D[symbolicate_batch]
-    D -->|symbolicatecrash + dSYM| F["SymbolicatedCrashLogsFolder"]
-    F -->|analyze_crashes| G["Crash Report\n(JSON + CSV)"]
-    G --> H["fix_status\n(track fixes)"]
-```
-
----
-
 ## Prerequisites
 
 - **macOS** (required for Xcode's `symbolicatecrash` and `dwarfdump`)
@@ -146,68 +131,7 @@ The `processed_manifest.json` tracks which crash files have already been process
 | 8 | `run_full_pipeline` | Run the complete pipeline: export → symbolicate → analyze |
 | 9 | `clean_old_crashes` | Delete `.crash`/`.ips` files older than a given date across all crash directories |
 
-### `export_crashes` Parameters
-
-| Parameter | Description |
-|---|---|
-| `inputDir` | Directory to search for `.xccrashpoint` files (default: `CRASH_INPUT_DIR` or `CRASH_ANALYSIS_PARENT`) |
-| `outputDir` | Destination directory (default: `MainCrashLogsFolder/XCodeCrashLogs`) |
-| `versions` | Comma-separated version filter |
-| `recursive` | Search subdirectories recursively |
-| `startDate` | ISO date string to filter crashes from (e.g. `2026-03-01`) |
-| `endDate` | ISO date string to filter crashes until |
-| `dryRun` | When `true`, shows what would be exported without writing any files |
-
-### `symbolicate_batch` Parameters
-
-| Parameter | Description |
-|---|---|
-| `file` | Path to a single `.crash` or `.ips` file to symbolicate (optional — omit for full batch mode) |
-| `crashDir` | Override crash directory (default: `MainCrashLogsFolder/XCodeCrashLogs`) |
-| `dsymPath` | Override dSYM path (default: `DSYM_PATH` env var) |
-| `outputDir` | Override output directory (default: `SymbolicatedCrashLogsFolder`) |
-| `includeProcessedCrashes` | When `true`, re-symbolicate already-processed files |
-
-### `analyze_crashes` Parameters
-
-| Parameter | Description |
-|---|---|
-| `crashDir` | Directory of symbolicated crash files (default: `SymbolicatedCrashLogsFolder`) |
-| `includeProcessedCrashes` | When `true`, re-analyze already-processed files |
-| `csvOutputPath` | When provided, also exports the report as a CSV file to this path |
-
-### `fix_status` Parameters
-
-| Parameter | Description |
-|---|---|
-| `action` | `"set"`, `"unset"`, or `"list"` |
-| `signature` | Crash signature string (required for `set` and `unset`) |
-| `fixed` | `true` to mark as fixed, `false` for unfixed (used with `set`, defaults to `true`) |
-| `note` | Optional note (e.g. PR reference) |
-
-### `clean_old_crashes` Parameters
-
-| Parameter | Description |
-|---|---|
-| `beforeDate` | ISO date string — files with crash dates before this date will be deleted (e.g. `2026-03-01`) |
-| `dryRun` | When `true`, reports what would be deleted without actually deleting (default: `false`) |
-
-### `verify_dsym` Parameters
-
-| Parameter | Description |
-|---|---|
-| `dsymPath` | Path to `.dSYM` bundle (defaults to `DSYM_PATH` env var). Must be provided together with `crashPath`/`crashDir`, or omitted entirely. |
-| `crashPath` | Path to a single `.crash` or `.ips` file to compare UUIDs against. Must be provided together with `dsymPath`, or omitted entirely. |
-| `crashDir` | Directory of crash files to compare UUIDs against. Must be provided together with `dsymPath`, or omitted entirely. |
-
-### `setup_folders` Parameters
-
-| Parameter | Description |
-|---|---|
-| `masterBranchPath` | Path to master branch checkout → creates `CurrentMasterLiveBranch` symlink |
-| `devBranchPath` | Path to dev branch checkout → creates `CurrentDevelopmentBranch` symlink |
-| `dsymPath` | Path to .dSYM bundle → creates `dSYM_File` symlink |
-| `appPath` | Path to .app bundle → creates `app_File` symlink |
+For detailed parameter documentation, see [Tool Parameters](docs/TOOL_PARAMETERS.md).
 
 ---
 
@@ -271,6 +195,12 @@ crashpoint-ios-cli analyze -o report.json
 
 ---
 
+## Symbolication Notes
+
+Symbolication uses Xcode's `symbolicatecrash` tool, which automatically processes all threads and all binaries.
+
+---
+
 ## Crash Source Tracking
 
 Each crash file is automatically tagged with its source based on its file path and type. These source breakdowns appear per crash group in the analysis report (e.g. `"sources": { "xcode-organizer": 3, "apptics": 1 }`).
@@ -290,13 +220,6 @@ Crash fix statuses are stored in `{CRASH_ANALYSIS_PARENT}/fix_status.json` (loca
   }
 }
 ```
-
----
-
-## Symbolication Notes
-
-- Symbolicated files are written to `SymbolicatedCrashLogsFolder/` with the same filename
-- Symbolication uses Xcode's `symbolicatecrash` tool, which automatically processes all threads and all binaries
 
 ---
 
