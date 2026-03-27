@@ -5,7 +5,6 @@ import { exportCrashLogs } from "../core/crashExporter.js";
 import { runBatch, BatchResult } from "../core/symbolicator.js";
 import { analyzeDirectory } from "../core/crashAnalyzer.js";
 import { loadFixStatuses } from "../fixTracker.js";
-import { sendCrashReportToCliq } from "../integrations/cliqNotifier.js";
 import { ProcessedManifest } from "../processedManifest.js";
 
 export async function cmdPipeline(flags: Record<string, string | boolean>): Promise<void> {
@@ -14,7 +13,6 @@ export async function cmdPipeline(flags: Record<string, string | boolean>): Prom
   const basicDir = getXcodeCrashesDir(config);
   const symbolicatedDir = getSymbolicatedDir(config);
   const dsymPath = config.DSYM_PATH;
-  const notify = flags["notify"] === true;
   const includeProcessed = flags["include-processed"] === true;
   const manifest = includeProcessed ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT);
   const versions = flags["versions"]
@@ -64,13 +62,4 @@ export async function cmdPipeline(flags: Record<string, string | boolean>): Prom
   fs.writeFileSync(reportFile, JSON.stringify(report, null, 2), "utf-8");
   console.log("Analysis:", JSON.stringify(report));
   console.log(`Report saved to: ${reportFile}`);
-
-  // Step 4: notify
-  if (notify) {
-    const result = await sendCrashReportToCliq(report, config);
-    console.log("Notification:", JSON.stringify(result));
-    if (!result.success) {
-      process.exit(1);
-    }
-  }
 }

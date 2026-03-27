@@ -1,0 +1,7 @@
+src/
+tsconfig.json
+.github/
+.env
+.env.example
+*.md
+!README.md

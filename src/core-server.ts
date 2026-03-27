@@ -19,7 +19,7 @@ import {
   diagnoseFrames,
   BatchResult,
 } from "./core/symbolicator.js";
-import { analyzeDirectory, readCrash, searchCrashes, cleanOldCrashes } from "./core/crashAnalyzer.js";
+import { analyzeDirectory, searchCrashes, cleanOldCrashes } from "./core/crashAnalyzer.js";
 import { FixTracker, loadFixStatuses } from "./fixTracker.js";
 import { assertPathUnderBase, assertNoTraversal, assertSafeSymlinkTarget } from "./pathSafety.js";
 import { exportReportToCsv } from "./core/csvExporter.js";
@@ -698,45 +698,7 @@ server.registerTool(
   }
 );
 
-// ── Tool 9: read_crash ────────────────────────────────────────────────────────
-server.registerTool(
-  "read_crash",
-  {
-    description:
-      "Parse and summarize a single .crash or .ips file. Returns structured metadata: exception type, exception codes, hardware model, OS version, app version, crashed thread, top stack frames, and source.",
-    inputSchema: z.object({
-      crashPath: z.string().describe("Path to the .crash or .ips file to read"),
-    }),
-    outputSchema: z.object({
-      file: z.string(),
-      exception_type: z.string(),
-      exception_codes: z.string(),
-      hardware_model: z.string(),
-      os_version: z.string(),
-      app_version: z.string(),
-      crashed_thread: z.object({
-        id: z.number(),
-        name: z.string(),
-        display: z.string(),
-      }),
-      top_frames: z.array(z.string()),
-      source: z.string(),
-    }),
-  },
-  async (input) => {
-    assertNoTraversal(input.crashPath);
-    const meta = readCrash(input.crashPath);
-    if (!meta) {
-      throw new Error(`Could not read or parse crash file: ${input.crashPath}`);
-    }
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify(meta, null, 2) }],
-      structuredContent: meta as unknown as Record<string, unknown>,
-    };
-  }
-);
-
-// ── Tool 10: search_crashes ───────────────────────────────────────────────────
+// ── Tool 9: search_crashes ────────────────────────────────────────────────────
 server.registerTool(
   "search_crashes",
   {
@@ -775,7 +737,7 @@ server.registerTool(
   }
 );
 
-// ── Tool 11: set_fix_status ───────────────────────────────────────────────────
+// ── Tool 10: set_fix_status ───────────────────────────────────────────────────
 server.registerTool(
   "set_fix_status",
   {
@@ -805,7 +767,7 @@ server.registerTool(
   }
 );
 
-// ── Tool 12: list_fix_statuses ────────────────────────────────────────────────
+// ── Tool 11: list_fix_statuses ────────────────────────────────────────────────
 server.registerTool(
   "list_fix_statuses",
   {
@@ -842,7 +804,7 @@ server.registerTool(
   }
 );
 
-// ── Tool 13: run_full_pipeline ───────────────────────────────────────────────
+// ── Tool 12: run_full_pipeline ───────────────────────────────────────────────
 server.registerTool(
   "run_full_pipeline",
   {
@@ -928,7 +890,7 @@ server.registerTool(
   }
 );
 
-// ── Tool 14: clean_old_crashes ────────────────────────────────────────────────
+// ── Tool 13: clean_old_crashes ────────────────────────────────────────────────
 server.registerTool(
   "clean_old_crashes",
   {
@@ -970,7 +932,7 @@ server.registerTool(
   }
 );
 
-// ── Tool 15: export_csv ───────────────────────────────────────────────────────
+// ── Tool 14: export_csv ───────────────────────────────────────────────────────
 server.registerTool(
   "export_csv",
   {
