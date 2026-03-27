@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { ProcessedManifest, extractIncidentId } from "./processedManifest.js";
+import { ProcessedManifest, extractIncidentId } from "../processedManifest.js";
 
 const execFileAsync = promisify(execFile);
 

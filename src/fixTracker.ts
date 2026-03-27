@@ -74,3 +74,12 @@ export class FixTracker {
     return false;
   }
 }
+
+export function loadFixStatuses(parentDir: string): Record<string, { fixed: boolean; note?: string }> {
+  const tracker = new FixTracker(parentDir);
+  const result: Record<string, { fixed: boolean; note?: string }> = {};
+  for (const entry of tracker.getAll()) {
+    result[entry.signature] = { fixed: entry.fixed, note: entry.note };
+  }
+  return result;
+}

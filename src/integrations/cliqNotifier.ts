@@ -1,5 +1,5 @@
-import type { CrashReport, CrashGroup } from "./crashAnalyzer.js";
-import type { CrashPointConfig } from "./config.js";
+import type { CrashReport, CrashGroup } from "../core/crashAnalyzer.js";
+import type { CrashPointConfig } from "../config.js";
 
 function formatCrashGroup(group: CrashGroup, index: number): string {
   const lines: string[] = [];
