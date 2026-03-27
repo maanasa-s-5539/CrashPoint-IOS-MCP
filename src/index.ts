@@ -24,6 +24,7 @@ import { sendCrashReportToCliq } from "./cliqNotifier.js";
 import { FixTracker } from "./fixTracker.js";
 import { assertPathUnderBase, assertNoTraversal, assertSafeSymlinkTarget } from "./pathSafety.js";
 import { reportToZohoProjectsViaMcp, getFieldIdsFromConfig } from "./zohoProjectsMcpBridge.js";
+import { exportReportToCsv } from "./csvExporter.js";
 import { ProcessedManifest } from "./processedManifest.js";
 
 const execFileAsync = promisify(execFile);
@@ -1186,6 +1187,60 @@ server.registerTool(
       mismatches,
       detail,
     };
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      structuredContent: result,
+    };
+  }
+);
+
+// ── Tool 17: export_csv ───────────────────────────────────────────────────────
+server.registerTool(
+  "export_csv",
+  {
+    description:
+      "Export the crash analysis report as a CSV file. Columns: Issue Name, Number of occurrences, App Version, Description, Severity, Status. Uses the same data mapping as Zoho Projects bug creation.",
+    inputSchema: {
+      crashDir: z
+        .string()
+        .optional()
+        .describe(
+          "Directory of symbolicated crash files (default: SymbolicatedCrashLogsFolder)"
+        ),
+      outputPath: z
+        .string()
+        .optional()
+        .describe(
+          "Path for the output CSV file (default: CRASH_ANALYSIS_PARENT/crash_report_<timestamp>.csv)"
+        ),
+      includeProcessedCrashes: z
+        .boolean()
+        .optional()
+        .describe(
+          "Include previously processed crashes (default: false — only new/unprocessed crashes)"
+        ),
+    },
+  },
+  async (input) => {
+    const config = getConfig();
+    const crashDir = input.crashDir ?? getSymbolicatedDir(config);
+    if (input.crashDir) assertPathUnderBase(input.crashDir, config.CRASH_ANALYSIS_PARENT);
+
+    const outputPath =
+      input.outputPath ??
+      path.join(config.CRASH_ANALYSIS_PARENT, `crash_report_${Date.now()}.csv`);
+    assertPathUnderBase(outputPath, config.CRASH_ANALYSIS_PARENT);
+
+    const tracker = new FixTracker(config.CRASH_ANALYSIS_PARENT);
+    const fixStatuses = tracker.getAll();
+    const manifest = input.includeProcessedCrashes
+      ? undefined
+      : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT);
+    const report = analyzeDirectory(crashDir, fixStatuses, manifest);
+
+    const fieldIds = getFieldIdsFromConfig(config);
+    const result = exportReportToCsv(report, outputPath, fieldIds);
+
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
       structuredContent: result,
