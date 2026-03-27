@@ -44,6 +44,10 @@
       "types": "./dist/core/csvExporter.d.ts",
       "import": "./dist/core/csvExporter.js"
     },
+    "./core/setup": {
+      "types": "./dist/core/setup.d.ts",
+      "import": "./dist/core/setup.js"
+    },
     "./config": {
       "types": "./dist/config.d.ts",
       "import": "./dist/config.js"

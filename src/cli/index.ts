@@ -5,28 +5,22 @@ export { cmdExport } from "./cmdExport.js";
 export { cmdBatch } from "./cmdBatch.js";
 export { cmdAnalyze } from "./cmdAnalyze.js";
 export { cmdSetup } from "./cmdSetup.js";
-export { cmdSymbolicateOne } from "./cmdSymbolicateOne.js";
-export { cmdDiagnose } from "./cmdDiagnose.js";
 export { cmdListVersions } from "./cmdListVersions.js";
 export { cmdPipeline } from "./cmdPipeline.js";
-export { cmdSearch } from "./cmdSearch.js";
 export { cmdClean } from "./cmdClean.js";
 export { cmdVerifyDsym } from "./cmdVerifyDsym.js";
-export { cmdSetFix, cmdUnsetFix, cmdListFixes } from "./cmdFixStatus.js";
+export { cmdFixStatus, cmdSetFix, cmdUnsetFix, cmdListFixes } from "./cmdFixStatus.js";
 
 import { parseFlags } from "./parseFlags.js";
 import { cmdExport } from "./cmdExport.js";
 import { cmdBatch } from "./cmdBatch.js";
 import { cmdAnalyze } from "./cmdAnalyze.js";
 import { cmdSetup } from "./cmdSetup.js";
-import { cmdSymbolicateOne } from "./cmdSymbolicateOne.js";
-import { cmdDiagnose } from "./cmdDiagnose.js";
 import { cmdListVersions } from "./cmdListVersions.js";
 import { cmdPipeline } from "./cmdPipeline.js";
-import { cmdSearch } from "./cmdSearch.js";
 import { cmdClean } from "./cmdClean.js";
 import { cmdVerifyDsym } from "./cmdVerifyDsym.js";
-import { cmdSetFix, cmdUnsetFix, cmdListFixes } from "./cmdFixStatus.js";
+import { cmdFixStatus, cmdSetFix, cmdUnsetFix, cmdListFixes } from "./cmdFixStatus.js";
 
 const [, , command, ...args] = process.argv;
 
@@ -41,23 +35,17 @@ Commands:
     --end-date <date>   ISO date string to filter crashes until (e.g. 2026-03-20)
   batch                 Symbolicate all crash files in MainCrashLogsFolder (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs)
                         using Xcode's symbolicatecrash tool
+    --file <path>       Symbolicate only this single .crash file instead of batch processing all directories
   analyze               Group and deduplicate crashes into a report
     --crash-dir <dir>   Directory of crash files (default: SymbolicatedCrashLogsFolder)
     -o <output.json>    Write report JSON to file (default: stdout)
+    --csv <path>        Also export the report as a CSV file to the given path
   setup                 Create full folder structure + symlinks
     --master-branch     Path to master/live branch checkout
     --dev-branch        Path to development branch checkout
     --dsym              Path to .dSYM bundle
     --app               Path to .app bundle
     --crash-logs        Directory to copy existing crash files from
-  symbolicate-one       Symbolicate a single crash file using Xcode's symbolicatecrash tool
-    --crash <path>      Path to .crash file (required)
-    --dsym <path>       Path to .dSYM bundle (overrides env)
-    --output <path>     Write symbolicated output to file
-  diagnose              Frame-by-frame symbolication quality check
-    --crash <path>      Path to original .crash file (required)
-    --symbolicated <path>  Path to symbolicated .crash file (required)
-    --app-name <name>   App binary name filter (overrides env)
   list-versions         List versions found in .xccrashpoint files
     --input-dir <dir>   Directory to search (default: CRASH_INPUT_DIR or CRASH_ANALYSIS_PARENT)
     --recursive         Search recursively
@@ -65,9 +53,6 @@ Commands:
     --versions v1,v2    Comma-separated version filter
     --start-date <date> ISO date string to filter crashes from (e.g. 2026-03-01)
     --end-date <date>   ISO date string to filter crashes until (e.g. 2026-03-20)
-  search                Search crash files for a keyword or pattern
-    --query <term>      Search term (required, case-insensitive)
-    --crash-dir <dir>   Directory to search (default: SymbolicatedCrashLogsFolder)
   clean                 Delete crash files older than a given date
     --before-date <date> ISO date — files with crash dates before this are deleted (required)
     --dry-run           Preview what would be deleted without deleting
@@ -78,10 +63,14 @@ Commands:
     --dsym <path>       Path to .dSYM bundle (overrides DSYM_PATH env var and dSYM_File symlink)
     --crash <path>      Path to a single .crash or .ips file to compare UUIDs against
     --crash-dir <dir>   Directory of crash files to compare UUIDs against
-  set-fix <signature>   Mark crash signature as fixed
+  fix-status            Manage crash fix statuses (unified command)
+    --action <set|unset|list>  Action to perform (required)
+    --signature <sig>   Crash signature (required for set/unset)
+    --note <text>       Optional note (for set action)
+  set-fix <signature>   Mark crash signature as fixed (legacy — use fix-status --action set)
     --note <text>       Optional note
-  unset-fix <signature> Mark crash signature as unfixed
-  list-fixes            List all tracked fix statuses
+  unset-fix <signature> Mark crash signature as unfixed (legacy — use fix-status --action unset)
+  list-fixes            List all tracked fix statuses (legacy — use fix-status --action list)
 
 Environment variables: see .env.example
 `);
@@ -104,26 +93,20 @@ Environment variables: see .env.example
       case "setup":
         await cmdSetup(flags);
         break;
-      case "symbolicate-one":
-        await cmdSymbolicateOne(flags);
-        break;
-      case "diagnose":
-        cmdDiagnose(flags);
-        break;
       case "list-versions":
         cmdListVersions(flags);
         break;
       case "pipeline":
         await cmdPipeline(flags);
         break;
-      case "search":
-        cmdSearch(flags);
-        break;
       case "clean":
         cmdClean(flags);
         break;
       case "verify-dsym":
         await cmdVerifyDsym(flags);
+        break;
+      case "fix-status":
+        cmdFixStatus(flags);
         break;
       case "set-fix": {
         const signature = args[0];
