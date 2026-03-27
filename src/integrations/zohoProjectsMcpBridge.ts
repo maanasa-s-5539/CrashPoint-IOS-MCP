@@ -1,7 +1,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import type { CrashGroup, CrashReport } from "./crashAnalyzer.js";
-import type { CrashPointConfig } from "./config.js";
+import type { CrashGroup, CrashReport } from "../core/crashAnalyzer.js";
+import type { CrashPointConfig } from "../config.js";
 
 // ── Field ID Configuration ────────────────────────────────────────────────────
 

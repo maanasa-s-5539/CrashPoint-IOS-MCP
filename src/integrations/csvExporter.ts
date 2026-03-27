@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import type { CrashGroup, CrashReport } from "./crashAnalyzer.js";
+import type { CrashGroup, CrashReport } from "../core/crashAnalyzer.js";
 import {
   buildDescription,
   mapSeverityId,

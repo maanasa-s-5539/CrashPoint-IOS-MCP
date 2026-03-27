@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { ProcessedManifest, extractIncidentId } from "./processedManifest.js";
+import { ProcessedManifest, extractIncidentId } from "../processedManifest.js";
 
 export interface CrashedThread {
   id: number;
@@ -447,4 +447,24 @@ export function cleanOldCrashes(beforeDate: string, dirs: string[], dryRun = fal
   }
 
   return { deleted, skipped, totalScanned, files };
+}
+
+// ── filterUnfixedGroups ───────────────────────────────────────────────────────
+
+export function filterUnfixedGroups(report: CrashReport): { filtered: CrashReport; totalFixed: number; totalUnfixed: number } {
+  const fixedGroups = report.crash_groups.filter((g) => g.fix_status?.fixed === true);
+  const unfixedGroups = report.crash_groups.filter(
+    (g) => !g.fix_status || g.fix_status.fixed === false
+  );
+  return {
+    filtered: {
+      ...report,
+      report_type: "unfixed-only",
+      crash_groups: unfixedGroups.map((g, idx) => ({ ...g, rank: idx + 1 })),
+      total_crashes: unfixedGroups.reduce((sum, g) => sum + g.count, 0),
+      unique_crash_types: unfixedGroups.length,
+    },
+    totalFixed: fixedGroups.length,
+    totalUnfixed: unfixedGroups.length,
+  };
 }

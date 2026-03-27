@@ -12,19 +12,19 @@ import { getConfig, getXcodeCrashesDir, getMainCrashLogsDir, getAppticsCrashesDi
 import {
   listAvailableVersions,
   exportCrashLogs,
-} from "./crashExporter.js";
+} from "./core/crashExporter.js";
 import {
   symbolicateOne,
   runBatch,
   diagnoseFrames,
   BatchResult,
-} from "./symbolicator.js";
-import { analyzeDirectory, readCrash, searchCrashes, cleanOldCrashes } from "./crashAnalyzer.js";
-import { sendCrashReportToCliq } from "./cliqNotifier.js";
-import { FixTracker } from "./fixTracker.js";
+} from "./core/symbolicator.js";
+import { analyzeDirectory, readCrash, searchCrashes, cleanOldCrashes, filterUnfixedGroups } from "./core/crashAnalyzer.js";
+import { sendCrashReportToCliq } from "./integrations/cliqNotifier.js";
+import { FixTracker, loadFixStatuses } from "./fixTracker.js";
 import { assertPathUnderBase, assertNoTraversal, assertSafeSymlinkTarget } from "./pathSafety.js";
-import { reportToZohoProjectsViaMcp, getFieldIdsFromConfig } from "./zohoProjectsMcpBridge.js";
-import { exportReportToCsv } from "./csvExporter.js";
+import { reportToZohoProjectsViaMcp, getFieldIdsFromConfig } from "./integrations/zohoProjectsMcpBridge.js";
+import { exportReportToCsv } from "./integrations/csvExporter.js";
 import { ProcessedManifest } from "./processedManifest.js";
 
 const execFileAsync = promisify(execFile);
@@ -56,7 +56,7 @@ server.registerTool(
     const result = { versions };
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-      structuredContent: result,
+      structuredContent: result as unknown as Record<string, unknown>,
     };
   }
 );
@@ -106,7 +106,7 @@ server.registerTool(
     const result = exportCrashLogs(inputDir, outputDir, versions, recursive, dryRun, input.startDate, input.endDate, manifest);
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-      structuredContent: result,
+      structuredContent: result as unknown as Record<string, unknown>,
     };
   }
 );
@@ -140,7 +140,7 @@ server.registerTool(
       };
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-        structuredContent: result,
+        structuredContent: result as unknown as Record<string, unknown>,
       };
     }
 
@@ -158,7 +158,7 @@ server.registerTool(
     );
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-      structuredContent: result,
+      structuredContent: result as unknown as Record<string, unknown>,
     };
   }
 );
@@ -209,7 +209,7 @@ server.registerTool(
       };
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-        structuredContent: result,
+        structuredContent: result as unknown as Record<string, unknown>,
       };
     }
 
@@ -233,7 +233,7 @@ server.registerTool(
       };
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-        structuredContent: { succeeded: 0, failed: 0, total: 0, results: [] },
+        structuredContent: { succeeded: 0, failed: 0, total: 0, results: [] } as unknown as Record<string, unknown>,
       };
     }
 
@@ -258,7 +258,7 @@ server.registerTool(
     const result = { succeeded, failed, total, results };
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-      structuredContent: result,
+      structuredContent: result as unknown as Record<string, unknown>,
     };
   }
 );
@@ -296,7 +296,7 @@ server.registerTool(
     const result = diagnoseFrames(input.crashPath, input.symbolicatedPath, appName);
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-      structuredContent: result,
+      structuredContent: result as unknown as Record<string, unknown>,
     };
   }
 );
@@ -323,16 +323,12 @@ server.registerTool(
     const config = getConfig();
     const crashDir = input.crashDir ?? getSymbolicatedDir(config);
     if (input.crashDir) assertPathUnderBase(input.crashDir, config.CRASH_ANALYSIS_PARENT);
-    const tracker = new FixTracker(config.CRASH_ANALYSIS_PARENT);
-    const fixStatuses: Record<string, { fixed: boolean; note?: string }> = {};
-    for (const entry of tracker.getAll()) {
-      fixStatuses[entry.signature] = { fixed: entry.fixed, note: entry.note };
-    }
+    const fixStatuses = loadFixStatuses(config.CRASH_ANALYSIS_PARENT);
     const manifest = input.includeProcessedCrashes ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT);
     const result = analyzeDirectory(crashDir, fixStatuses, manifest);
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-      structuredContent: result,
+      structuredContent: result as unknown as Record<string, unknown>,
     };
   }
 );
@@ -366,11 +362,7 @@ server.registerTool(
     const shouldNotify = input.notify !== false;
 
     // Load fix statuses
-    const tracker = new FixTracker(config.CRASH_ANALYSIS_PARENT);
-    const fixStatuses: Record<string, { fixed: boolean; note?: string }> = {};
-    for (const entry of tracker.getAll()) {
-      fixStatuses[entry.signature] = { fixed: entry.fixed, note: entry.note };
-    }
+    const fixStatuses = loadFixStatuses(config.CRASH_ANALYSIS_PARENT);
 
     // Analyze directory with fix statuses
     const fullReport = analyzeDirectory(crashDir, fixStatuses);
@@ -380,19 +372,10 @@ server.registerTool(
     let totalUnfixed: number | undefined;
 
     if (unfixedOnly) {
-      const fixedGroups = fullReport.crash_groups.filter((g) => g.fix_status?.fixed === true);
-      const unfixedGroups = fullReport.crash_groups.filter(
-        (g) => !g.fix_status || g.fix_status.fixed === false
-      );
-      totalFixed = fixedGroups.length;
-      totalUnfixed = unfixedGroups.length;
-      reportToSend = {
-        ...fullReport,
-        report_type: "unfixed-only",
-        crash_groups: unfixedGroups.map((g, idx) => ({ ...g, rank: idx + 1 })),
-        total_crashes: unfixedGroups.reduce((sum, g) => sum + g.count, 0),
-        unique_crash_types: unfixedGroups.length,
-      };
+      const { filtered, totalFixed: tf, totalUnfixed: tu } = filterUnfixedGroups(fullReport);
+      reportToSend = filtered;
+      totalFixed = tf;
+      totalUnfixed = tu;
     }
 
     if (!shouldNotify) {
@@ -409,7 +392,7 @@ server.registerTool(
       };
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-        structuredContent: result,
+        structuredContent: result as unknown as Record<string, unknown>,
       };
     }
 
@@ -425,7 +408,7 @@ server.registerTool(
       };
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-        structuredContent: result,
+        structuredContent: result as unknown as Record<string, unknown>,
       };
     }
 
@@ -441,7 +424,7 @@ server.registerTool(
     };
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-      structuredContent: result,
+      structuredContent: result as unknown as Record<string, unknown>,
     };
   }
 );
@@ -471,7 +454,7 @@ server.registerTool(
     };
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-      structuredContent: result,
+      structuredContent: result as unknown as Record<string, unknown>,
     };
   }
 );
@@ -508,7 +491,7 @@ server.registerTool(
     };
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-      structuredContent: result,
+      structuredContent: result as unknown as Record<string, unknown>,
     };
   }
 );
@@ -578,11 +561,7 @@ server.registerTool(
     }
 
     // Step 3: Analyze
-    const tracker = new FixTracker(config.CRASH_ANALYSIS_PARENT);
-    const fixStatuses: Record<string, { fixed: boolean; note?: string }> = {};
-    for (const entry of tracker.getAll()) {
-      fixStatuses[entry.signature] = { fixed: entry.fixed, note: entry.note };
-    }
+    const fixStatuses = loadFixStatuses(config.CRASH_ANALYSIS_PARENT);
     const analysisReport = analyzeDirectory(symbolicatedDir, fixStatuses, manifest);
     const reportFile = path.join(config.CRASH_ANALYSIS_PARENT, `report_${Date.now()}.json`);
     try {
@@ -608,7 +587,7 @@ server.registerTool(
     };
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-      structuredContent: result,
+      structuredContent: result as unknown as Record<string, unknown>,
     };
   }
 );
@@ -742,7 +721,7 @@ server.registerTool(
     const result = { parentDir, created, symlinks, copiedFiles, warnings };
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-      structuredContent: result,
+      structuredContent: result as unknown as Record<string, unknown>,
     };
   }
 );
@@ -784,22 +763,12 @@ server.registerTool(
     if (input.crashDir) assertPathUnderBase(input.crashDir, config.CRASH_ANALYSIS_PARENT);
 
     // Load fix statuses
-    const tracker = new FixTracker(config.CRASH_ANALYSIS_PARENT);
-    const fixStatuses: Record<string, { fixed: boolean; note?: string }> = {};
-    for (const entry of tracker.getAll()) {
-      fixStatuses[entry.signature] = { fixed: entry.fixed, note: entry.note };
-    }
+    const fixStatuses = loadFixStatuses(config.CRASH_ANALYSIS_PARENT);
 
-    const report = analyzeDirectory(crashDir, fixStatuses);
+    let report = analyzeDirectory(crashDir, fixStatuses);
 
     if (input.unfixedOnly) {
-      const unfixedGroups = report.crash_groups.filter(
-        (g) => !g.fix_status || g.fix_status.fixed === false
-      );
-      report.crash_groups = unfixedGroups.map((g, idx) => ({ ...g, rank: idx + 1 }));
-      report.report_type = "unfixed-only";
-      report.unique_crash_types = report.crash_groups.length;
-      report.total_crashes = report.crash_groups.reduce((sum, g) => sum + g.count, 0);
+      report = filterUnfixedGroups(report).filtered;
     }
 
     const fieldIds = getFieldIdsFromConfig(config);
@@ -813,7 +782,7 @@ server.registerTool(
 
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-      structuredContent: result,
+      structuredContent: result as unknown as Record<string, unknown>,
     };
   }
 );
@@ -851,7 +820,7 @@ server.registerTool(
     }
     return {
       content: [{ type: "text" as const, text: JSON.stringify(meta, null, 2) }],
-      structuredContent: meta,
+      structuredContent: meta as unknown as Record<string, unknown>,
     };
   }
 );
@@ -890,7 +859,7 @@ server.registerTool(
     const result = searchCrashes(input.query, crashDir);
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-      structuredContent: result,
+      structuredContent: result as unknown as Record<string, unknown>,
     };
   }
 );
@@ -932,7 +901,7 @@ server.registerTool(
     const result = cleanOldCrashes(input.beforeDate, dirs, dryRun, config.CRASH_ANALYSIS_PARENT);
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-      structuredContent: result,
+      structuredContent: result as unknown as Record<string, unknown>,
     };
   }
 );
@@ -974,7 +943,7 @@ server.registerTool(
       };
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-        structuredContent: result,
+        structuredContent: result as unknown as Record<string, unknown>,
       };
     }
     if (!hasDsymInput && hasCrashInput) {
@@ -986,7 +955,7 @@ server.registerTool(
       };
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-        structuredContent: result,
+        structuredContent: result as unknown as Record<string, unknown>,
       };
     }
 
@@ -1009,7 +978,7 @@ server.registerTool(
         };
         return {
           content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-          structuredContent: result,
+          structuredContent: result as unknown as Record<string, unknown>,
         };
       }
     }
@@ -1025,7 +994,7 @@ server.registerTool(
       };
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-        structuredContent: result,
+        structuredContent: result as unknown as Record<string, unknown>,
       };
     }
 
@@ -1052,7 +1021,7 @@ server.registerTool(
       };
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-        structuredContent: result,
+        structuredContent: result as unknown as Record<string, unknown>,
       };
     }
 
@@ -1073,7 +1042,7 @@ server.registerTool(
       };
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-        structuredContent: result,
+        structuredContent: result as unknown as Record<string, unknown>,
       };
     }
 
@@ -1119,7 +1088,7 @@ server.registerTool(
       };
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-        structuredContent: result,
+        structuredContent: result as unknown as Record<string, unknown>,
       };
     }
 
@@ -1189,7 +1158,7 @@ server.registerTool(
     };
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-      structuredContent: result,
+      structuredContent: result as unknown as Record<string, unknown>,
     };
   }
 );
@@ -1231,8 +1200,7 @@ server.registerTool(
       path.join(config.CRASH_ANALYSIS_PARENT, `crash_report_${Date.now()}.csv`);
     assertPathUnderBase(outputPath, config.CRASH_ANALYSIS_PARENT);
 
-    const tracker = new FixTracker(config.CRASH_ANALYSIS_PARENT);
-    const fixStatuses = tracker.getAll();
+    const fixStatuses = loadFixStatuses(config.CRASH_ANALYSIS_PARENT);
     const manifest = input.includeProcessedCrashes
       ? undefined
       : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT);
@@ -1243,7 +1211,7 @@ server.registerTool(
 
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-      structuredContent: result,
+      structuredContent: result as unknown as Record<string, unknown>,
     };
   }
 );
