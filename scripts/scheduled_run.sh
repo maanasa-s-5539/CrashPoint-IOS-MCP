@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # scripts/scheduled_run.sh
-# Runs the full crash analysis pipeline and sends a Cliq notification.
+# Runs the full crash analysis pipeline: export → symbolicate → analyze.
 # Intended to be run via cron or launchd.
 #
 # Cron example (daily at 9am):
@@ -9,7 +9,7 @@
 # launchd example: see README.md for a sample plist.
 #
 # Required env vars (set in .env or pass directly):
-#   CRASH_ANALYSIS_PARENT, DSYM_PATH, APP_PATH, ZOHO_CLIQ_WEBHOOK_URL
+#   CRASH_ANALYSIS_PARENT, DSYM_PATH
 
 set -euo pipefail
 
@@ -44,21 +44,5 @@ fi
 # Step 3: Analyze
 echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] Analyzing crashes..."
 node "$PROJECT_DIR/dist/cli.js" analyze -o "$REPORT_FILE"
-
-# Step 4: Notify Cliq
-if [[ -n "${ZOHO_CLIQ_WEBHOOK_URL:-}" ]]; then
-  echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] Sending Cliq notification..."
-  node "$PROJECT_DIR/dist/cli.js" notify --report "$REPORT_FILE"
-else
-  echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] No Cliq webhook configured — skipping notification"
-fi
-
-# Step 4b: Send unfixed-only report to Cliq
-if [[ -n "${ZOHO_CLIQ_WEBHOOK_URL:-}" ]]; then
-  echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] Sending unfixed crashes report to Zoho Cliq..."
-  node "$PROJECT_DIR/dist/cli.js" notify-unfixed
-else
-  echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] No Cliq webhook configured — skipping unfixed notification"
-fi
 
 echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] Done. Report saved to: $REPORT_FILE"

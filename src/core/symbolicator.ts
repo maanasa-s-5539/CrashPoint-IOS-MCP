@@ -21,24 +21,6 @@ export interface BatchResult {
   detail: string;
 }
 
-export interface FrameDiag {
-  index: number;
-  library: string;
-  address: string;
-  originalSymbol: string;
-  resolvedSymbol: string;
-  symbolicated: boolean;
-}
-
-export interface DiagnoseResult {
-  appFramesSymbolicated: number;
-  appFramesMissed: number;
-  totalFrames: number;
-  frames: FrameDiag[];
-}
-
-const FRAME_REGEX = /^\s*(\d+)\s+(\S+)\s+(0x[0-9a-fA-F]+)/;
-
 export async function symbolicateOne(
   crashPath: string,
   dsymPath: string,
@@ -116,53 +98,4 @@ export async function runBatch(
   return { succeeded, failed, total: files.length, results };
 }
 
-export function diagnoseFrames(
-  crashPath: string,
-  symbolicatedPath: string,
-  appName?: string
-): DiagnoseResult {
-  if (!fs.existsSync(crashPath) || !fs.existsSync(symbolicatedPath)) {
-    return { appFramesSymbolicated: 0, appFramesMissed: 0, totalFrames: 0, frames: [] };
-  }
 
-  const origLines = fs.readFileSync(crashPath, "utf-8").split("\n");
-  const symLines = fs.readFileSync(symbolicatedPath, "utf-8").split("\n");
-
-  const frames: FrameDiag[] = [];
-  let symbolicated = 0;
-  let missed = 0;
-
-  for (let i = 0; i < origLines.length; i++) {
-    const origMatch = FRAME_REGEX.exec(origLines[i]);
-    if (!origMatch) continue;
-
-    const frameLib = origMatch[2];
-    if (appName && frameLib !== appName) continue;
-
-    const symLine = symLines[i] || origLines[i];
-    const symMatch = FRAME_REGEX.exec(symLine);
-
-    const origSymbol = origMatch[3]; // address
-    const resolvedSymbol = symMatch ? symMatch[3] : origSymbol;
-    const wasSymbolicated = resolvedSymbol !== origSymbol;
-
-    if (wasSymbolicated) symbolicated++;
-    else missed++;
-
-    frames.push({
-      index: parseInt(origMatch[1], 10),
-      library: frameLib,
-      address: origMatch[3],
-      originalSymbol: origSymbol,
-      resolvedSymbol,
-      symbolicated: wasSymbolicated,
-    });
-  }
-
-  return {
-    appFramesSymbolicated: symbolicated,
-    appFramesMissed: missed,
-    totalFrames: frames.length,
-    frames,
-  };
-}
