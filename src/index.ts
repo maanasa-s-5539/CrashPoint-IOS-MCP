@@ -24,7 +24,7 @@ import { sendCrashReportToCliq } from "./integrations/cliqNotifier.js";
 import { FixTracker, loadFixStatuses } from "./fixTracker.js";
 import { assertPathUnderBase, assertNoTraversal, assertSafeSymlinkTarget } from "./pathSafety.js";
 import { reportToZohoProjectsViaMcp, getFieldIdsFromConfig } from "./integrations/zohoProjectsMcpBridge.js";
-import { exportReportToCsv } from "./integrations/csvExporter.js";
+import { exportReportToCsv } from "./core/csvExporter.js";
 import { ProcessedManifest } from "./processedManifest.js";
 
 const execFileAsync = promisify(execFile);
@@ -1206,8 +1206,7 @@ server.registerTool(
       : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT);
     const report = analyzeDirectory(crashDir, fixStatuses, manifest);
 
-    const fieldIds = getFieldIdsFromConfig(config);
-    const result = exportReportToCsv(report, outputPath, fieldIds);
+    const result = exportReportToCsv(report, outputPath);
 
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],

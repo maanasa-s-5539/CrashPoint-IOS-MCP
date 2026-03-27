@@ -4,7 +4,7 @@
   "description": "MCP server for iOS/macOS crash log export, symbolication, analysis, Zoho Cliq reporting & Zoho Projects bug creation.",
   "license": "MIT",
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node18 --outfile=dist/index.js && esbuild src/cli/index.ts --bundle --platform=node --target=node18 --outfile=dist/cli.js",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node18 --outfile=dist/index.js && esbuild src/core-server.ts --bundle --platform=node --target=node18 --outfile=dist/core-server.js && esbuild src/integrations-server.ts --bundle --platform=node --target=node18 --outfile=dist/integrations-server.js && esbuild src/cli/index.ts --bundle --platform=node --target=node18 --outfile=dist/cli.js",
     "typecheck": "tsc --noEmit",
     "prepare": "npm run build"
   },
@@ -24,6 +24,8 @@
   "main": "dist/index.js",
   "bin": {
     "crashpoint-ios-mcp": "dist/index.js",
+    "crashpoint-ios-core": "dist/core-server.js",
+    "crashpoint-ios-integrations": "dist/integrations-server.js",
     "crashpoint-ios-cli": "dist/cli.js"
   },
   "repository": {
