@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { ProcessedManifest } from "./processedManifest.js";
+import { ProcessedManifest, extractIncidentId } from "./processedManifest.js";
 
 export interface ExportEntry {
   source: string;
@@ -174,8 +174,10 @@ export function exportCrashLogs(
     for (const crashPath of crashes) {
       const fileVersion = extractVersion(crashPath);
 
-      // Manifest check — skip if already processed with the same date range
-      if (manifest && manifest.isProcessed(crashPath, startDate, endDate)) {
+      // Manifest check — skip if already processed (keyed by Incident Identifier or path)
+      const incidentId = extractIncidentId(crashPath);
+      const manifestKey = incidentId ?? crashPath;
+      if (manifest && manifest.isProcessed(manifestKey)) {
         result.skipped++;
         result.files.push({
           source: crashPath,
@@ -268,7 +270,7 @@ export function exportCrashLogs(
           fs.copyFileSync(crashPath, destPath);
           result.exported++;
           counter++;
-          manifest?.markProcessed(crashPath, startDate, endDate);
+          manifest?.markProcessed(manifestKey);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           result.errors.push(`Failed to copy ${crashPath}: ${msg}`);

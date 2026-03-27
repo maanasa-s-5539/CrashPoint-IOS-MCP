@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { ProcessedManifest } from "./processedManifest.js";
+import { ProcessedManifest, extractIncidentId } from "./processedManifest.js";
 
 export interface CrashedThread {
   id: number;
@@ -176,7 +176,9 @@ export function analyzeDirectory(
   for (const file of files) {
     const filepath = path.join(crashDir, file);
 
-    if (manifest && manifest.isProcessed(filepath)) {
+    const incidentId = extractIncidentId(filepath);
+    const manifestKey = incidentId ?? filepath;
+    if (manifest && manifest.isProcessed(manifestKey)) {
       continue;
     }
 
@@ -211,7 +213,7 @@ export function analyzeDirectory(
     increment(group.app_versions, meta.appVersion);
     increment(group.sources, meta.source);
 
-    manifest?.markProcessed(filepath);
+    manifest?.markProcessed(manifestKey);
   }
 
   const sortedGroups = Array.from(groups.values())

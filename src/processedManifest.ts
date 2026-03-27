@@ -3,10 +3,29 @@ import path from "path";
 
 const MANIFEST_FILENAME = "processed_manifest.json";
 
+const INCIDENT_ID_RE = /^Incident Identifier:\s+([0-9A-Fa-f-]+)/;
+
+/**
+ * Read the first ~4 KB of a crash file and return the Incident Identifier
+ * UUID, or null if not found (e.g. non-standard / .ips format without it).
+ */
+export function extractIncidentId(filePath: string): string | null {
+  try {
+    const fd = fs.openSync(filePath, "r");
+    const buf = Buffer.alloc(4096);
+    const bytesRead = fs.readSync(fd, buf, 0, 4096, 0);
+    fs.closeSync(fd);
+    const content = buf.slice(0, bytesRead).toString("utf-8");
+    const match = INCIDENT_ID_RE.exec(content);
+    if (match) return match[1];
+  } catch {
+    // ignore read errors
+  }
+  return null;
+}
+
 interface ManifestEntry {
   processedAt: string;
-  startDate?: string;
-  endDate?: string;
 }
 
 interface ManifestData {
@@ -42,38 +61,18 @@ export class ProcessedManifest {
     }
   }
 
-  isProcessed(crashId: string, startDate?: string, endDate?: string): boolean {
+  isProcessed(crashId: string): boolean {
     const data = this.load();
-    const entry = data.entries[crashId];
-    if (!entry) return false;
-
-    // If caller provides a date range, check that it matches what was stored.
-    // If the range differs, treat the crash as not yet processed for the new range.
-    if (startDate !== undefined || endDate !== undefined) {
-      if (entry.startDate !== startDate || entry.endDate !== endDate) {
-        return false;
-      }
-    } else {
-      // No date range provided for the check — only consider it processed if
-      // the stored entry also had no date range.
-      if (entry.startDate !== undefined || entry.endDate !== undefined) {
-        return false;
-      }
-    }
-
-    return true;
+    return crashId in data.entries;
   }
 
-  markProcessed(crashId: string, startDate?: string, endDate?: string): void {
+  markProcessed(crashId: string): void {
     const data = this.load();
-    const entry: ManifestEntry = { processedAt: new Date().toISOString() };
-    if (startDate !== undefined) entry.startDate = startDate;
-    if (endDate !== undefined) entry.endDate = endDate;
-    data.entries[crashId] = entry;
+    data.entries[crashId] = { processedAt: new Date().toISOString() };
     this.save();
   }
 
-  getAll(): Record<string, { processedAt: string; startDate?: string; endDate?: string }> {
+  getAll(): Record<string, { processedAt: string }> {
     return this.load().entries;
   }
 

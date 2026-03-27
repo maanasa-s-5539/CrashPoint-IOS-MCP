@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { ProcessedManifest } from "./processedManifest.js";
+import { ProcessedManifest, extractIncidentId } from "./processedManifest.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -96,7 +96,9 @@ export async function runBatch(
     const crashPath = path.join(crashDir, file);
     const outputPath = path.join(outputDir, file);
 
-    if (manifest && manifest.isProcessed(crashPath)) {
+    const incidentId = extractIncidentId(crashPath);
+    const manifestKey = incidentId ?? crashPath;
+    if (manifest && manifest.isProcessed(manifestKey)) {
       results.push({ file, success: true, detail: "skipped (already processed)" });
       continue;
     }
@@ -105,7 +107,7 @@ export async function runBatch(
     results.push({ file, ...res });
     if (res.success) {
       succeeded++;
-      manifest?.markProcessed(crashPath);
+      manifest?.markProcessed(manifestKey);
     } else {
       failed++;
     }
