@@ -23,7 +23,8 @@ export async function cmdPipeline(flags: Record<string, string | boolean>): Prom
 
   // Step 1: export
   const exportResult = exportCrashLogs(inputDir, basicDir, versions, false, false, startDate, endDate, manifest);
-  console.log("Export:", JSON.stringify(exportResult));
+  console.log("\n── Export ──────────────────────────────────────────");
+  console.log(JSON.stringify(exportResult, null, 2));
 
   // Step 2: symbolicate
   let symbolicationResult: unknown = null;
@@ -39,9 +40,11 @@ export async function cmdPipeline(flags: Record<string, string | boolean>): Prom
     } else {
       symbolicationResult = await runBatchAll(dsymPath, manifest);
     }
-    console.log("Symbolication:", JSON.stringify(symbolicationResult));
+    console.log("\n── Symbolication ───────────────────────────────────");
+    console.log(JSON.stringify(symbolicationResult, null, 2));
   } else {
-    console.log("Symbolication: skipped (DSYM_PATH not set)");
+    console.log("\n── Symbolication ───────────────────────────────────");
+    console.log(JSON.stringify({ skipped: true, reason: "DSYM_PATH not set" }, null, 2));
   }
 
   // Step 3: analyze
@@ -49,6 +52,7 @@ export async function cmdPipeline(flags: Record<string, string | boolean>): Prom
   const report = analyzeDirectory(symbolicatedDir, fixStatuses, manifest);
   const reportFile = path.join(config.CRASH_ANALYSIS_PARENT, `report_${Date.now()}.json`);
   fs.writeFileSync(reportFile, JSON.stringify(report, null, 2), "utf-8");
-  console.log("Analysis:", JSON.stringify(report));
+  console.log("\n── Analysis ────────────────────────────────────────");
+  console.log(JSON.stringify(report, null, 2));
   console.log(`Report saved to: ${reportFile}`);
 }

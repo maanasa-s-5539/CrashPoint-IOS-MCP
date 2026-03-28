@@ -13,13 +13,11 @@ const DEVELOPER_DIR = "/Applications/Xcode.app/Contents/Developer";
 
 export interface SymbolicateResult {
   success: boolean;
-  detail: string;
 }
 
 export interface BatchResult {
   file: string;
   success: boolean;
-  detail: string;
 }
 
 export async function symbolicateOne(
@@ -28,13 +26,13 @@ export async function symbolicateOne(
   outputPath: string,
 ): Promise<SymbolicateResult> {
   if (!fs.existsSync(crashPath)) {
-    return { success: false, detail: `Crash file not found: ${crashPath}` };
+    return { success: false };
   }
   if (!fs.existsSync(dsymPath)) {
-    return { success: false, detail: `dSYM not found: ${dsymPath}` };
+    return { success: false };
   }
   if (!fs.existsSync(SYMBOLICATE_CRASH)) {
-    return { success: false, detail: `symbolicatecrash not found at: ${SYMBOLICATE_CRASH}` };
+    return { success: false };
   }
 
   if (fs.existsSync(dsymPath)) {
@@ -50,11 +48,9 @@ export async function symbolicateOne(
     fs.writeFileSync(outputPath, stdout, "utf-8");
     return {
       success: true,
-      detail: `Symbolicated output written to ${outputPath}`,
     };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return { success: false, detail: `symbolicatecrash failed: ${msg}` };
+    return { success: false };
   }
 }
 
@@ -82,7 +78,7 @@ export async function runBatch(
     const incidentId = extractIncidentId(crashPath);
     const manifestKey = incidentId ?? crashPath;
     if (manifest && manifest.isProcessed(manifestKey)) {
-      results.push({ file, success: true, detail: "skipped (already processed)" });
+      results.push({ file, success: true });
       continue;
     }
 
