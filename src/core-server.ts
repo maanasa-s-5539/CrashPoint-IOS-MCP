@@ -164,7 +164,6 @@ server.registerTool(
         z.object({
           file: z.string(),
           success: z.boolean(),
-          detail: z.string(),
         })
       ),
     }),
@@ -193,7 +192,7 @@ server.registerTool(
         succeeded: res.success ? 1 : 0,
         failed: res.success ? 0 : 1,
         total: 1,
-        results: [{ file: path.basename(input.file), success: res.success, detail: res.detail }],
+        results: [{ file: path.basename(input.file), success: res.success }],
       };
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
