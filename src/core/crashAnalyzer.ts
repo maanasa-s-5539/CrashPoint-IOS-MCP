@@ -262,12 +262,13 @@ function parseCrashDate(content: string, filePath: string): Date {
   return fs.statSync(filePath).mtime;
 }
 
-export function cleanOldCrashes(beforeDate: string, dirs: string[], dryRun = false, parentDir?: string): CleanResult {
+export function cleanOldCrashes(beforeDate: string, dirs: string[], dryRun = false, parentDir?: string, manifest?: ProcessedManifest): CleanResult {
   const before = new Date(beforeDate);
   const files: CleanFileEntry[] = [];
   let deleted = 0;
   let skipped = 0;
   let totalScanned = 0;
+  const deletedManifestKeys: string[] = [];
 
   for (const dir of dirs) {
     if (!fs.existsSync(dir)) continue;
@@ -289,12 +290,15 @@ export function cleanOldCrashes(beforeDate: string, dirs: string[], dryRun = fal
         crashDate: crashDate.toISOString(),
         deleted: false,
       };
+      const incidentId = extractIncidentId(filepath);
+      const manifestKey = incidentId ?? filepath;
 
       if (shouldDelete) {
         if (!dryRun) {
           try {
             fs.unlinkSync(filepath);
             entry.deleted = true;
+            deletedManifestKeys.push(manifestKey);
           } catch {
             // skip if cannot delete
           }
@@ -344,6 +348,10 @@ export function cleanOldCrashes(beforeDate: string, dirs: string[], dryRun = fal
       }
       files.push(entry);
     }
+  }
+
+  if (manifest) {
+    manifest.removeProcessedBatch(deletedManifestKeys);
   }
 
   return { deleted, skipped, totalScanned, files };

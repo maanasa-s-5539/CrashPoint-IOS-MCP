@@ -727,7 +727,7 @@ server.registerTool(
       getSymbolicatedDir(config),
     ];
 
-    const result = cleanOldCrashes(input.beforeDate, dirs, dryRun, config.CRASH_ANALYSIS_PARENT);
+    const result = cleanOldCrashes(input.beforeDate, dirs, dryRun, config.CRASH_ANALYSIS_PARENT, dryRun ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT));
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
       structuredContent: result as unknown as Record<string, unknown>,

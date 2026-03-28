@@ -76,6 +76,21 @@ export class ProcessedManifest {
     return this.load().entries;
   }
 
+  removeProcessed(crashId: string): void {
+    const data = this.load();
+    delete data.entries[crashId];
+    this.save();
+  }
+
+  removeProcessedBatch(crashIds: string[]): void {
+    if (crashIds.length === 0) return;
+    const data = this.load();
+    for (const crashId of crashIds) {
+      delete data.entries[crashId];
+    }
+    this.save();
+  }
+
   clear(): void {
     this.data = { entries: {} };
     this.save();
