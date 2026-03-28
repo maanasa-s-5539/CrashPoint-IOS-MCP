@@ -110,6 +110,7 @@ server.registerTool(
       includeProcessedCrashes: z.boolean().optional().describe("When true, re-processes crashes that were already exported. Default is false (skip already-processed crashes)."),
     }),
     outputSchema: z.object({
+      canBeExported: z.number().optional(),
       exported: z.number(),
       skipped: z.number(),
       errors: z.array(z.string()),

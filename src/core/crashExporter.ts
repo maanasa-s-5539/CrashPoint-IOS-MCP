@@ -11,6 +11,7 @@ export interface ExportEntry {
 }
 
 export interface ExportResult {
+  canBeExported?: number;
   exported: number;
   skipped: number;
   errors: string[];
@@ -156,6 +157,9 @@ export function exportCrashLogs(
   manifest?: ProcessedManifest
 ): ExportResult {
   const result: ExportResult = { exported: 0, skipped: 0, errors: [], files: [] };
+  if (dryRun) {
+    result.canBeExported = 0;
+  }
 
   if (!fs.existsSync(inputDir)) {
     result.errors.push(`Input directory does not exist: ${inputDir}`);
@@ -279,7 +283,7 @@ export function exportCrashLogs(
           result.skipped++;
         }
       } else {
-        result.exported++;
+        result.canBeExported = (result.canBeExported ?? 0) + 1;
         counter++;
       }
 
