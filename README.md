@@ -103,17 +103,17 @@ ParentHolderFolder/                   ← CRASH_ANALYSIS_PARENT
 │   ├── AppticsCrashLogs/             ← User-placed Apptics SDK crash logs
 │   └── OtherCrashLogs/              ← User-placed other crash logs
 ├── SymbolicatedCrashLogsFolder/      ← Symbolicated .crash files
+├── AnalyzedReportsFolder/            ← Auto-generated JSON + CSV analysis reports
+├── StateMaintenance/                 ← Internal state (processed manifest, fix tracking)
 ├── CurrentMasterLiveBranch -> ...    ← Symlink to master branch (optional)
 ├── CurrentDevelopmentBranch -> ...   ← Symlink to dev branch (optional)
 ├── dSYM_File -> ...                  ← Symlink to .dSYM bundle (optional)
-├── app_File -> ...                   ← Symlink to .app bundle (optional)
-├── fix_status.json                   ← Local fix tracking database
-└── processed_manifest.json           ← Tracks already-exported/symbolicated files
+└── app_File -> ...                   ← Symlink to .app bundle (optional)
 ```
 
 Run `setup_folders` (MCP tool) or `node dist/cli.js setup` to create this structure.
 
-The `processed_manifest.json` tracks which crash files have already been processed (keyed by `Incident Identifier` UUID). This prevents re-exporting and re-symbolicating the same crashes across sessions. Pass `includeProcessedCrashes: true` (MCP) or `--include-processed` (CLI) to override and reprocess all files.
+The `StateMaintenance/` folder holds `processed_manifest.json` (tracks which crash files have already been processed, keyed by `Incident Identifier` UUID) and `fix_status.json` (local fix tracking database). This prevents re-exporting and re-symbolicating the same crashes across sessions. Pass `includeProcessedCrashes: true` (MCP) or `--include-processed` (CLI) to override and reprocess all files.
 
 ---
 
@@ -126,7 +126,7 @@ The `processed_manifest.json` tracks which crash files have already been process
 | 3 | `export_crashes` | Export `.crash` files from `.xccrashpoint` packages to `MainCrashLogsFolder/XCodeCrashLogs`. Add `dryRun: true` to preview without writing |
 | 4 | `symbolicate_batch` | Symbolicate crash files. Pass optional `file` param for a single file, or batch-process all of `MainCrashLogsFolder` (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs) |
 | 5 | `verify_dsym` | Validate a `.dSYM` bundle and check if its UUIDs match those in crash files |
-| 6 | `analyze_crashes` | Group & deduplicate crashes by signature; includes fix status. Pass optional `csvOutputPath` to also export a CSV |
+| 6 | `analyze_crashes` | Group & deduplicate crashes by signature; includes fix status. Always auto-generates JSON + CSV reports in `AnalyzedReportsFolder` |
 | 7 | `fix_status` | Unified fix tracking: `action='set'` to mark fixed/unfixed, `action='unset'` to clear, `action='list'` to view all |
 | 8 | `run_full_pipeline` | Run the complete pipeline: export → symbolicate → analyze |
 | 9 | `clean_old_crashes` | Delete `.crash`/`.ips` files older than a given date across all crash directories |
@@ -169,14 +169,8 @@ node dist/cli.js batch
 # Symbolicate a single crash file
 node dist/cli.js batch --file /path/to/crash.crash
 
-# Analyze crashes and print JSON report
+# Analyze crashes and print JSON report (also auto-saves JSON + CSV to AnalyzedReportsFolder)
 node dist/cli.js analyze
-
-# Analyze and save to file
-node dist/cli.js analyze --crash-dir /path/to/dir -o report.json
-
-# Analyze and also export CSV
-node dist/cli.js analyze -o report.json --csv report.csv
 
 # Manage fix statuses (unified command)
 node dist/cli.js fix-status --action set --signature "EXC_BAD_ACCESS SIGSEGV" --note "Fixed in PR #42"
@@ -190,7 +184,7 @@ node dist/cli.js pipeline
 If installed globally, you can also use:
 
 ```bash
-crashpoint-ios-cli analyze -o report.json
+crashpoint-ios-cli analyze
 ```
 
 ---
@@ -209,7 +203,7 @@ Each crash file is automatically tagged with its source based on its file path a
 
 ## Fix Tracking
 
-Crash fix statuses are stored in `{CRASH_ANALYSIS_PARENT}/fix_status.json` (local only, gitignored).
+Crash fix statuses are stored in `{CRASH_ANALYSIS_PARENT}/StateMaintenance/fix_status.json` (local only, gitignored).
 
 ```json
 {

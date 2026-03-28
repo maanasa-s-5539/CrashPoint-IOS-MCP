@@ -1,6 +1,6 @@
 // Barrel re-exports for package consumers
 export type { CrashPointConfig } from "./config.js";
-export { getConfig, getMainCrashLogsDir, getXcodeCrashesDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir, hasCrashFiles } from "./config.js";
+export { getConfig, getMainCrashLogsDir, getXcodeCrashesDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir, getAnalyzedReportsDir, getStateMaintenanceDir, hasCrashFiles } from "./config.js";
 
 export type { CrashGroup, CrashReport, CrashMetadata, CrashedThread, CleanFileEntry, CleanResult } from "./core/crashAnalyzer.js";
 export { analyzeDirectory, cleanOldCrashes, filterUnfixedGroups, parseCrashMetadata, buildSignature, analyzeCrashFile, detectSource } from "./core/crashAnalyzer.js";
@@ -19,6 +19,6 @@ export { setupWorkspace } from "./core/setup.js";
 export type { FixStatus, FixStatusStore, FixStatusEntry } from "./state/fixTracker.js";
 export { FixTracker, loadFixStatuses } from "./state/fixTracker.js";
 
-export { assertPathUnderBase, assertNoTraversal, assertSafeSymlinkTarget } from "./pathSafety.js";
+export { assertPathUnderBase, assertWritePathUnderBase, assertNoTraversal, assertSafeSymlinkTarget } from "./pathSafety.js";
 
 export { ProcessedManifest, extractIncidentId } from "./state/processedManifest.js";
