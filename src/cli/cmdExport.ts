@@ -11,7 +11,7 @@ export async function cmdExport(flags: Record<string, string | boolean>): Promis
   const endDate = flags["end-date"] as string | undefined;
   const dryRun = flags["dry-run"] === true;
   const includeProcessed = flags["include-processed"] === true;
-  const manifest = includeProcessed ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT);
+  const manifest = dryRun || includeProcessed ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT);
   const result = exportCrashLogs(inputDir, outputDir, versions, false, dryRun, startDate, endDate, manifest);
   console.log(JSON.stringify(result, null, 2));
 }
