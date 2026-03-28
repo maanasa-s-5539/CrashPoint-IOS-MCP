@@ -133,7 +133,7 @@ server.registerTool(
     const versions = input.versions?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
     const recursive = input.recursive ?? false;
     const dryRun = input.dryRun ?? false;
-    const manifest = input.includeProcessedCrashes ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT);
+    const manifest = dryRun || input.includeProcessedCrashes ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT);
 
     const result = exportCrashLogs(inputDir, outputDir, versions, recursive, dryRun, input.startDate, input.endDate, manifest);
     return {
