@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { getConfig, getXcodeCrashesDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir, hasCrashFiles } from "../config.js";
+import { getConfig, getXcodeCrashesDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir, getAnalyzedReportsDir, hasCrashFiles } from "../config.js";
 import { exportCrashLogs } from "../core/crashExporter.js";
 import { runBatchAll } from "../core/symbolicator.js";
 import { analyzeDirectory } from "../core/crashAnalyzer.js";
@@ -50,7 +50,10 @@ export async function cmdPipeline(flags: Record<string, string | boolean>): Prom
   // Step 3: analyze
   const fixStatuses = loadFixStatuses(config.CRASH_ANALYSIS_PARENT);
   const report = analyzeDirectory(symbolicatedDir, fixStatuses, manifest);
-  const reportFile = path.join(config.CRASH_ANALYSIS_PARENT, `report_${Date.now()}.json`);
+  const reportsDir = getAnalyzedReportsDir(config);
+  fs.mkdirSync(reportsDir, { recursive: true });
+  const ts = Date.now();
+  const reportFile = path.join(reportsDir, `jsonReport_${ts}.json`);
   fs.writeFileSync(reportFile, JSON.stringify(report, null, 2), "utf-8");
   console.log("\n── Analysis ────────────────────────────────────────");
   console.log(JSON.stringify(report, null, 2));

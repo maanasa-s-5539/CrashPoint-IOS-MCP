@@ -17,7 +17,6 @@
 | Parameter | Description |
 |---|---|
 | `file` | Path to a single `.crash` or `.ips` file to symbolicate (optional — omit for full batch mode) |
-| `crashDir` | Override crash directory (default: `MainCrashLogsFolder/XCodeCrashLogs`) |
 | `dsymPath` | Override dSYM path (default: `DSYM_PATH` env var) |
 | `outputDir` | Override output directory (default: `SymbolicatedCrashLogsFolder`) |
 | `includeProcessedCrashes` | When `true`, re-symbolicate already-processed files |
@@ -26,9 +25,9 @@
 
 | Parameter | Description |
 |---|---|
-| `crashDir` | Directory of symbolicated crash files (default: `SymbolicatedCrashLogsFolder`) |
 | `includeProcessedCrashes` | When `true`, re-analyze already-processed files |
-| `csvOutputPath` | When provided, also exports the report as a CSV file to this path |
+
+> **Note:** Reports are always auto-generated in `AnalyzedReportsFolder`. A JSON report (`jsonReport_<timestamp>.json`) and a CSV report (`sheetReport_<timestamp>.csv`) are created on every run. The source directory is always `SymbolicatedCrashLogsFolder`.
 
 ### `fix_status` Parameters
 

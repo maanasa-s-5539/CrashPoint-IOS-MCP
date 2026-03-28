@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { getConfig, getMainCrashLogsDir, getXcodeCrashesDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir } from "../config.js";
+import { getConfig, getMainCrashLogsDir, getXcodeCrashesDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir, getAnalyzedReportsDir, getStateMaintenanceDir } from "../config.js";
 import { assertNoTraversal, assertSafeSymlinkTarget } from "../pathSafety.js";
 
 export interface SetupOptions {
@@ -29,13 +29,11 @@ export function setupWorkspace(options: SetupOptions = {}): SetupResult {
   const created: string[] = [];
   const warnings: string[] = [];
 
-  for (const dir of [parentDir, mainCrashDir, xcodeCrashDir, symbolicatedDir]) {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-      created.push(dir);
-    }
-  }
-  for (const dir of [appticsDir, otherDir]) {
+  const dirsToCreate = [
+    parentDir, mainCrashDir, xcodeCrashDir, appticsDir, otherDir,
+    symbolicatedDir, getAnalyzedReportsDir(config), getStateMaintenanceDir(config),
+  ];
+  for (const dir of dirsToCreate) {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
       created.push(dir);

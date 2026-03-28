@@ -20,7 +20,7 @@ export class FixTracker {
   private filePath: string;
 
   constructor(parentDir: string) {
-    this.filePath = path.join(parentDir, "fix_status.json");
+    this.filePath = path.join(parentDir, "StateMaintenance", "fix_status.json");
   }
 
   private load(): FixStatusStore {

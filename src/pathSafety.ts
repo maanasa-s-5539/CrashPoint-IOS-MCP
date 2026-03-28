@@ -1,10 +1,22 @@
 import path from "path";
+import type { CrashPointConfig } from "./config.js";
 
 export function assertPathUnderBase(userPath: string, base: string): string {
   const resolved = path.resolve(userPath);
   const resolvedBase = path.resolve(base);
   if (!resolved.startsWith(resolvedBase + path.sep) && resolved !== resolvedBase) {
     throw new Error(`Path "${userPath}" is outside the allowed directory "${base}"`);
+  }
+  return resolved;
+}
+
+export function assertWritePathUnderBase(writePath: string, config: CrashPointConfig): string {
+  const resolved = path.resolve(writePath);
+  const resolvedBase = path.resolve(config.CRASH_ANALYSIS_PARENT);
+  if (!resolved.startsWith(resolvedBase + path.sep) && resolved !== resolvedBase) {
+    throw new Error(
+      `Write operation rejected: path "${writePath}" is outside ParentHolderFolder "${config.CRASH_ANALYSIS_PARENT}"`
+    );
   }
   return resolved;
 }

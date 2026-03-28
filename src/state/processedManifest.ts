@@ -37,7 +37,7 @@ export class ProcessedManifest {
   private data: ManifestData | null = null;
 
   constructor(parentDir: string) {
-    this.manifestPath = path.join(parentDir, MANIFEST_FILENAME);
+    this.manifestPath = path.join(parentDir, "StateMaintenance", MANIFEST_FILENAME);
   }
 
   private load(): ManifestData {

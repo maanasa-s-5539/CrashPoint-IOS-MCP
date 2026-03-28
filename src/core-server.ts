@@ -8,14 +8,13 @@ import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 
-import { getConfig, getXcodeCrashesDir, getMainCrashLogsDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir, hasCrashFiles } from "./config.js";
+import { getConfig, getXcodeCrashesDir, getMainCrashLogsDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir, getAnalyzedReportsDir, hasCrashFiles } from "./config.js";
 import {
   listAvailableVersions,
   exportCrashLogs,
 } from "./core/crashExporter.js";
 import {
   symbolicateOne,
-  runBatch,
   runBatchAll,
   BatchResult,
 } from "./core/symbolicator.js";
@@ -152,7 +151,6 @@ server.registerTool(
       "Symbolicate crash files using Xcode's symbolicatecrash tool. When the optional 'file' parameter is provided, symbolicates only that single .crash file. Otherwise, processes ALL .crash and .ips files in MainCrashLogsFolder (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs), outputting to SymbolicatedCrashLogsFolder. All paths (dSYM, directories) are pre-configured via environment variables — do NOT ask the user for them unless they explicitly want to override.",
     inputSchema: z.object({
       file: z.string().optional().describe("Path to a single .crash or .ips file to symbolicate. When provided, only this file is processed instead of batch processing all directories."),
-      crashDir: z.string().optional().describe("ALREADY CONFIGURED via env (MainCrashLogsFolder/XCodeCrashLogs). Do NOT ask the user for this. Only provide to override."),
       dsymPath: z.string().optional().describe("ALREADY CONFIGURED via DSYM_PATH env var. Do NOT ask the user for this. Only provide if the user explicitly wants to override the configured default."),
       outputDir: z.string().optional().describe("ALREADY CONFIGURED via env (SymbolicatedCrashLogsFolder). Do NOT ask the user for this. Only provide to override."),
       includeProcessedCrashes: z.boolean().optional().describe("When true, re-symbolicate crashes that were already processed. Default is false (skip already-processed crashes)."),
@@ -201,27 +199,20 @@ server.registerTool(
       };
     }
 
-    const crashDir = input.crashDir ?? getXcodeCrashesDir(config);
+    const xcodeCrashDir = getXcodeCrashesDir(config);
     const appticsDir = getAppticsCrashesDir(config);
     const otherDir = getOtherCrashesDir(config);
-    if (input.crashDir) assertPathUnderBase(input.crashDir, config.CRASH_ANALYSIS_PARENT);
     const manifest = input.includeProcessedCrashes ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT);
 
-    const inputIsDefault = !input.crashDir;
-    const anyFiles = inputIsDefault
-      ? hasCrashFiles(crashDir) || hasCrashFiles(appticsDir) || hasCrashFiles(otherDir)
-      : hasCrashFiles(crashDir);
+    const anyFiles = hasCrashFiles(xcodeCrashDir) || hasCrashFiles(appticsDir) || hasCrashFiles(otherDir);
 
     if (!anyFiles) {
-      const noFilesMsg = inputIsDefault
-        ? "No .crash or .ips files found in MainCrashLogsFolder/XCodeCrashLogs, MainCrashLogsFolder/AppticsCrashLogs, or MainCrashLogsFolder/OtherCrashLogs"
-        : `No .crash or .ips files found in ${crashDir}`;
       const result = {
         succeeded: 0,
         failed: 0,
         total: 0,
         results: [] as BatchResult[],
-        message: noFilesMsg,
+        message: "No .crash or .ips files found in MainCrashLogsFolder/XCodeCrashLogs, MainCrashLogsFolder/AppticsCrashLogs, or MainCrashLogsFolder/OtherCrashLogs",
       };
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
@@ -229,26 +220,8 @@ server.registerTool(
       };
     }
 
-    let succeeded = 0;
-    let failed = 0;
-    let total = 0;
-    const results: BatchResult[] = [];
-
-    if (inputIsDefault) {
-      const r = await runBatchAll(dsymPath, manifest);
-      succeeded = r.succeeded;
-      failed = r.failed;
-      total = r.total;
-      results.push(...r.results);
-    } else {
-      const batchResult = await runBatch(crashDir, dsymPath, outputDir, manifest);
-      succeeded = batchResult.succeeded;
-      failed = batchResult.failed;
-      total = batchResult.total;
-      results.push(...batchResult.results);
-    }
-
-    const result = { succeeded, failed, total, results };
+    const r = await runBatchAll(dsymPath, manifest);
+    const result = { succeeded: r.succeeded, failed: r.failed, total: r.total, results: r.results };
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
       structuredContent: result as unknown as Record<string, unknown>,
@@ -503,11 +476,9 @@ server.registerTool(
   "analyze_crashes",
   {
     description:
-      "Group and deduplicate symbolicated crashes by unique signature. Returns a JSON crash analysis report. Optionally exports the report as a CSV file when csvOutputPath is provided.",
+      "Group and deduplicate symbolicated crashes by unique signature. Always reads from SymbolicatedCrashLogsFolder. Automatically generates both a JSON report (jsonReport_<timestamp>.json) and a CSV report (sheetReport_<timestamp>.csv) in AnalyzedReportsFolder. Also returns the full JSON report in the response.",
     inputSchema: z.object({
-      crashDir: z.string().optional().describe("Directory of symbolicated crash files"),
       includeProcessedCrashes: z.boolean().optional().describe("When true, re-analyzes crashes that were already processed. Default is false (skip already-processed crashes)."),
-      csvOutputPath: z.string().optional().describe("When provided, also exports the report as a CSV file to this path (must be under CRASH_ANALYSIS_PARENT)."),
     }),
     outputSchema: z.object({
       report_date: z.string(),
@@ -515,24 +486,33 @@ server.registerTool(
       total_crashes: z.number(),
       unique_crash_types: z.number(),
       crash_groups: z.array(z.any()),
+      json_report_path: z.string(),
+      csv_report_path: z.string(),
       csv_export: z.object({ success: z.boolean(), message: z.string(), filePath: z.string(), totalRows: z.number() }).optional(),
     }),
   },
   async (input) => {
     const config = getConfig();
-    const crashDir = input.crashDir ?? getSymbolicatedDir(config);
-    if (input.crashDir) assertPathUnderBase(input.crashDir, config.CRASH_ANALYSIS_PARENT);
-    if (input.csvOutputPath) assertPathUnderBase(input.csvOutputPath, config.CRASH_ANALYSIS_PARENT);
+    const crashDir = getSymbolicatedDir(config);
     const fixStatuses = loadFixStatuses(config.CRASH_ANALYSIS_PARENT);
     const manifest = input.includeProcessedCrashes ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT);
     const report = analyzeDirectory(crashDir, fixStatuses, manifest);
 
-    let csvExport: { success: boolean; message: string; filePath: string; totalRows: number } | undefined;
-    if (input.csvOutputPath) {
-      csvExport = exportReportToCsv(report, input.csvOutputPath);
-    }
+    const reportsDir = getAnalyzedReportsDir(config);
+    fs.mkdirSync(reportsDir, { recursive: true });
+    const ts = Date.now();
+    const jsonReportPath = path.join(reportsDir, `jsonReport_${ts}.json`);
+    const csvReportPath = path.join(reportsDir, `sheetReport_${ts}.csv`);
 
-    const result = csvExport ? { ...report, csv_export: csvExport } : report;
+    fs.writeFileSync(jsonReportPath, JSON.stringify(report, null, 2), "utf-8");
+    const csvExport = exportReportToCsv(report, csvReportPath);
+
+    const result = {
+      ...report,
+      json_report_path: jsonReportPath,
+      csv_report_path: csvReportPath,
+      csv_export: csvExport,
+    };
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
       structuredContent: result as unknown as Record<string, unknown>,
@@ -673,10 +653,14 @@ server.registerTool(
     // Step 3: Analyze
     const fixStatuses = loadFixStatuses(config.CRASH_ANALYSIS_PARENT);
     const analysisReport = analyzeDirectory(symbolicatedDir, fixStatuses, manifest);
-    const reportFile = path.join(config.CRASH_ANALYSIS_PARENT, `report_${Date.now()}.json`);
+    const reportsDir = getAnalyzedReportsDir(config);
+    const ts = Date.now();
+    const reportFile = path.join(reportsDir, `jsonReport_${ts}.json`);
+    const csvFile = path.join(reportsDir, `sheetReport_${ts}.csv`);
     try {
-      fs.mkdirSync(config.CRASH_ANALYSIS_PARENT, { recursive: true });
+      fs.mkdirSync(reportsDir, { recursive: true });
       fs.writeFileSync(reportFile, JSON.stringify(analysisReport, null, 2), "utf-8");
+      exportReportToCsv(analysisReport, csvFile);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`Warning: failed to save report to ${reportFile}: ${msg}`);

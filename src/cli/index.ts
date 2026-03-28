@@ -36,10 +36,7 @@ Commands:
   batch                 Symbolicate all crash files in MainCrashLogsFolder (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs)
                         using Xcode's symbolicatecrash tool
     --file <path>       Symbolicate only this single .crash file instead of batch processing all directories
-  analyze               Group and deduplicate crashes into a report
-    --crash-dir <dir>   Directory of crash files (default: SymbolicatedCrashLogsFolder)
-    -o <output.json>    Write report JSON to file (default: stdout)
-    --csv <path>        Also export the report as a CSV file to the given path
+  analyze               Group and deduplicate crashes into a report (auto-saves JSON + CSV to AnalyzedReportsFolder)
   setup                 Create full folder structure + symlinks
     --master-branch     Path to master/live branch checkout
     --dev-branch        Path to development branch checkout
