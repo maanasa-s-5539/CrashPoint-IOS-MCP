@@ -6,7 +6,7 @@ import { runBatchAll } from "../core/symbolicator.js";
 import { analyzeDirectory } from "../core/crashAnalyzer.js";
 import { loadFixStatuses } from "../state/fixTracker.js";
 import { ProcessedManifest } from "../state/processedManifest.js";
-import { exportReportToCsv, exportReportToSheetJson } from "../core/csvExporter.js";
+import { exportReportToCsv } from "../core/csvExporter.js";
 
 export async function cmdPipeline(flags: Record<string, string | boolean>): Promise<void> {
   const config = getConfig();
@@ -56,13 +56,10 @@ export async function cmdPipeline(flags: Record<string, string | boolean>): Prom
   const ts = Date.now();
   const reportFile = path.join(reportsDir, `jsonReport_${ts}.json`);
   const csvFile = path.join(reportsDir, `sheetReport_${ts}.csv`);
-  const sheetJsonFile = path.join(reportsDir, `sheetReport_${ts}.json`);
   fs.writeFileSync(reportFile, JSON.stringify(report, null, 2), "utf-8");
   exportReportToCsv(report, csvFile);
-  exportReportToSheetJson(report, sheetJsonFile);
   console.log("\n── Analysis ────────────────────────────────────────");
   console.log(JSON.stringify(report, null, 2));
   console.log(`JSON report saved to: ${reportFile}`);
   console.log(`CSV report saved to: ${csvFile}`);
-  console.log(`Sheet JSON report saved to: ${sheetJsonFile}`);
 }
