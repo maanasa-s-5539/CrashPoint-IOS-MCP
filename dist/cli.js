@@ -1,12 +1,17 @@
 #!/usr/bin/env node
-"use strict";
 var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __commonJS = (cb, mod) => function __require() {
+var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
+  get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
+}) : x)(function(x) {
+  if (typeof require !== "undefined") return require.apply(this, arguments);
+  throw Error('Dynamic require of "' + x + '" is not supported');
+});
+var __commonJS = (cb, mod) => function __require2() {
   return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
 };
 var __export = (target, all) => {
@@ -29,12 +34,11 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
   mod
 ));
-var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
 // node_modules/dotenv/package.json
 var require_package = __commonJS({
-  "node_modules/dotenv/package.json"(exports2, module2) {
-    module2.exports = {
+  "node_modules/dotenv/package.json"(exports, module) {
+    module.exports = {
       name: "dotenv",
       version: "17.3.1",
       description: "Loads environment variables from .env file",
@@ -101,11 +105,11 @@ var require_package = __commonJS({
 
 // node_modules/dotenv/lib/main.js
 var require_main = __commonJS({
-  "node_modules/dotenv/lib/main.js"(exports2, module2) {
-    var fs12 = require("fs");
-    var path14 = require("path");
-    var os = require("os");
-    var crypto = require("crypto");
+  "node_modules/dotenv/lib/main.js"(exports, module) {
+    var fs12 = __require("fs");
+    var path14 = __require("path");
+    var os = __require("os");
+    var crypto = __require("crypto");
     var packageJson = require_package();
     var version2 = packageJson.version;
     var TIPS = [
@@ -414,32 +418,16 @@ var require_main = __commonJS({
       parse: parse3,
       populate
     };
-    module2.exports.configDotenv = DotenvModule.configDotenv;
-    module2.exports._configVault = DotenvModule._configVault;
-    module2.exports._parseVault = DotenvModule._parseVault;
-    module2.exports.config = DotenvModule.config;
-    module2.exports.decrypt = DotenvModule.decrypt;
-    module2.exports.parse = DotenvModule.parse;
-    module2.exports.populate = DotenvModule.populate;
-    module2.exports = DotenvModule;
+    module.exports.configDotenv = DotenvModule.configDotenv;
+    module.exports._configVault = DotenvModule._configVault;
+    module.exports._parseVault = DotenvModule._parseVault;
+    module.exports.config = DotenvModule.config;
+    module.exports.decrypt = DotenvModule.decrypt;
+    module.exports.parse = DotenvModule.parse;
+    module.exports.populate = DotenvModule.populate;
+    module.exports = DotenvModule;
   }
 });
-
-// src/cli/index.ts
-var index_exports = {};
-__export(index_exports, {
-  cmdAnalyze: () => cmdAnalyze,
-  cmdBatch: () => cmdBatch,
-  cmdClean: () => cmdClean,
-  cmdExport: () => cmdExport,
-  cmdFixStatus: () => cmdFixStatus,
-  cmdListVersions: () => cmdListVersions,
-  cmdPipeline: () => cmdPipeline,
-  cmdSetup: () => cmdSetup,
-  cmdVerifyDsym: () => cmdVerifyDsym,
-  parseFlags: () => parseFlags
-});
-module.exports = __toCommonJS(index_exports);
 
 // src/cli/parseFlags.ts
 function parseFlags(argv) {
@@ -14241,9 +14229,9 @@ function date4(params) {
 config(en_default());
 
 // src/config.ts
-var import_path = __toESM(require("path"));
-var import_fs = __toESM(require("fs"));
-import_dotenv.default.config({ path: import_path.default.resolve(__dirname, "..", ".env"), quiet: true });
+import path from "path";
+import fs from "fs";
+import_dotenv.default.config({ path: path.resolve(__dirname, "..", ".env"), quiet: true });
 var envSchema = external_exports.object({
   CRASH_ANALYSIS_PARENT: external_exports.string().min(1).describe("Path to ParentHolderFolder"),
   DSYM_PATH: external_exports.string().optional().describe("Path to MyApp.dSYM"),
@@ -14262,45 +14250,45 @@ function getConfig() {
   return cachedConfig;
 }
 function getMainCrashLogsDir(config2) {
-  return import_path.default.join(config2.CRASH_ANALYSIS_PARENT, "MainCrashLogsFolder");
+  return path.join(config2.CRASH_ANALYSIS_PARENT, "MainCrashLogsFolder");
 }
 function getXcodeCrashesDir(config2) {
-  return import_path.default.join(config2.CRASH_ANALYSIS_PARENT, "MainCrashLogsFolder", "XCodeCrashLogs");
+  return path.join(config2.CRASH_ANALYSIS_PARENT, "MainCrashLogsFolder", "XCodeCrashLogs");
 }
 function getAppticsCrashesDir(config2) {
-  return import_path.default.join(config2.CRASH_ANALYSIS_PARENT, "MainCrashLogsFolder", "AppticsCrashLogs");
+  return path.join(config2.CRASH_ANALYSIS_PARENT, "MainCrashLogsFolder", "AppticsCrashLogs");
 }
 function getOtherCrashesDir(config2) {
-  return import_path.default.join(config2.CRASH_ANALYSIS_PARENT, "MainCrashLogsFolder", "OtherCrashLogs");
+  return path.join(config2.CRASH_ANALYSIS_PARENT, "MainCrashLogsFolder", "OtherCrashLogs");
 }
 function getSymbolicatedDir(config2) {
-  return import_path.default.join(config2.CRASH_ANALYSIS_PARENT, "SymbolicatedCrashLogsFolder");
+  return path.join(config2.CRASH_ANALYSIS_PARENT, "SymbolicatedCrashLogsFolder");
 }
 function getAnalyzedReportsDir(config2) {
-  return import_path.default.join(config2.CRASH_ANALYSIS_PARENT, "AnalyzedReportsFolder");
+  return path.join(config2.CRASH_ANALYSIS_PARENT, "AnalyzedReportsFolder");
 }
 function getStateMaintenanceDir(config2) {
-  return import_path.default.join(config2.CRASH_ANALYSIS_PARENT, "StateMaintenance");
+  return path.join(config2.CRASH_ANALYSIS_PARENT, "StateMaintenance");
 }
 function hasCrashFiles(dir) {
-  return import_fs.default.existsSync(dir) && import_fs.default.readdirSync(dir).some((f) => f.endsWith(".crash") || f.endsWith(".ips"));
+  return fs.existsSync(dir) && fs.readdirSync(dir).some((f) => f.endsWith(".crash") || f.endsWith(".ips"));
 }
 
 // src/core/crashExporter.ts
-var import_fs3 = __toESM(require("fs"));
-var import_path3 = __toESM(require("path"));
+import fs3 from "fs";
+import path3 from "path";
 
 // src/state/processedManifest.ts
-var import_fs2 = __toESM(require("fs"));
-var import_path2 = __toESM(require("path"));
+import fs2 from "fs";
+import path2 from "path";
 var MANIFEST_FILENAME = "processed_manifest.json";
 var INCIDENT_ID_RE = /^Incident Identifier:\s+([0-9A-Fa-f-]+)/;
 function extractIncidentId(filePath) {
   try {
-    const fd = import_fs2.default.openSync(filePath, "r");
+    const fd = fs2.openSync(filePath, "r");
     const buf = Buffer.alloc(4096);
-    const bytesRead = import_fs2.default.readSync(fd, buf, 0, 4096, 0);
-    import_fs2.default.closeSync(fd);
+    const bytesRead = fs2.readSync(fd, buf, 0, 4096, 0);
+    fs2.closeSync(fd);
     const content = buf.slice(0, bytesRead).toString("utf-8");
     const match = INCIDENT_ID_RE.exec(content);
     if (match) return match[1];
@@ -14311,12 +14299,12 @@ function extractIncidentId(filePath) {
 var ProcessedManifest = class {
   constructor(parentDir) {
     this.data = null;
-    this.manifestPath = import_path2.default.join(parentDir, "StateMaintenance", MANIFEST_FILENAME);
+    this.manifestPath = path2.join(parentDir, "StateMaintenance", MANIFEST_FILENAME);
   }
   load() {
     if (this.data !== null) return this.data;
     try {
-      const raw = import_fs2.default.readFileSync(this.manifestPath, "utf-8");
+      const raw = fs2.readFileSync(this.manifestPath, "utf-8");
       this.data = JSON.parse(raw);
     } catch {
       this.data = { entries: {} };
@@ -14326,8 +14314,8 @@ var ProcessedManifest = class {
   save() {
     if (this.data === null) return;
     try {
-      import_fs2.default.mkdirSync(import_path2.default.dirname(this.manifestPath), { recursive: true });
-      import_fs2.default.writeFileSync(this.manifestPath, JSON.stringify(this.data, null, 2), "utf-8");
+      fs2.mkdirSync(path2.dirname(this.manifestPath), { recursive: true });
+      fs2.writeFileSync(this.manifestPath, JSON.stringify(this.data, null, 2), "utf-8");
     } catch {
     }
   }
@@ -14378,7 +14366,7 @@ var VERSION_REGEX = /^Version:\s+(.+)/;
 var DATE_TIME_REGEX = /^Date\/Time:\s+(.+)/;
 function extractCrashDate(crashFilePath) {
   try {
-    const content = import_fs3.default.readFileSync(crashFilePath, "utf-8");
+    const content = fs3.readFileSync(crashFilePath, "utf-8");
     const lines = content.split("\n").slice(0, 120);
     for (const line of lines) {
       const match = DATE_TIME_REGEX.exec(line);
@@ -14395,7 +14383,7 @@ function extractCrashDate(crashFilePath) {
 }
 function extractVersion(crashFilePath) {
   try {
-    const content = import_fs3.default.readFileSync(crashFilePath, "utf-8");
+    const content = fs3.readFileSync(crashFilePath, "utf-8");
     const lines = content.split("\n").slice(0, 120);
     for (const line of lines) {
       const match = VERSION_REGEX.exec(line);
@@ -14409,13 +14397,13 @@ function extractVersion(crashFilePath) {
 }
 function findCrashLogs(xccrashpointPath) {
   const results = [];
-  const primaryDir = import_path3.default.join(xccrashpointPath, "DistributionInfos", "all", "logs");
-  if (import_fs3.default.existsSync(primaryDir)) {
+  const primaryDir = path3.join(xccrashpointPath, "DistributionInfos", "all", "logs");
+  if (fs3.existsSync(primaryDir)) {
     _findCrashFiles(primaryDir, results);
     if (results.length > 0) return results;
   }
-  const contentsDir = import_path3.default.join(xccrashpointPath, "Contents", "Logs");
-  if (import_fs3.default.existsSync(contentsDir)) {
+  const contentsDir = path3.join(xccrashpointPath, "Contents", "Logs");
+  if (fs3.existsSync(contentsDir)) {
     _findCrashFiles(contentsDir, results);
     if (results.length > 0) return results;
   }
@@ -14424,9 +14412,9 @@ function findCrashLogs(xccrashpointPath) {
 }
 function _findCrashFiles(dir, results) {
   try {
-    const entries = import_fs3.default.readdirSync(dir, { withFileTypes: true });
+    const entries = fs3.readdirSync(dir, { withFileTypes: true });
     for (const entry of entries) {
-      const fullPath = import_path3.default.join(dir, entry.name);
+      const fullPath = path3.join(dir, entry.name);
       if (entry.isDirectory()) {
         _findCrashFiles(fullPath, results);
       } else if (entry.isFile() && (entry.name.endsWith(".crash") || entry.name.endsWith(".ips"))) {
@@ -14453,9 +14441,9 @@ function listAvailableVersions(inputDir, recursive = false) {
 function _findXccrashpoints(dir, recursive) {
   const results = [];
   try {
-    const entries = import_fs3.default.readdirSync(dir, { withFileTypes: true });
+    const entries = fs3.readdirSync(dir, { withFileTypes: true });
     for (const entry of entries) {
-      const fullPath = import_path3.default.join(dir, entry.name);
+      const fullPath = path3.join(dir, entry.name);
       if (entry.isDirectory()) {
         if (entry.name.endsWith(".xccrashpoint")) {
           results.push(fullPath);
@@ -14479,12 +14467,12 @@ function exportCrashLogs(inputDir, outputDir, versions = [], recursive = false, 
   if (dryRun) {
     result.canBeExported = 0;
   }
-  if (!import_fs3.default.existsSync(inputDir)) {
+  if (!fs3.existsSync(inputDir)) {
     result.errors.push(`Input directory does not exist: ${inputDir}`);
     return result;
   }
   if (!dryRun) {
-    import_fs3.default.mkdirSync(outputDir, { recursive: true });
+    fs3.mkdirSync(outputDir, { recursive: true });
   }
   const xccrashpoints = _findXccrashpoints(inputDir, recursive);
   let counter = 1;
@@ -14557,14 +14545,14 @@ function exportCrashLogs(inputDir, outputDir, versions = [], recursive = false, 
       }
       const dateStr = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10).replace(/-/g, "");
       let destName = `xcodeCrashLog${counter}_${dateStr}.crash`;
-      let destPath = import_path3.default.join(outputDir, destName);
+      let destPath = path3.join(outputDir, destName);
       if (!dryRun) {
         const suffixes = ["", "b", "c", "d", "e", "f", "g", "h"];
         for (const suffix of suffixes) {
           const candidate = `xcodeCrashLog${counter}_${dateStr}${suffix}.crash`;
-          destPath = import_path3.default.join(outputDir, candidate);
+          destPath = path3.join(outputDir, candidate);
           destName = candidate;
-          if (!import_fs3.default.existsSync(destPath)) break;
+          if (!fs3.existsSync(destPath)) break;
         }
       }
       const entry = {
@@ -14575,7 +14563,7 @@ function exportCrashLogs(inputDir, outputDir, versions = [], recursive = false, 
       };
       if (!dryRun) {
         try {
-          import_fs3.default.copyFileSync(crashPath, destPath);
+          fs3.copyFileSync(crashPath, destPath);
           result.exported++;
           counter++;
           manifest?.markProcessed(manifestKey);
@@ -14628,34 +14616,34 @@ async function cmdExport(flags) {
 }
 
 // src/cli/cmdBatch.ts
-var import_path6 = __toESM(require("path"));
+import path6 from "path";
 
 // src/core/symbolicator.ts
-var import_fs4 = __toESM(require("fs"));
-var import_path4 = __toESM(require("path"));
-var import_child_process = require("child_process");
-var import_util3 = require("util");
-var execFileAsync = (0, import_util3.promisify)(import_child_process.execFile);
+import fs4 from "fs";
+import path4 from "path";
+import { execFile } from "child_process";
+import { promisify } from "util";
+var execFileAsync = promisify(execFile);
 var SYMBOLICATE_CRASH = "/Applications/Xcode.app/Contents/SharedFrameworks/DVTFoundation.framework/Versions/A/Resources/symbolicatecrash";
 var DEVELOPER_DIR = "/Applications/Xcode.app/Contents/Developer";
 async function symbolicateOne(crashPath, dsymPath, outputPath) {
-  if (!import_fs4.default.existsSync(crashPath)) {
+  if (!fs4.existsSync(crashPath)) {
     return { success: false };
   }
-  if (!import_fs4.default.existsSync(dsymPath)) {
+  if (!fs4.existsSync(dsymPath)) {
     return { success: false };
   }
-  if (!import_fs4.default.existsSync(SYMBOLICATE_CRASH)) {
+  if (!fs4.existsSync(SYMBOLICATE_CRASH)) {
     return { success: false };
   }
-  if (import_fs4.default.existsSync(dsymPath)) {
-    dsymPath = import_fs4.default.realpathSync(dsymPath);
+  if (fs4.existsSync(dsymPath)) {
+    dsymPath = fs4.realpathSync(dsymPath);
   }
-  import_fs4.default.mkdirSync(import_path4.default.dirname(outputPath), { recursive: true });
+  fs4.mkdirSync(path4.dirname(outputPath), { recursive: true });
   const env = { ...process.env, DEVELOPER_DIR };
   try {
     const { stdout } = await execFileAsync(SYMBOLICATE_CRASH, ["-d", dsymPath, crashPath], { env });
-    import_fs4.default.writeFileSync(outputPath, stdout, "utf-8");
+    fs4.writeFileSync(outputPath, stdout, "utf-8");
     return {
       success: true
     };
@@ -14664,17 +14652,17 @@ async function symbolicateOne(crashPath, dsymPath, outputPath) {
   }
 }
 async function runBatch(crashDir, dsymPath, outputDir, manifest) {
-  if (!import_fs4.default.existsSync(crashDir)) {
+  if (!fs4.existsSync(crashDir)) {
     return { succeeded: 0, failed: 0, total: 0, results: [] };
   }
-  import_fs4.default.mkdirSync(outputDir, { recursive: true });
-  const files = import_fs4.default.readdirSync(crashDir).filter((f) => f.endsWith(".crash") || f.endsWith(".ips"));
+  fs4.mkdirSync(outputDir, { recursive: true });
+  const files = fs4.readdirSync(crashDir).filter((f) => f.endsWith(".crash") || f.endsWith(".ips"));
   const results = [];
   let succeeded = 0;
   let failed = 0;
   for (const file2 of files) {
-    const crashPath = import_path4.default.join(crashDir, file2);
-    const outputPath = import_path4.default.join(outputDir, file2);
+    const crashPath = path4.join(crashDir, file2);
+    const outputPath = path4.join(outputDir, file2);
     const incidentId = extractIncidentId(crashPath);
     const manifestKey = incidentId ?? crashPath;
     if (manifest && manifest.isProcessed(manifestKey)) {
@@ -14713,16 +14701,16 @@ async function runBatchAll(dsymPath, manifest) {
 }
 
 // src/pathSafety.ts
-var import_path5 = __toESM(require("path"));
+import path5 from "path";
 function assertNoTraversal(userPath) {
   if (userPath.includes("..")) {
     throw new Error(`Path "${userPath}" contains directory traversal`);
   }
-  return import_path5.default.resolve(userPath);
+  return path5.resolve(userPath);
 }
 var BLOCKED_PREFIXES = ["/etc", "/var/run", "/usr/bin", "/usr/sbin", "/System", "/Library/LaunchDaemons"];
 function assertSafeSymlinkTarget(target) {
-  const resolved = import_path5.default.resolve(target);
+  const resolved = path5.resolve(target);
   for (const prefix of BLOCKED_PREFIXES) {
     if (resolved.startsWith(prefix + "/") || resolved === prefix) {
       throw new Error(`Symlink target "${target}" points to a restricted system directory`);
@@ -14744,7 +14732,7 @@ async function cmdBatch(flags) {
   }
   if (filePath) {
     assertNoTraversal(filePath);
-    const outputPath = import_path6.default.join(outputDir, import_path6.default.basename(filePath));
+    const outputPath = path6.join(outputDir, path6.basename(filePath));
     const result = await symbolicateOne(filePath, dsymPath, outputPath);
     console.log(JSON.stringify(result, null, 2));
     return;
@@ -14779,12 +14767,12 @@ async function cmdBatch(flags) {
 }
 
 // src/cli/cmdAnalyze.ts
-var import_fs8 = __toESM(require("fs"));
-var import_path10 = __toESM(require("path"));
+import fs8 from "fs";
+import path10 from "path";
 
 // src/core/crashAnalyzer.ts
-var import_fs5 = __toESM(require("fs"));
-var import_path7 = __toESM(require("path"));
+import fs5 from "fs";
+import path7 from "path";
 var EXCEPTION_TYPE_RE = /^Exception Type:\s+(.+)/;
 var EXCEPTION_CODES_RE = /^Exception Codes:\s+(.+)/;
 var HARDWARE_MODEL_RE = /^Hardware Model:\s+(.+)/;
@@ -14861,7 +14849,7 @@ function increment(map2, key) {
 }
 function analyzeCrashFile(filepath) {
   try {
-    const content = import_fs5.default.readFileSync(filepath, "utf-8");
+    const content = fs5.readFileSync(filepath, "utf-8");
     const lines = content.split("\n");
     const meta3 = parseCrashMetadata(lines);
     const source = detectSource(filepath);
@@ -14880,7 +14868,7 @@ function detectSource(filepath) {
 function analyzeDirectory(crashDir, fixStatuses, manifest) {
   const groups = /* @__PURE__ */ new Map();
   let totalCrashes = 0;
-  if (!import_fs5.default.existsSync(crashDir)) {
+  if (!fs5.existsSync(crashDir)) {
     return {
       report_date: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10),
       source_dir: crashDir,
@@ -14889,9 +14877,9 @@ function analyzeDirectory(crashDir, fixStatuses, manifest) {
       crash_groups: []
     };
   }
-  const files = import_fs5.default.readdirSync(crashDir).filter((f) => f.endsWith(".crash") || f.endsWith(".ips"));
+  const files = fs5.readdirSync(crashDir).filter((f) => f.endsWith(".crash") || f.endsWith(".ips"));
   for (const file2 of files) {
-    const filepath = import_path7.default.join(crashDir, file2);
+    const filepath = path7.join(crashDir, file2);
     const incidentId = extractIncidentId(filepath);
     const manifestKey = incidentId ?? filepath;
     if (manifest && manifest.isProcessed(manifestKey)) {
@@ -14949,7 +14937,7 @@ function parseCrashDate(content, filePath) {
     const parsed = new Date(match[1].trim());
     if (!isNaN(parsed.getTime())) return parsed;
   }
-  return import_fs5.default.statSync(filePath).mtime;
+  return fs5.statSync(filePath).mtime;
 }
 function cleanOldCrashes(beforeDate, dirs, dryRun = false, parentDir, manifest) {
   const before = validateDateInput(beforeDate, "--before-date");
@@ -14959,14 +14947,14 @@ function cleanOldCrashes(beforeDate, dirs, dryRun = false, parentDir, manifest) 
   let totalScanned = 0;
   const deletedManifestKeys = [];
   for (const dir of dirs) {
-    if (!import_fs5.default.existsSync(dir)) continue;
-    const dirFiles = import_fs5.default.readdirSync(dir).filter((f) => f.endsWith(".crash") || f.endsWith(".ips"));
+    if (!fs5.existsSync(dir)) continue;
+    const dirFiles = fs5.readdirSync(dir).filter((f) => f.endsWith(".crash") || f.endsWith(".ips"));
     for (const file2 of dirFiles) {
-      const filepath = import_path7.default.join(dir, file2);
+      const filepath = path7.join(dir, file2);
       totalScanned++;
       let content = "";
       try {
-        content = import_fs5.default.readFileSync(filepath, "utf-8");
+        content = fs5.readFileSync(filepath, "utf-8");
       } catch {
       }
       const crashDate = parseCrashDate(content, filepath);
@@ -14981,7 +14969,7 @@ function cleanOldCrashes(beforeDate, dirs, dryRun = false, parentDir, manifest) 
       if (shouldDelete) {
         if (!dryRun) {
           try {
-            import_fs5.default.unlinkSync(filepath);
+            fs5.unlinkSync(filepath);
             entry.deleted = true;
             deletedManifestKeys.push(manifestKey);
           } catch {
@@ -14997,14 +14985,14 @@ function cleanOldCrashes(beforeDate, dirs, dryRun = false, parentDir, manifest) 
     }
   }
   const REPORT_RE = /^report_(\d+)\.json$/;
-  if (parentDir && import_fs5.default.existsSync(parentDir)) {
-    const reportFiles = import_fs5.default.readdirSync(parentDir).filter((f) => REPORT_RE.test(f));
+  if (parentDir && fs5.existsSync(parentDir)) {
+    const reportFiles = fs5.readdirSync(parentDir).filter((f) => REPORT_RE.test(f));
     for (const file2 of reportFiles) {
       const match = REPORT_RE.exec(file2);
       if (!match) continue;
       const ts = parseInt(match[1], 10);
       const fileDate = new Date(ts);
-      const filepath = import_path7.default.join(parentDir, file2);
+      const filepath = path7.join(parentDir, file2);
       totalScanned++;
       const shouldDelete = fileDate < before;
       const entry = {
@@ -15015,7 +15003,7 @@ function cleanOldCrashes(beforeDate, dirs, dryRun = false, parentDir, manifest) 
       if (shouldDelete) {
         if (!dryRun) {
           try {
-            import_fs5.default.unlinkSync(filepath);
+            fs5.unlinkSync(filepath);
             entry.deleted = true;
           } catch {
           }
@@ -15036,8 +15024,8 @@ function cleanOldCrashes(beforeDate, dirs, dryRun = false, parentDir, manifest) 
 }
 
 // src/core/csvExporter.ts
-var import_fs6 = __toESM(require("fs"));
-var import_path8 = __toESM(require("path"));
+import fs6 from "fs";
+import path8 from "path";
 function escapeCsvValue(value) {
   const escaped = value.replace(/"/g, '""');
   return `"${escaped}"`;
@@ -15078,11 +15066,11 @@ function reportToCsvString(report) {
 function exportReportToCsv(report, outputPath) {
   try {
     const csv = reportToCsvString(report);
-    const dir = import_path8.default.dirname(outputPath);
+    const dir = path8.dirname(outputPath);
     if (dir && dir !== ".") {
-      import_fs6.default.mkdirSync(dir, { recursive: true });
+      fs6.mkdirSync(dir, { recursive: true });
     }
-    import_fs6.default.writeFileSync(outputPath, csv, "utf-8");
+    fs6.writeFileSync(outputPath, csv, "utf-8");
     return {
       success: true,
       message: `CSV exported successfully with ${report.crash_groups.length} row(s).`,
@@ -15101,16 +15089,16 @@ function exportReportToCsv(report, outputPath) {
 }
 
 // src/state/fixTracker.ts
-var import_fs7 = __toESM(require("fs"));
-var import_path9 = __toESM(require("path"));
+import fs7 from "fs";
+import path9 from "path";
 var FixTracker = class {
   constructor(parentDir) {
-    this.filePath = import_path9.default.join(parentDir, "StateMaintenance", "fix_status.json");
+    this.filePath = path9.join(parentDir, "StateMaintenance", "fix_status.json");
   }
   load() {
     try {
-      if (import_fs7.default.existsSync(this.filePath)) {
-        const raw = import_fs7.default.readFileSync(this.filePath, "utf-8");
+      if (fs7.existsSync(this.filePath)) {
+        const raw = fs7.readFileSync(this.filePath, "utf-8");
         return JSON.parse(raw);
       }
     } catch {
@@ -15118,8 +15106,8 @@ var FixTracker = class {
     return {};
   }
   save(store) {
-    import_fs7.default.mkdirSync(import_path9.default.dirname(this.filePath), { recursive: true });
-    import_fs7.default.writeFileSync(this.filePath, JSON.stringify(store, null, 2), "utf-8");
+    fs7.mkdirSync(path9.dirname(this.filePath), { recursive: true });
+    fs7.writeFileSync(this.filePath, JSON.stringify(store, null, 2), "utf-8");
   }
   setFixed(signature, fixed, note) {
     const store = this.load();
@@ -15172,11 +15160,11 @@ async function cmdAnalyze(flags) {
   const json2 = JSON.stringify(report, null, 2);
   console.log(json2);
   const reportsDir = getAnalyzedReportsDir(config2);
-  import_fs8.default.mkdirSync(reportsDir, { recursive: true });
+  fs8.mkdirSync(reportsDir, { recursive: true });
   const ts = Date.now();
-  const jsonFile = import_path10.default.join(reportsDir, `jsonReport_${ts}.json`);
-  const csvFile = import_path10.default.join(reportsDir, `sheetReport_${ts}.csv`);
-  import_fs8.default.writeFileSync(jsonFile, json2, "utf-8");
+  const jsonFile = path10.join(reportsDir, `jsonReport_${ts}.json`);
+  const csvFile = path10.join(reportsDir, `sheetReport_${ts}.csv`);
+  fs8.writeFileSync(jsonFile, json2, "utf-8");
   console.log(`JSON report written to ${jsonFile}`);
   const csvResult = exportReportToCsv(report, csvFile);
   if (csvResult.success) {
@@ -15187,8 +15175,8 @@ async function cmdAnalyze(flags) {
 }
 
 // src/core/setup.ts
-var import_fs9 = __toESM(require("fs"));
-var import_path11 = __toESM(require("path"));
+import fs9 from "fs";
+import path11 from "path";
 function setupWorkspace(options = {}) {
   const config2 = getConfig();
   const parentDir = config2.CRASH_ANALYSIS_PARENT;
@@ -15210,8 +15198,8 @@ function setupWorkspace(options = {}) {
     getStateMaintenanceDir(config2)
   ];
   for (const dir of dirsToCreate) {
-    if (!import_fs9.default.existsSync(dir)) {
-      import_fs9.default.mkdirSync(dir, { recursive: true });
+    if (!fs9.existsSync(dir)) {
+      fs9.mkdirSync(dir, { recursive: true });
       created.push(dir);
     }
   }
@@ -15226,28 +15214,28 @@ function setupWorkspace(options = {}) {
     if (!target) continue;
     assertNoTraversal(target);
     assertSafeSymlinkTarget(target);
-    const resolvedTarget = import_path11.default.resolve(target);
-    const linkPath = import_path11.default.join(parentDir, name);
+    const resolvedTarget = path11.resolve(target);
+    const linkPath = path11.join(parentDir, name);
     let status;
-    if (!import_fs9.default.existsSync(resolvedTarget)) {
+    if (!fs9.existsSync(resolvedTarget)) {
       warnings.push(`Target for ${name} does not exist: ${resolvedTarget}`);
     }
     try {
-      import_fs9.default.lstatSync(linkPath);
-      import_fs9.default.rmSync(linkPath, { force: true });
+      fs9.lstatSync(linkPath);
+      fs9.rmSync(linkPath, { force: true });
     } catch {
     }
     let symlinkType = "file";
-    if (import_fs9.default.existsSync(resolvedTarget)) {
-      symlinkType = import_fs9.default.statSync(resolvedTarget).isDirectory() ? "dir" : "file";
+    if (fs9.existsSync(resolvedTarget)) {
+      symlinkType = fs9.statSync(resolvedTarget).isDirectory() ? "dir" : "file";
     } else {
       const lowerTarget = resolvedTarget.toLowerCase();
-      if (lowerTarget.endsWith(".dsym") || lowerTarget.endsWith(".app") || lowerTarget.endsWith(".framework") || !import_path11.default.extname(resolvedTarget)) {
+      if (lowerTarget.endsWith(".dsym") || lowerTarget.endsWith(".app") || lowerTarget.endsWith(".framework") || !path11.extname(resolvedTarget)) {
         symlinkType = "dir";
       }
     }
     try {
-      import_fs9.default.symlinkSync(resolvedTarget, linkPath, symlinkType);
+      fs9.symlinkSync(resolvedTarget, linkPath, symlinkType);
       status = "created";
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -15280,8 +15268,8 @@ function cmdListVersions(flags) {
 }
 
 // src/cli/cmdPipeline.ts
-var import_fs10 = __toESM(require("fs"));
-var import_path12 = __toESM(require("path"));
+import fs10 from "fs";
+import path12 from "path";
 async function cmdPipeline(flags) {
   const config2 = getConfig();
   const inputDir = config2.CRASH_INPUT_DIR ?? config2.CRASH_ANALYSIS_PARENT;
@@ -15333,11 +15321,11 @@ async function cmdPipeline(flags) {
   const fixStatuses = loadFixStatuses(config2.CRASH_ANALYSIS_PARENT);
   const report = analyzeDirectory(symbolicatedDir, fixStatuses, manifest);
   const reportsDir = getAnalyzedReportsDir(config2);
-  import_fs10.default.mkdirSync(reportsDir, { recursive: true });
+  fs10.mkdirSync(reportsDir, { recursive: true });
   const ts = Date.now();
-  const reportFile = import_path12.default.join(reportsDir, `jsonReport_${ts}.json`);
-  const csvFile = import_path12.default.join(reportsDir, `sheetReport_${ts}.csv`);
-  import_fs10.default.writeFileSync(reportFile, JSON.stringify(report, null, 2), "utf-8");
+  const reportFile = path12.join(reportsDir, `jsonReport_${ts}.json`);
+  const csvFile = path12.join(reportsDir, `sheetReport_${ts}.csv`);
+  fs10.writeFileSync(reportFile, JSON.stringify(report, null, 2), "utf-8");
   exportReportToCsv(report, csvFile);
   console.log("\n\u2500\u2500 Analysis \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500");
   console.log(JSON.stringify(report, null, 2));
@@ -15377,11 +15365,11 @@ function cmdClean(flags) {
 }
 
 // src/cli/cmdVerifyDsym.ts
-var import_fs11 = __toESM(require("fs"));
-var import_path13 = __toESM(require("path"));
-var import_child_process2 = require("child_process");
-var import_util4 = require("util");
-var execFileAsync2 = (0, import_util4.promisify)(import_child_process2.execFile);
+import fs11 from "fs";
+import path13 from "path";
+import { execFile as execFile2 } from "child_process";
+import { promisify as promisify2 } from "util";
+var execFileAsync2 = promisify2(execFile2);
 async function cmdVerifyDsym(flags) {
   const config2 = getConfig();
   const flagDsym = flags["dsym"];
@@ -15403,22 +15391,22 @@ async function cmdVerifyDsym(flags) {
   } else if (config2.DSYM_PATH) {
     dsymPath = config2.DSYM_PATH;
   } else {
-    const symlinkPath = import_path13.default.join(config2.CRASH_ANALYSIS_PARENT, "dSYM_File");
+    const symlinkPath = path13.join(config2.CRASH_ANALYSIS_PARENT, "dSYM_File");
     try {
-      dsymPath = import_fs11.default.realpathSync(symlinkPath);
+      dsymPath = fs11.realpathSync(symlinkPath);
     } catch {
       console.error("Error: No dSYM path available. Provide --dsym, set DSYM_PATH env var, or run setup to create the dSYM_File symlink in CRASH_ANALYSIS_PARENT.");
       process.exit(1);
     }
   }
   assertNoTraversal(dsymPath);
-  if (!import_fs11.default.existsSync(dsymPath)) {
+  if (!fs11.existsSync(dsymPath)) {
     console.error(`Error: dSYM not found at: ${dsymPath}`);
     process.exit(1);
   }
   let resolvedDsymPath;
   try {
-    resolvedDsymPath = import_fs11.default.realpathSync(dsymPath);
+    resolvedDsymPath = fs11.realpathSync(dsymPath);
   } catch {
     resolvedDsymPath = dsymPath;
   }
@@ -15444,8 +15432,8 @@ async function cmdVerifyDsym(flags) {
       crashFiles.push(crashPath);
     }
     if (crashDir) {
-      if (import_fs11.default.existsSync(crashDir)) {
-        import_fs11.default.readdirSync(crashDir).filter((f) => f.endsWith(".crash") || f.endsWith(".ips")).forEach((f) => crashFiles.push(import_path13.default.join(crashDir, f)));
+      if (fs11.existsSync(crashDir)) {
+        fs11.readdirSync(crashDir).filter((f) => f.endsWith(".crash") || f.endsWith(".ips")).forEach((f) => crashFiles.push(path13.join(crashDir, f)));
       }
     }
   } else {
@@ -15455,8 +15443,8 @@ async function cmdVerifyDsym(flags) {
       getOtherCrashesDir(config2)
     ];
     for (const dir of dirs) {
-      if (import_fs11.default.existsSync(dir)) {
-        import_fs11.default.readdirSync(dir).filter((f) => f.endsWith(".crash") || f.endsWith(".ips")).forEach((f) => crashFiles.push(import_path13.default.join(dir, f)));
+      if (fs11.existsSync(dir)) {
+        fs11.readdirSync(dir).filter((f) => f.endsWith(".crash") || f.endsWith(".ips")).forEach((f) => crashFiles.push(path13.join(dir, f)));
       }
     }
   }
@@ -15469,7 +15457,7 @@ async function cmdVerifyDsym(flags) {
   for (const cf of crashFiles) {
     let content = "";
     try {
-      content = import_fs11.default.readFileSync(cf, "utf-8");
+      content = fs11.readFileSync(cf, "utf-8");
     } catch {
       continue;
     }
@@ -15481,7 +15469,7 @@ async function cmdVerifyDsym(flags) {
       const uuid3 = `${raw.slice(0, 8)}-${raw.slice(8, 12)}-${raw.slice(12, 16)}-${raw.slice(16, 20)}-${raw.slice(20)}`;
       if (!seen.has(uuid3)) {
         seen.add(uuid3);
-        crashFileUuids.push({ file: import_path13.default.basename(cf), uuid: uuid3 });
+        crashFileUuids.push({ file: path13.basename(cf), uuid: uuid3 });
       }
     }
   }
@@ -15625,8 +15613,7 @@ Environment variables: see .env.example
     process.exit(1);
   }
 })();
-// Annotate the CommonJS export names for ESM import in node:
-0 && (module.exports = {
+export {
   cmdAnalyze,
   cmdBatch,
   cmdClean,
@@ -15637,4 +15624,4 @@ Environment variables: see .env.example
   cmdSetup,
   cmdVerifyDsym,
   parseFlags
-});
+};
