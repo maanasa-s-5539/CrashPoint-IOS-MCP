@@ -4,7 +4,7 @@
   "description": "Standalone MCP server for iOS/macOS crash log export, symbolication, analysis & CSV reporting.",
   "license": "MIT",
   "scripts": {
-    "build": "tsc --declaration --emitDeclarationOnly --outDir dist && esbuild src/core-server.ts --bundle --platform=node --target=node18 --format=esm --outfile=dist/core-server.js && esbuild src/cli/index.ts --bundle --platform=node --target=node18 --format=esm --outfile=dist/cli.js && esbuild src/index.ts --bundle --platform=node --target=node18 --format=esm --outfile=dist/index.js",
+    "build": "tsc --declaration --emitDeclarationOnly --outDir dist && esbuild src/core-server.ts --bundle --platform=node --target=node18 --format=esm --outfile=dist/core-server.js --banner:js=\"import { fileURLToPath as _fUTP } from 'url'; import { dirname as _dn } from 'path'; const __dirname = _dn(_fUTP(import.meta.url)); const __filename = _fUTP(import.meta.url);\" --external:dotenv --external:fs --external:path --external:os --external:crypto --external:child_process --external:url --external:stream --external:events --external:util --external:net --external:tls --external:http --external:https --external:assert --external:buffer --external:string_decoder --external:readline --external:tty --external:worker_threads --external:module && esbuild src/cli/index.ts --bundle --platform=node --target=node18 --format=esm --outfile=dist/cli.js --banner:js=\"import { fileURLToPath as _fUTP } from 'url'; import { dirname as _dn } from 'path'; const __dirname = _dn(_fUTP(import.meta.url)); const __filename = _fUTP(import.meta.url);\" --external:dotenv --external:fs --external:path --external:os --external:crypto --external:child_process --external:url --external:stream --external:events --external:util --external:net --external:tls --external:http --external:https --external:assert --external:buffer --external:string_decoder --external:readline --external:tty --external:worker_threads --external:module && esbuild src/index.ts --bundle --platform=node --target=node18 --format=esm --outfile=dist/index.js --banner:js=\"import { fileURLToPath as _fUTP } from 'url'; import { dirname as _dn } from 'path'; const __dirname = _dn(_fUTP(import.meta.url)); const __filename = _fUTP(import.meta.url);\" --external:dotenv --external:fs --external:path --external:os --external:crypto --external:child_process --external:url --external:stream --external:events --external:util --external:net --external:tls --external:http --external:https --external:assert --external:buffer --external:string_decoder --external:readline --external:tty --external:worker_threads --external:module",
     "typecheck": "tsc --noEmit",
     "prepare": "npm run build"
   },
@@ -18,6 +18,7 @@
     "esbuild": "^0.27.4",
     "typescript": "^6.0.2"
   },
+  "type": "module",
   "engines": {
     "node": ">=18.0.0"
   },
