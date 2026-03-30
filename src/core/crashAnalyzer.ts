@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { ProcessedManifest, extractIncidentId } from "../state/processedManifest.js";
+import { validateDateInput } from "../dateValidation.js";
 
 export interface CrashedThread {
   id: number;
@@ -263,7 +264,7 @@ function parseCrashDate(content: string, filePath: string): Date {
 }
 
 export function cleanOldCrashes(beforeDate: string, dirs: string[], dryRun = false, parentDir?: string, manifest?: ProcessedManifest): CleanResult {
-  const before = new Date(beforeDate);
+  const before = validateDateInput(beforeDate, "--before-date");
   const files: CleanFileEntry[] = [];
   let deleted = 0;
   let skipped = 0;
