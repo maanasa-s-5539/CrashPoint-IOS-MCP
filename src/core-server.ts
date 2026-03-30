@@ -23,6 +23,7 @@ import { FixTracker, loadFixStatuses } from "./state/fixTracker.js";
 import { assertPathUnderBase, assertNoTraversal } from "./pathSafety.js";
 import { exportReportToCsv } from "./core/csvExporter.js";
 import { ProcessedManifest } from "./state/processedManifest.js";
+import { validateDateInput } from "./dateValidation.js";
 import { setupWorkspace } from "./core/setup.js";
 
 const execFileAsync = promisify(execFile);
@@ -134,6 +135,21 @@ server.registerTool(
     const recursive = input.recursive ?? false;
     const dryRun = input.dryRun ?? false;
     const manifest = dryRun || input.includeProcessedCrashes ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT);
+
+    if (input.startDate !== undefined) {
+      try {
+        validateDateInput(input.startDate, "startDate");
+      } catch (err) {
+        return { content: [{ type: "text" as const, text: (err as Error).message }] };
+      }
+    }
+    if (input.endDate !== undefined) {
+      try {
+        validateDateInput(input.endDate, "endDate");
+      } catch (err) {
+        return { content: [{ type: "text" as const, text: (err as Error).message }] };
+      }
+    }
 
     const result = exportCrashLogs(inputDir, outputDir, versions, recursive, dryRun, input.startDate, input.endDate, manifest);
     return {
@@ -626,6 +642,21 @@ server.registerTool(
       input.versions?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
     const manifest = input.includeProcessedCrashes ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT);
 
+    if (input.startDate !== undefined) {
+      try {
+        validateDateInput(input.startDate, "startDate");
+      } catch (err) {
+        return { content: [{ type: "text" as const, text: (err as Error).message }] };
+      }
+    }
+    if (input.endDate !== undefined) {
+      try {
+        validateDateInput(input.endDate, "endDate");
+      } catch (err) {
+        return { content: [{ type: "text" as const, text: (err as Error).message }] };
+      }
+    }
+
     // Step 1: Export
     const exportResult = exportCrashLogs(inputDir, basicDir, versions, false, false, input.startDate, input.endDate, manifest);
 
@@ -704,6 +735,12 @@ server.registerTool(
   async (input) => {
     const config = getConfig();
     const dryRun = input.dryRun ?? false;
+
+    try {
+      validateDateInput(input.beforeDate, "beforeDate");
+    } catch (err) {
+      return { content: [{ type: "text" as const, text: (err as Error).message }] };
+    }
 
     const dirs = [
       getXcodeCrashesDir(config),

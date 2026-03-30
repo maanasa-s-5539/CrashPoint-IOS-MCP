@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { ProcessedManifest, extractIncidentId } from "../state/processedManifest.js";
+import { validateDateInput } from "../dateValidation.js";
 
 export interface ExportEntry {
   source: string;
@@ -156,6 +157,12 @@ export function exportCrashLogs(
   endDate?: string,
   manifest?: ProcessedManifest
 ): ExportResult {
+  if (startDate !== undefined) {
+    validateDateInput(startDate, "--start-date");
+  }
+  if (endDate !== undefined) {
+    validateDateInput(endDate, "--end-date");
+  }
   const result: ExportResult = { exported: 0, skipped: 0, errors: [], files: [] };
   if (dryRun) {
     result.canBeExported = 0;

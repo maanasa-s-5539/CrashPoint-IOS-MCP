@@ -7,6 +7,7 @@ import { analyzeDirectory } from "../core/crashAnalyzer.js";
 import { loadFixStatuses } from "../state/fixTracker.js";
 import { ProcessedManifest } from "../state/processedManifest.js";
 import { exportReportToCsv } from "../core/csvExporter.js";
+import { validateDateInput } from "../dateValidation.js";
 
 export async function cmdPipeline(flags: Record<string, string | boolean>): Promise<void> {
   const config = getConfig();
@@ -21,6 +22,23 @@ export async function cmdPipeline(flags: Record<string, string | boolean>): Prom
     : (config.CRASH_VERSIONS?.split(",").map((v) => v.trim()).filter(Boolean) ?? []);
   const startDate = flags["start-date"] as string | undefined;
   const endDate = flags["end-date"] as string | undefined;
+
+  if (startDate !== undefined) {
+    try {
+      validateDateInput(startDate, "--start-date");
+    } catch (err) {
+      console.error(`Error: ${(err as Error).message}`);
+      process.exit(1);
+    }
+  }
+  if (endDate !== undefined) {
+    try {
+      validateDateInput(endDate, "--end-date");
+    } catch (err) {
+      console.error(`Error: ${(err as Error).message}`);
+      process.exit(1);
+    }
+  }
 
   // Step 1: export
   const exportResult = exportCrashLogs(inputDir, basicDir, versions, false, false, startDate, endDate, manifest);

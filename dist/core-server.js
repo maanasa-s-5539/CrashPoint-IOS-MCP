@@ -30624,6 +30624,17 @@ var ProcessedManifest = class {
   }
 };
 
+// src/dateValidation.ts
+function validateDateInput(dateString, paramName) {
+  const parsed = new Date(dateString);
+  if (isNaN(parsed.getTime())) {
+    throw new Error(
+      `Invalid date for ${paramName}: "${dateString}". Please use ISO format (YYYY-MM-DD), e.g. 2026-03-01`
+    );
+  }
+  return parsed;
+}
+
 // src/core/crashExporter.ts
 var VERSION_REGEX = /^Version:\s+(.+)/;
 var DATE_TIME_REGEX = /^Date\/Time:\s+(.+)/;
@@ -30720,6 +30731,12 @@ function _findXccrashpoints(dir, recursive) {
   return results;
 }
 function exportCrashLogs(inputDir, outputDir, versions = [], recursive = false, dryRun = false, startDate, endDate, manifest) {
+  if (startDate !== void 0) {
+    validateDateInput(startDate, "--start-date");
+  }
+  if (endDate !== void 0) {
+    validateDateInput(endDate, "--end-date");
+  }
   const result = { exported: 0, skipped: 0, errors: [], files: [] };
   if (dryRun) {
     result.canBeExported = 0;
@@ -31093,7 +31110,7 @@ function parseCrashDate(content, filePath) {
   return import_fs5.default.statSync(filePath).mtime;
 }
 function cleanOldCrashes(beforeDate, dirs, dryRun = false, parentDir, manifest) {
-  const before = new Date(beforeDate);
+  const before = validateDateInput(beforeDate, "--before-date");
   const files = [];
   let deleted = 0;
   let skipped = 0;
@@ -31303,22 +31320,6 @@ function reportToCsvString(report) {
   const rows = report.crash_groups.map((group) => buildCsvRow(group));
   return [CSV_HEADER, ...rows].join("\n") + "\n";
 }
-function exportReportToSheetJson(report, outputPath) {
-  const rows = report.crash_groups.map((group) => ({
-    issueName: `[Crash] ${group.exception_type} \u2014 ${group.crashed_thread.display} (${group.count} occurrences)`,
-    numberOfOccurrences: group.count,
-    appVersion: formatAppVersions(group.app_versions),
-    fixStatus: mapFixStatusLabel(group),
-    signature: group.signature,
-    iosDevices: formatDevices(group.devices),
-    iosVersionNumbers: formatIosVersions(group.ios_versions)
-  }));
-  const dir = import_path8.default.dirname(outputPath);
-  if (dir && dir !== ".") {
-    import_fs7.default.mkdirSync(dir, { recursive: true });
-  }
-  import_fs7.default.writeFileSync(outputPath, JSON.stringify(rows, null, 2), "utf-8");
-}
 function exportReportToCsv(report, outputPath) {
   try {
     const csv = reportToCsvString(report);
@@ -31517,6 +31518,20 @@ server.registerTool(
     const recursive = input.recursive ?? false;
     const dryRun = input.dryRun ?? false;
     const manifest = dryRun || input.includeProcessedCrashes ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT);
+    if (input.startDate !== void 0) {
+      try {
+        validateDateInput(input.startDate, "startDate");
+      } catch (err) {
+        return { content: [{ type: "text", text: err.message }] };
+      }
+    }
+    if (input.endDate !== void 0) {
+      try {
+        validateDateInput(input.endDate, "endDate");
+      } catch (err) {
+        return { content: [{ type: "text", text: err.message }] };
+      }
+    }
     const result = exportCrashLogs(inputDir, outputDir, versions, recursive, dryRun, input.startDate, input.endDate, manifest);
     return {
       content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
@@ -31842,10 +31857,8 @@ server.registerTool(
     const ts = Date.now();
     const jsonReportPath = import_path10.default.join(reportsDir, `jsonReport_${ts}.json`);
     const csvReportPath = import_path10.default.join(reportsDir, `sheetReport_${ts}.csv`);
-    const sheetJsonPath = import_path10.default.join(reportsDir, `sheetReport_${ts}.json`);
     import_fs9.default.writeFileSync(jsonReportPath, JSON.stringify(report, null, 2), "utf-8");
     const csvExport = exportReportToCsv(report, csvReportPath);
-    exportReportToSheetJson(report, sheetJsonPath);
     const result = {
       ...report,
       json_report_path: jsonReportPath,
@@ -31953,6 +31966,20 @@ server.registerTool(
     const symbolicatedDir = getSymbolicatedDir(config2);
     const versions = input.versions?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
     const manifest = input.includeProcessedCrashes ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT);
+    if (input.startDate !== void 0) {
+      try {
+        validateDateInput(input.startDate, "startDate");
+      } catch (err) {
+        return { content: [{ type: "text", text: err.message }] };
+      }
+    }
+    if (input.endDate !== void 0) {
+      try {
+        validateDateInput(input.endDate, "endDate");
+      } catch (err) {
+        return { content: [{ type: "text", text: err.message }] };
+      }
+    }
     const exportResult = exportCrashLogs(inputDir, basicDir, versions, false, false, input.startDate, input.endDate, manifest);
     const dsymPath = config2.DSYM_PATH;
     let symbolicationResult = { skipped: true, reason: "DSYM_PATH not configured" };
@@ -31975,12 +32002,10 @@ server.registerTool(
     const ts = Date.now();
     const reportFile = import_path10.default.join(reportsDir, `jsonReport_${ts}.json`);
     const csvFile = import_path10.default.join(reportsDir, `sheetReport_${ts}.csv`);
-    const sheetJsonFile = import_path10.default.join(reportsDir, `sheetReport_${ts}.json`);
     try {
       import_fs9.default.mkdirSync(reportsDir, { recursive: true });
       import_fs9.default.writeFileSync(reportFile, JSON.stringify(analysisReport, null, 2), "utf-8");
       exportReportToCsv(analysisReport, csvFile);
-      exportReportToSheetJson(analysisReport, sheetJsonFile);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`Warning: failed to save report to ${reportFile}: ${msg}`);
@@ -32020,6 +32045,11 @@ server.registerTool(
   async (input) => {
     const config2 = getConfig();
     const dryRun = input.dryRun ?? false;
+    try {
+      validateDateInput(input.beforeDate, "beforeDate");
+    } catch (err) {
+      return { content: [{ type: "text", text: err.message }] };
+    }
     const dirs = [
       getXcodeCrashesDir(config2),
       getAppticsCrashesDir(config2),

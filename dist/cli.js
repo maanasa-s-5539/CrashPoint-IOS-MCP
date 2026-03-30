@@ -14362,6 +14362,17 @@ var ProcessedManifest = class {
   }
 };
 
+// src/dateValidation.ts
+function validateDateInput(dateString, paramName) {
+  const parsed = new Date(dateString);
+  if (isNaN(parsed.getTime())) {
+    throw new Error(
+      `Invalid date for ${paramName}: "${dateString}". Please use ISO format (YYYY-MM-DD), e.g. 2026-03-01`
+    );
+  }
+  return parsed;
+}
+
 // src/core/crashExporter.ts
 var VERSION_REGEX = /^Version:\s+(.+)/;
 var DATE_TIME_REGEX = /^Date\/Time:\s+(.+)/;
@@ -14458,6 +14469,12 @@ function _findXccrashpoints(dir, recursive) {
   return results;
 }
 function exportCrashLogs(inputDir, outputDir, versions = [], recursive = false, dryRun = false, startDate, endDate, manifest) {
+  if (startDate !== void 0) {
+    validateDateInput(startDate, "--start-date");
+  }
+  if (endDate !== void 0) {
+    validateDateInput(endDate, "--end-date");
+  }
   const result = { exported: 0, skipped: 0, errors: [], files: [] };
   if (dryRun) {
     result.canBeExported = 0;
@@ -14587,6 +14604,22 @@ async function cmdExport(flags) {
   const versions = config2.CRASH_VERSIONS?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
   const startDate = flags["start-date"];
   const endDate = flags["end-date"];
+  if (startDate !== void 0) {
+    try {
+      validateDateInput(startDate, "--start-date");
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  }
+  if (endDate !== void 0) {
+    try {
+      validateDateInput(endDate, "--end-date");
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  }
   const dryRun = flags["dry-run"] === true;
   const includeProcessed = flags["include-processed"] === true;
   const manifest = dryRun || includeProcessed ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT);
@@ -14919,7 +14952,7 @@ function parseCrashDate(content, filePath) {
   return import_fs5.default.statSync(filePath).mtime;
 }
 function cleanOldCrashes(beforeDate, dirs, dryRun = false, parentDir, manifest) {
-  const before = new Date(beforeDate);
+  const before = validateDateInput(beforeDate, "--before-date");
   const files = [];
   let deleted = 0;
   let skipped = 0;
@@ -15041,22 +15074,6 @@ var CSV_HEADER = ["Issue Name", "Number of Occurrences", "App Version", "Fix Sta
 function reportToCsvString(report) {
   const rows = report.crash_groups.map((group) => buildCsvRow(group));
   return [CSV_HEADER, ...rows].join("\n") + "\n";
-}
-function exportReportToSheetJson(report, outputPath) {
-  const rows = report.crash_groups.map((group) => ({
-    issueName: `[Crash] ${group.exception_type} \u2014 ${group.crashed_thread.display} (${group.count} occurrences)`,
-    numberOfOccurrences: group.count,
-    appVersion: formatAppVersions(group.app_versions),
-    fixStatus: mapFixStatusLabel(group),
-    signature: group.signature,
-    iosDevices: formatDevices(group.devices),
-    iosVersionNumbers: formatIosVersions(group.ios_versions)
-  }));
-  const dir = import_path8.default.dirname(outputPath);
-  if (dir && dir !== ".") {
-    import_fs6.default.mkdirSync(dir, { recursive: true });
-  }
-  import_fs6.default.writeFileSync(outputPath, JSON.stringify(rows, null, 2), "utf-8");
 }
 function exportReportToCsv(report, outputPath) {
   try {
@@ -15276,6 +15293,22 @@ async function cmdPipeline(flags) {
   const versions = flags["versions"] ? flags["versions"].split(",").map((v) => v.trim()).filter(Boolean) : config2.CRASH_VERSIONS?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
   const startDate = flags["start-date"];
   const endDate = flags["end-date"];
+  if (startDate !== void 0) {
+    try {
+      validateDateInput(startDate, "--start-date");
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  }
+  if (endDate !== void 0) {
+    try {
+      validateDateInput(endDate, "--end-date");
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  }
   const exportResult = exportCrashLogs(inputDir, basicDir, versions, false, false, startDate, endDate, manifest);
   console.log("\n\u2500\u2500 Export \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500");
   console.log(JSON.stringify(exportResult, null, 2));
@@ -15304,15 +15337,12 @@ async function cmdPipeline(flags) {
   const ts = Date.now();
   const reportFile = import_path12.default.join(reportsDir, `jsonReport_${ts}.json`);
   const csvFile = import_path12.default.join(reportsDir, `sheetReport_${ts}.csv`);
-  const sheetJsonFile = import_path12.default.join(reportsDir, `sheetReport_${ts}.json`);
   import_fs10.default.writeFileSync(reportFile, JSON.stringify(report, null, 2), "utf-8");
   exportReportToCsv(report, csvFile);
-  exportReportToSheetJson(report, sheetJsonFile);
   console.log("\n\u2500\u2500 Analysis \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500");
   console.log(JSON.stringify(report, null, 2));
   console.log(`JSON report saved to: ${reportFile}`);
   console.log(`CSV report saved to: ${csvFile}`);
-  console.log(`Sheet JSON report saved to: ${sheetJsonFile}`);
 }
 
 // src/cli/cmdClean.ts
@@ -15320,6 +15350,12 @@ function cmdClean(flags) {
   const beforeDate = flags["before-date"];
   if (!beforeDate) {
     console.error("Error: --before-date <ISO date> is required for clean command.");
+    process.exit(1);
+  }
+  try {
+    validateDateInput(beforeDate, "--before-date");
+  } catch (err) {
+    console.error(`Error: ${err.message}`);
     process.exit(1);
   }
   const dryRun = flags["dry-run"] === true;

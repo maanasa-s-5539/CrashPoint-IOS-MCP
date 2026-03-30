@@ -1,11 +1,18 @@
 import { getConfig, getXcodeCrashesDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir } from "../config.js";
 import { cleanOldCrashes } from "../core/crashAnalyzer.js";
 import { ProcessedManifest } from "../state/processedManifest.js";
+import { validateDateInput } from "../dateValidation.js";
 
 export function cmdClean(flags: Record<string, string | boolean>): void {
   const beforeDate = flags["before-date"] as string;
   if (!beforeDate) {
     console.error("Error: --before-date <ISO date> is required for clean command.");
+    process.exit(1);
+  }
+  try {
+    validateDateInput(beforeDate, "--before-date");
+  } catch (err) {
+    console.error(`Error: ${(err as Error).message}`);
     process.exit(1);
   }
   const dryRun = flags["dry-run"] === true;
