@@ -4,7 +4,7 @@
   "description": "Standalone MCP server for iOS/macOS crash log export, symbolication, analysis & CSV reporting.",
   "license": "MIT",
   "scripts": {
-    "build": "tsc --declaration --emitDeclarationOnly --outDir dist && esbuild src/core-server.ts --bundle --platform=node --target=node18 --outfile=dist/core-server.js && esbuild src/cli/index.ts --bundle --platform=node --target=node18 --outfile=dist/cli.js",
+    "build": "tsc --declaration --emitDeclarationOnly --outDir dist && esbuild src/core-server.ts --bundle --platform=node --target=node18 --format=esm --outfile=dist/core-server.js && esbuild src/cli/index.ts --bundle --platform=node --target=node18 --format=esm --outfile=dist/cli.js && esbuild src/index.ts --bundle --platform=node --target=node18 --format=esm --outfile=dist/index.js",
     "typecheck": "tsc --noEmit",
     "prepare": "npm run build"
   },
@@ -21,11 +21,11 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "main": "dist/core-server.js",
+  "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/core-server.js",
+      "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
     "./core/crashAnalyzer": {
