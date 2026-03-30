@@ -31273,6 +31273,12 @@ function escapeCsvValue(value) {
 function formatAppVersions(appVersions) {
   return Object.entries(appVersions).sort(([, a], [, b]) => b - a).map(([ver, count]) => `${ver} (${count})`).join(", ");
 }
+function formatDevices(devices) {
+  return Object.entries(devices).sort(([, a], [, b]) => b - a).map(([device, count]) => `${device} (${count})`).join(", ");
+}
+function formatIosVersions(iosVersions) {
+  return Object.entries(iosVersions).sort(([, a], [, b]) => b - a).map(([ver, count]) => `${ver} (${count})`).join(", ");
+}
 function mapFixStatusLabel(group) {
   if (!group.fix_status || group.fix_status.fixed === false) {
     return "Not Fixed";
@@ -31287,12 +31293,31 @@ function buildCsvRow(group) {
   const occurrences = String(group.count);
   const appVersion = formatAppVersions(group.app_versions);
   const fixStatus = mapFixStatusLabel(group);
-  return [title, occurrences, appVersion, fixStatus].map(escapeCsvValue).join(",");
+  const signature = group.signature;
+  const devices = formatDevices(group.devices);
+  const iosVersions = formatIosVersions(group.ios_versions);
+  return [title, occurrences, appVersion, fixStatus, signature, devices, iosVersions].map(escapeCsvValue).join(",");
 }
-var CSV_HEADER = ["Issue Name", "Number of Occurrences", "App Version", "Fix Status"].map(escapeCsvValue).join(",");
+var CSV_HEADER = ["Issue Name", "Number of Occurrences", "App Version", "Fix Status", "Signature", "iOS Devices", "iOS Version Numbers"].map(escapeCsvValue).join(",");
 function reportToCsvString(report) {
   const rows = report.crash_groups.map((group) => buildCsvRow(group));
   return [CSV_HEADER, ...rows].join("\n") + "\n";
+}
+function exportReportToSheetJson(report, outputPath) {
+  const rows = report.crash_groups.map((group) => ({
+    issueName: `[Crash] ${group.exception_type} \u2014 ${group.crashed_thread.display} (${group.count} occurrences)`,
+    numberOfOccurrences: group.count,
+    appVersion: formatAppVersions(group.app_versions),
+    fixStatus: mapFixStatusLabel(group),
+    signature: group.signature,
+    iosDevices: formatDevices(group.devices),
+    iosVersionNumbers: formatIosVersions(group.ios_versions)
+  }));
+  const dir = import_path8.default.dirname(outputPath);
+  if (dir && dir !== ".") {
+    import_fs7.default.mkdirSync(dir, { recursive: true });
+  }
+  import_fs7.default.writeFileSync(outputPath, JSON.stringify(rows, null, 2), "utf-8");
 }
 function exportReportToCsv(report, outputPath) {
   try {
@@ -31817,8 +31842,10 @@ server.registerTool(
     const ts = Date.now();
     const jsonReportPath = import_path10.default.join(reportsDir, `jsonReport_${ts}.json`);
     const csvReportPath = import_path10.default.join(reportsDir, `sheetReport_${ts}.csv`);
+    const sheetJsonPath = import_path10.default.join(reportsDir, `sheetReport_${ts}.json`);
     import_fs9.default.writeFileSync(jsonReportPath, JSON.stringify(report, null, 2), "utf-8");
     const csvExport = exportReportToCsv(report, csvReportPath);
+    exportReportToSheetJson(report, sheetJsonPath);
     const result = {
       ...report,
       json_report_path: jsonReportPath,
@@ -31948,10 +31975,12 @@ server.registerTool(
     const ts = Date.now();
     const reportFile = import_path10.default.join(reportsDir, `jsonReport_${ts}.json`);
     const csvFile = import_path10.default.join(reportsDir, `sheetReport_${ts}.csv`);
+    const sheetJsonFile = import_path10.default.join(reportsDir, `sheetReport_${ts}.json`);
     try {
       import_fs9.default.mkdirSync(reportsDir, { recursive: true });
       import_fs9.default.writeFileSync(reportFile, JSON.stringify(analysisReport, null, 2), "utf-8");
       exportReportToCsv(analysisReport, csvFile);
+      exportReportToSheetJson(analysisReport, sheetJsonFile);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`Warning: failed to save report to ${reportFile}: ${msg}`);

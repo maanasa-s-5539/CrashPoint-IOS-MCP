@@ -10,6 +10,12 @@ export interface CsvExportResult {
  */
 export declare function reportToCsvString(report: CrashReport): string;
 /**
+ * Export the crash analysis report as a sheet-friendly JSON file.
+ * Each entry is an object with the same columns as the CSV report.
+ * Throws on filesystem errors.
+ */
+export declare function exportReportToSheetJson(report: CrashReport, outputPath: string): void;
+/**
  * Export the crash analysis report as a CSV file.
  * Returns a result object describing success/failure, the file path, and total rows written.
  */

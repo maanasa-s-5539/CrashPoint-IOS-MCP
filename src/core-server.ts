@@ -21,7 +21,7 @@ import {
 import { analyzeDirectory, cleanOldCrashes } from "./core/crashAnalyzer.js";
 import { FixTracker, loadFixStatuses } from "./state/fixTracker.js";
 import { assertPathUnderBase, assertNoTraversal } from "./pathSafety.js";
-import { exportReportToCsv } from "./core/csvExporter.js";
+import { exportReportToCsv, exportReportToSheetJson } from "./core/csvExporter.js";
 import { ProcessedManifest } from "./state/processedManifest.js";
 import { setupWorkspace } from "./core/setup.js";
 
@@ -503,9 +503,11 @@ server.registerTool(
     const ts = Date.now();
     const jsonReportPath = path.join(reportsDir, `jsonReport_${ts}.json`);
     const csvReportPath = path.join(reportsDir, `sheetReport_${ts}.csv`);
+    const sheetJsonPath = path.join(reportsDir, `sheetReport_${ts}.json`);
 
     fs.writeFileSync(jsonReportPath, JSON.stringify(report, null, 2), "utf-8");
     const csvExport = exportReportToCsv(report, csvReportPath);
+    exportReportToSheetJson(report, sheetJsonPath);
 
     const result = {
       ...report,
@@ -657,10 +659,12 @@ server.registerTool(
     const ts = Date.now();
     const reportFile = path.join(reportsDir, `jsonReport_${ts}.json`);
     const csvFile = path.join(reportsDir, `sheetReport_${ts}.csv`);
+    const sheetJsonFile = path.join(reportsDir, `sheetReport_${ts}.json`);
     try {
       fs.mkdirSync(reportsDir, { recursive: true });
       fs.writeFileSync(reportFile, JSON.stringify(analysisReport, null, 2), "utf-8");
       exportReportToCsv(analysisReport, csvFile);
+      exportReportToSheetJson(analysisReport, sheetJsonFile);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`Warning: failed to save report to ${reportFile}: ${msg}`);

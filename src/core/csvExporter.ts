@@ -27,6 +27,22 @@ function formatAppVersions(appVersions: Record<string, number>): string {
     .join(", ");
 }
 
+/** Format devices record as "device (count), ..." sorted descending by count. */
+function formatDevices(devices: Record<string, number>): string {
+  return Object.entries(devices)
+    .sort(([, a], [, b]) => b - a)
+    .map(([device, count]) => `${device} (${count})`)
+    .join(", ");
+}
+
+/** Format ios_versions record as "version (count), ..." sorted descending by count. */
+function formatIosVersions(iosVersions: Record<string, number>): string {
+  return Object.entries(iosVersions)
+    .sort(([, a], [, b]) => b - a)
+    .map(([ver, count]) => `${ver} (${count})`)
+    .join(", ");
+}
+
 /** Map fix_status to a human-readable label: Fixed, Not Fixed, or Partially Fixed. */
 function mapFixStatusLabel(group: CrashGroup): string {
   if (!group.fix_status || group.fix_status.fixed === false) {
@@ -45,15 +61,18 @@ function buildCsvRow(group: CrashGroup): string {
   const occurrences = String(group.count);
   const appVersion = formatAppVersions(group.app_versions);
   const fixStatus = mapFixStatusLabel(group);
+  const signature = group.signature;
+  const devices = formatDevices(group.devices);
+  const iosVersions = formatIosVersions(group.ios_versions);
 
-  return [title, occurrences, appVersion, fixStatus]
+  return [title, occurrences, appVersion, fixStatus, signature, devices, iosVersions]
     .map(escapeCsvValue)
     .join(",");
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-const CSV_HEADER = ["Issue Name", "Number of Occurrences", "App Version", "Fix Status"]
+const CSV_HEADER = ["Issue Name", "Number of Occurrences", "App Version", "Fix Status", "Signature", "iOS Devices", "iOS Version Numbers"]
   .map(escapeCsvValue)
   .join(",");
 
@@ -63,6 +82,31 @@ const CSV_HEADER = ["Issue Name", "Number of Occurrences", "App Version", "Fix S
 export function reportToCsvString(report: CrashReport): string {
   const rows = report.crash_groups.map((group) => buildCsvRow(group));
   return [CSV_HEADER, ...rows].join("\n") + "\n";
+}
+
+/**
+ * Export the crash analysis report as a sheet-friendly JSON file.
+ * Each entry is an object with the same columns as the CSV report.
+ * Throws on filesystem errors.
+ */
+export function exportReportToSheetJson(
+  report: CrashReport,
+  outputPath: string
+): void {
+  const rows = report.crash_groups.map((group) => ({
+    issueName: `[Crash] ${group.exception_type} — ${group.crashed_thread.display} (${group.count} occurrences)`,
+    numberOfOccurrences: group.count,
+    appVersion: formatAppVersions(group.app_versions),
+    fixStatus: mapFixStatusLabel(group),
+    signature: group.signature,
+    iosDevices: formatDevices(group.devices),
+    iosVersionNumbers: formatIosVersions(group.ios_versions),
+  }));
+  const dir = path.dirname(outputPath);
+  if (dir && dir !== ".") {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  fs.writeFileSync(outputPath, JSON.stringify(rows, null, 2), "utf-8");
 }
 
 /**
