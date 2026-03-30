@@ -9,7 +9,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # TypeScript build output
-dist/
+# dist/
 
 # Environment files (contain secrets)
 .env
