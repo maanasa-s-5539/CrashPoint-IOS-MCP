@@ -10,7 +10,7 @@ export async function cmdAnalyze(flags: Record<string, string | boolean>): Promi
   const config = getConfig();
   const crashDir = getSymbolicatedDir(config);
   const includeProcessed = flags["include-processed"] === true;
-  const manifest = includeProcessed ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT);
+  const manifest = includeProcessed ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "analyze");
 
   const fixStatuses = loadFixStatuses(config.CRASH_ANALYSIS_PARENT);
   const report = analyzeDirectory(crashDir, fixStatuses, manifest);

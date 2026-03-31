@@ -24,29 +24,48 @@ export function extractIncidentId(filePath: string): string | null {
   return null;
 }
 
+export type ManifestStage = "export" | "symbolicate" | "analyze";
+
 interface ManifestEntry {
   processedAt: string;
 }
 
 interface ManifestData {
-  entries: Record<string, ManifestEntry>;
+  export_entries: Record<string, ManifestEntry>;
+  symbolicate_entries: Record<string, ManifestEntry>;
+  analyze_entries: Record<string, ManifestEntry>;
+}
+
+function emptyManifestData(): ManifestData {
+  return { export_entries: {}, symbolicate_entries: {}, analyze_entries: {} };
 }
 
 export class ProcessedManifest {
   private manifestPath: string;
   private data: ManifestData | null = null;
+  private stage: ManifestStage;
 
-  constructor(parentDir: string) {
+  constructor(parentDir: string, stage: ManifestStage) {
     this.manifestPath = path.join(parentDir, "StateMaintenance", MANIFEST_FILENAME);
+    this.stage = stage;
+  }
+
+  private sectionKey(): keyof ManifestData {
+    return `${this.stage}_entries` as keyof ManifestData;
   }
 
   private load(): ManifestData {
     if (this.data !== null) return this.data;
     try {
       const raw = fs.readFileSync(this.manifestPath, "utf-8");
-      this.data = JSON.parse(raw) as ManifestData;
+      const parsed = JSON.parse(raw) as Partial<ManifestData>;
+      this.data = {
+        export_entries: parsed.export_entries ?? {},
+        symbolicate_entries: parsed.symbolicate_entries ?? {},
+        analyze_entries: parsed.analyze_entries ?? {},
+      };
     } catch {
-      this.data = { entries: {} };
+      this.data = emptyManifestData();
     }
     return this.data;
   }
@@ -63,22 +82,22 @@ export class ProcessedManifest {
 
   isProcessed(crashId: string): boolean {
     const data = this.load();
-    return crashId in data.entries;
+    return crashId in data[this.sectionKey()];
   }
 
   markProcessed(crashId: string): void {
     const data = this.load();
-    data.entries[crashId] = { processedAt: new Date().toISOString() };
+    data[this.sectionKey()][crashId] = { processedAt: new Date().toISOString() };
     this.save();
   }
 
   getAll(): Record<string, { processedAt: string }> {
-    return this.load().entries;
+    return this.load()[this.sectionKey()];
   }
 
   removeProcessed(crashId: string): void {
     const data = this.load();
-    delete data.entries[crashId];
+    delete data[this.sectionKey()][crashId];
     this.save();
   }
 
@@ -86,13 +105,15 @@ export class ProcessedManifest {
     if (crashIds.length === 0) return;
     const data = this.load();
     for (const crashId of crashIds) {
-      delete data.entries[crashId];
+      delete data.export_entries[crashId];
+      delete data.symbolicate_entries[crashId];
+      delete data.analyze_entries[crashId];
     }
     this.save();
   }
 
   clear(): void {
-    this.data = { entries: {} };
+    this.data = emptyManifestData();
     this.save();
   }
 }

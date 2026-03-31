@@ -16,7 +16,9 @@ export async function cmdPipeline(flags: Record<string, string | boolean>): Prom
   const symbolicatedDir = getSymbolicatedDir(config);
   const dsymPath = config.DSYM_PATH;
   const includeProcessed = flags["include-processed"] === true;
-  const manifest = includeProcessed ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT);
+  const exportManifest = includeProcessed ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "export");
+  const symbolicateManifest = includeProcessed ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "symbolicate");
+  const analyzeManifest = includeProcessed ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "analyze");
   const versions = flags["versions"]
     ? (flags["versions"] as string).split(",").map((v) => v.trim()).filter(Boolean)
     : (config.CRASH_VERSIONS?.split(",").map((v) => v.trim()).filter(Boolean) ?? []);
@@ -41,7 +43,7 @@ export async function cmdPipeline(flags: Record<string, string | boolean>): Prom
   }
 
   // Step 1: export
-  const exportResult = exportCrashLogs(inputDir, basicDir, versions, false, false, startDate, endDate, manifest);
+  const exportResult = exportCrashLogs(inputDir, basicDir, versions, false, false, startDate, endDate, exportManifest);
   console.log("\n── Export ──────────────────────────────────────────");
   console.log(JSON.stringify(exportResult, null, 2));
 
@@ -57,7 +59,7 @@ export async function cmdPipeline(flags: Record<string, string | boolean>): Prom
         reason: "No .crash or .ips files found in MainCrashLogsFolder/XCodeCrashLogs, MainCrashLogsFolder/AppticsCrashLogs, or MainCrashLogsFolder/OtherCrashLogs",
       };
     } else {
-      symbolicationResult = await runBatchAll(dsymPath, manifest);
+      symbolicationResult = await runBatchAll(dsymPath, symbolicateManifest);
     }
     console.log("\n── Symbolication ───────────────────────────────────");
     console.log(JSON.stringify(symbolicationResult, null, 2));
@@ -68,7 +70,7 @@ export async function cmdPipeline(flags: Record<string, string | boolean>): Prom
 
   // Step 3: analyze
   const fixStatuses = loadFixStatuses(config.CRASH_ANALYSIS_PARENT);
-  const report = analyzeDirectory(symbolicatedDir, fixStatuses, manifest);
+  const report = analyzeDirectory(symbolicatedDir, fixStatuses, analyzeManifest);
   const reportsDir = getAnalyzedReportsDir(config);
   fs.mkdirSync(reportsDir, { recursive: true });
   const ts = Date.now();
