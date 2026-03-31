@@ -295,44 +295,8 @@ export function cleanOldCrashes(beforeDate: string, dirs: string[], dryRun = fal
       const manifestKey = incidentId ?? filepath;
 
       if (shouldDelete) {
-        if (!dryRun) {
-          try {
-            fs.unlinkSync(filepath);
-            entry.deleted = true;
-            deletedManifestKeys.push(manifestKey);
-          } catch {
-            // skip if cannot delete
-          }
-        } else {
-          entry.deleted = true; // would be deleted in a real run
-        }
-        deleted++;
-      } else {
-        skipped++;
-      }
-      files.push(entry);
-    }
-  }
-
-  // Also clean report_<timestamp>.json files from parentDir
-  const REPORT_RE = /^report_(\d+)\.json$/;
-  if (parentDir && fs.existsSync(parentDir)) {
-    const reportFiles = fs.readdirSync(parentDir).filter((f) => REPORT_RE.test(f));
-    for (const file of reportFiles) {
-      const match = REPORT_RE.exec(file);
-      if (!match) continue;
-      const ts = parseInt(match[1], 10);
-      const fileDate = new Date(ts);
-      const filepath = path.join(parentDir, file);
-      totalScanned++;
-      const shouldDelete = fileDate < before;
-      const entry: CleanFileEntry = {
-        file: filepath,
-        crashDate: fileDate.toISOString(),
-        deleted: false,
-      };
-
-      if (shouldDelete) {
+        // Mark for manifest removal regardless of whether the file deletion succeeds
+        deletedManifestKeys.push(manifestKey);
         if (!dryRun) {
           try {
             fs.unlinkSync(filepath);
