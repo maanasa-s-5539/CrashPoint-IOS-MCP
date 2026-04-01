@@ -13844,18 +13844,31 @@ function extractIncidentId(filePath) {
   }
   return null;
 }
+function emptyManifestData() {
+  return { pipeline_runs: {}, export_entries: {}, symbolicate_entries: {}, analyze_entries: {} };
+}
 var ProcessedManifest = class {
-  constructor(parentDir) {
+  constructor(parentDir, stage) {
     this.data = null;
     this.manifestPath = path2.join(parentDir, "StateMaintenance", MANIFEST_FILENAME);
+    this.stage = stage;
+  }
+  sectionKey() {
+    return `${this.stage}_entries`;
   }
   load() {
     if (this.data !== null) return this.data;
     try {
       const raw = fs2.readFileSync(this.manifestPath, "utf-8");
-      this.data = JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      this.data = {
+        pipeline_runs: parsed.pipeline_runs ?? {},
+        export_entries: parsed.export_entries ?? {},
+        symbolicate_entries: parsed.symbolicate_entries ?? {},
+        analyze_entries: parsed.analyze_entries ?? {}
+      };
     } catch {
-      this.data = { entries: {} };
+      this.data = emptyManifestData();
     }
     return this.data;
   }
@@ -13869,32 +13882,66 @@ var ProcessedManifest = class {
   }
   isProcessed(crashId) {
     const data = this.load();
-    return crashId in data.entries;
+    return crashId in data[this.sectionKey()];
   }
   markProcessed(crashId) {
     const data = this.load();
-    data.entries[crashId] = { processedAt: (/* @__PURE__ */ new Date()).toISOString() };
+    data[this.sectionKey()][crashId] = { processedAt: (/* @__PURE__ */ new Date()).toISOString() };
     this.save();
   }
   getAll() {
-    return this.load().entries;
+    return this.load()[this.sectionKey()];
   }
   removeProcessed(crashId) {
     const data = this.load();
-    delete data.entries[crashId];
+    delete data[this.sectionKey()][crashId];
     this.save();
   }
   removeProcessedBatch(crashIds) {
     if (crashIds.length === 0) return;
     const data = this.load();
     for (const crashId of crashIds) {
-      delete data.entries[crashId];
+      delete data.export_entries[crashId];
+      delete data.symbolicate_entries[crashId];
+      delete data.analyze_entries[crashId];
     }
     this.save();
   }
   clear() {
-    this.data = { entries: {} };
+    this.data = emptyManifestData();
     this.save();
+  }
+  // ── Pipeline run tracking ──────────────────────────────────────────────────
+  isPipelineRunComplete(rangeKey) {
+    return rangeKey in this.load().pipeline_runs;
+  }
+  /**
+   * Check whether the union of all existing pipeline_runs fully covers the
+   * requested [startDate, endDate] range (inclusive).  Uses date comparison,
+   * not string comparison.
+   */
+  isRangeCovered(startDate, endDate) {
+    const reqStart = new Date(startDate);
+    const reqEnd = new Date(endDate);
+    if (isNaN(reqStart.getTime()) || isNaN(reqEnd.getTime())) return false;
+    const runs = Object.values(this.load().pipeline_runs);
+    if (runs.length === 0) return false;
+    const sorted = runs.map((r) => ({ start: new Date(r.startDate), end: new Date(r.endDate) })).filter((r) => !isNaN(r.start.getTime()) && !isNaN(r.end.getTime())).sort((a, b) => a.start.getTime() - b.start.getTime());
+    let coveredTime = reqStart.getTime();
+    for (const run of sorted) {
+      if (run.start.getTime() > coveredTime) break;
+      if (run.end.getTime() >= coveredTime) coveredTime = run.end.getTime();
+      if (coveredTime >= reqEnd.getTime()) return true;
+    }
+    return false;
+  }
+  recordPipelineRun(rangeKey, run) {
+    const data = this.load();
+    data.pipeline_runs[rangeKey] = run;
+    this.save();
+  }
+  getPipelineRun(rangeKey) {
+    return this.load().pipeline_runs[rangeKey];
   }
 };
 
@@ -14104,40 +14151,7 @@ function cleanOldCrashes(beforeDate, dirs, dryRun = false, parentDir, manifest) 
       const incidentId = extractIncidentId(filepath);
       const manifestKey = incidentId ?? filepath;
       if (shouldDelete) {
-        if (!dryRun) {
-          try {
-            fs3.unlinkSync(filepath);
-            entry.deleted = true;
-            deletedManifestKeys.push(manifestKey);
-          } catch {
-          }
-        } else {
-          entry.deleted = true;
-        }
-        deleted++;
-      } else {
-        skipped++;
-      }
-      files.push(entry);
-    }
-  }
-  const REPORT_RE = /^report_(\d+)\.json$/;
-  if (parentDir && fs3.existsSync(parentDir)) {
-    const reportFiles = fs3.readdirSync(parentDir).filter((f) => REPORT_RE.test(f));
-    for (const file2 of reportFiles) {
-      const match = REPORT_RE.exec(file2);
-      if (!match) continue;
-      const ts = parseInt(match[1], 10);
-      const fileDate = new Date(ts);
-      const filepath = path3.join(parentDir, file2);
-      totalScanned++;
-      const shouldDelete = fileDate < before;
-      const entry = {
-        file: filepath,
-        crashDate: fileDate.toISOString(),
-        deleted: false
-      };
-      if (shouldDelete) {
+        deletedManifestKeys.push(manifestKey);
         if (!dryRun) {
           try {
             fs3.unlinkSync(filepath);

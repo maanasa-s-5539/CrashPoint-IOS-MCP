@@ -50,6 +50,15 @@ export declare function analyzeDirectory(crashDir: string, fixStatuses?: Record<
     fixed: boolean;
     note?: string;
 }>, manifest?: ProcessedManifest): CrashReport;
+/**
+ * Analyze a specific list of crash file paths (instead of scanning a
+ * directory).  Used by the scoped pipeline flow when only the files that were
+ * just symbolicated need to be analyzed.
+ */
+export declare function analyzeFiles(files: string[], fixStatuses?: Record<string, {
+    fixed: boolean;
+    note?: string;
+}>, manifest?: ProcessedManifest): CrashReport;
 export interface CleanFileEntry {
     file: string;
     crashDate: string;

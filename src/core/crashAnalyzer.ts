@@ -237,6 +237,82 @@ export function analyzeDirectory(
   };
 }
 
+/**
+ * Analyze a specific list of crash file paths (instead of scanning a
+ * directory).  Used by the scoped pipeline flow when only the files that were
+ * just symbolicated need to be analyzed.
+ */
+export function analyzeFiles(
+  files: string[],
+  fixStatuses?: Record<string, { fixed: boolean; note?: string }>,
+  manifest?: ProcessedManifest,
+): CrashReport {
+  const groups = new Map<string, CrashGroup>();
+  let totalCrashes = 0;
+
+  for (const filepath of files) {
+    if (!fs.existsSync(filepath)) continue;
+
+    const incidentId = extractIncidentId(filepath);
+    const manifestKey = incidentId ?? filepath;
+    if (manifest && manifest.isProcessed(manifestKey)) {
+      continue;
+    }
+
+    const meta = analyzeCrashFile(filepath);
+    if (!meta) continue;
+
+    totalCrashes++;
+    const sig = buildSignature(meta.exceptionType, meta.topFrames);
+
+    if (!groups.has(sig)) {
+      groups.set(sig, {
+        rank: 0,
+        count: 0,
+        exception_type: meta.exceptionType,
+        exception_codes: meta.exceptionCodes,
+        crashed_thread: meta.crashedThread,
+        top_frames: meta.topFrames,
+        devices: {},
+        ios_versions: {},
+        app_versions: {},
+        sources: {},
+        affected_files: [],
+        signature: sig,
+      });
+    }
+
+    const group = groups.get(sig)!;
+    group.count++;
+    group.affected_files.push(path.basename(filepath));
+    increment(group.devices, meta.hardwareModel);
+    increment(group.ios_versions, meta.osVersion);
+    increment(group.app_versions, meta.appVersion);
+    increment(group.sources, meta.source);
+
+    manifest?.markProcessed(manifestKey);
+  }
+
+  const sortedGroups = Array.from(groups.values())
+    .sort((a, b) => b.count - a.count)
+    .map((g, idx) => {
+      const fs2 = fixStatuses?.[g.signature];
+      return {
+        ...g,
+        rank: idx + 1,
+        fix_status: fs2 ? { fixed: fs2.fixed, note: fs2.note } : undefined,
+      };
+    });
+
+  return {
+    report_date: new Date().toISOString().slice(0, 10),
+    source_dir: files.length > 0 ? path.dirname(files[0]) : "multiple sources",
+    total_crashes: totalCrashes,
+    unique_crash_types: sortedGroups.length,
+    crash_groups: sortedGroups,
+  };
+}
+
 // ── cleanOldCrashes ───────────────────────────────────────────────────────────
 
 const CRASH_DATE_RE = /^Date\/Time:\s+(.+)/m;

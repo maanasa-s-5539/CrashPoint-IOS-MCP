@@ -16,13 +16,14 @@ import {
 import {
   symbolicateOne,
   runBatchAll,
+  symbolicateFiles,
   BatchResult,
 } from "./core/symbolicator.js";
-import { analyzeDirectory, cleanOldCrashes } from "./core/crashAnalyzer.js";
+import { analyzeDirectory, analyzeFiles, cleanOldCrashes } from "./core/crashAnalyzer.js";
 import { FixTracker, loadFixStatuses } from "./state/fixTracker.js";
 import { assertPathUnderBase, assertNoTraversal } from "./pathSafety.js";
 import { exportReportToCsv } from "./core/csvExporter.js";
-import { ProcessedManifest } from "./state/processedManifest.js";
+import { ProcessedManifest, extractIncidentId } from "./state/processedManifest.js";
 import { validateDateInput } from "./dateValidation.js";
 import { setupWorkspace } from "./core/setup.js";
 
@@ -638,11 +639,10 @@ server.registerTool(
     const inputDir = config.CRASH_INPUT_DIR ?? config.CRASH_ANALYSIS_PARENT;
     const basicDir = getXcodeCrashesDir(config);
     const symbolicatedDir = getSymbolicatedDir(config);
+    const dsymPath = config.DSYM_PATH;
     const versions =
       input.versions?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
-    const exportManifest = input.includeProcessedCrashes ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "export");
-    const symbolicateManifest = input.includeProcessedCrashes ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "symbolicate");
-    const analyzeManifest = input.includeProcessedCrashes ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "analyze");
+    const includeProcessed = input.includeProcessedCrashes === true;
 
     if (input.startDate !== undefined) {
       try {
@@ -659,11 +659,106 @@ server.registerTool(
       }
     }
 
+    const hasDateRange = input.startDate !== undefined && input.endDate !== undefined;
+
+    if (hasDateRange) {
+      const rangeKey = `${input.startDate}..${input.endDate}`;
+
+      // ── Fast-path: skip entire pipeline if range is already covered ──────
+      if (!includeProcessed) {
+        const fastPathManifest = new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "export");
+        if (fastPathManifest.isRangeCovered(input.startDate!, input.endDate!)) {
+          const skippedResult = {
+            export_result: { skipped: true, reason: `Range ${rangeKey} already fully processed` },
+            symbolication_result: { skipped: true, reason: `Range ${rangeKey} already fully processed` },
+            analysis_report: { skipped: true, reason: `Range ${rangeKey} already fully processed` },
+          };
+          return {
+            content: [{ type: "text" as const, text: JSON.stringify(skippedResult, null, 2) }],
+            structuredContent: skippedResult as unknown as Record<string, unknown>,
+          };
+        }
+      }
+
+      // ── Step 1: Export (date-filtered + per-crash dedup) ─────────────────
+      const exportManifest = includeProcessed ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "export");
+      const exportResult = exportCrashLogs(inputDir, basicDir, versions, false, false, input.startDate, input.endDate, exportManifest);
+
+      // Collect only the files that were freshly exported in this run
+      const exportedPaths = exportResult.files
+        .filter((f) => !f.skipped)
+        .map((f) => f.destination);
+
+      // ── Step 2: Symbolicate ONLY the freshly exported files ──────────────
+      let symbolicationResult: object = { skipped: true, reason: "DSYM_PATH not configured" };
+      let symbolicatedPaths: string[] = [];
+
+      if (dsymPath) {
+        if (exportedPaths.length === 0) {
+          symbolicationResult = { skipped: true, reason: "No new files were exported for this date range" };
+        } else {
+          const symbolicateManifest = includeProcessed ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "symbolicate");
+          const batchRes = await symbolicateFiles(exportedPaths, dsymPath, symbolicatedDir, symbolicateManifest);
+          symbolicationResult = batchRes;
+          symbolicatedPaths = batchRes.results
+            .filter((r) => r.success)
+            .map((r) => path.join(symbolicatedDir, r.file));
+        }
+      }
+
+      // ── Step 3: Analyze ONLY the freshly symbolicated files ──────────────
+      const fixStatuses = loadFixStatuses(config.CRASH_ANALYSIS_PARENT);
+      const analyzeManifest = includeProcessed ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "analyze");
+      const analysisReport = analyzeFiles(symbolicatedPaths, fixStatuses, analyzeManifest);
+
+      // ── Save report ───────────────────────────────────────────────────────
+      const reportsDir = getAnalyzedReportsDir(config);
+      const ts = Date.now();
+      const reportFile = path.join(reportsDir, `jsonReport_${ts}.json`);
+      const csvFile = path.join(reportsDir, `sheetReport_${ts}.csv`);
+      try {
+        fs.mkdirSync(reportsDir, { recursive: true });
+        fs.writeFileSync(reportFile, JSON.stringify(analysisReport, null, 2), "utf-8");
+        exportReportToCsv(analysisReport, csvFile);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`Warning: failed to save report to ${reportFile}: ${msg}`);
+      }
+
+      // ── Record completed pipeline run ─────────────────────────────────────
+      const pipelineManifest = new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "export");
+      const resolvedCrashIds = exportedPaths.map((p) => extractIncidentId(p) ?? path.basename(p));
+      pipelineManifest.recordPipelineRun(rangeKey, {
+        startDate: input.startDate!,
+        endDate: input.endDate!,
+        completedAt: new Date().toISOString(),
+        crashIds: resolvedCrashIds,
+        exportedCount: exportedPaths.length,
+        symbolicatedCount: symbolicatedPaths.length,
+        analyzedCount: analysisReport.total_crashes,
+        reportPath: reportFile,
+      });
+
+      const result = {
+        export_result: exportResult,
+        symbolication_result: symbolicationResult,
+        analysis_report: analysisReport,
+      };
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+        structuredContent: result as unknown as Record<string, unknown>,
+      };
+    }
+
+    // ── No date range: existing unscoped flow ────────────────────────────────
+    const exportManifest = includeProcessed ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "export");
+    const symbolicateManifest = includeProcessed ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "symbolicate");
+    const analyzeManifest = includeProcessed ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "analyze");
+
     // Step 1: Export
-    const exportResult = exportCrashLogs(inputDir, basicDir, versions, false, false, input.startDate, input.endDate, exportManifest);
+    const exportResult = exportCrashLogs(inputDir, basicDir, versions, false, false, undefined, undefined, exportManifest);
 
     // Step 2: Symbolicate
-    const dsymPath = config.DSYM_PATH;
     let symbolicationResult: object = { skipped: true, reason: "DSYM_PATH not configured" };
 
     if (dsymPath) {
