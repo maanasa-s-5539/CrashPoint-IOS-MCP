@@ -57,7 +57,7 @@ Add the following configuration to your MCP client:
   "mcpServers": {
     "crashpoint-ios": {
       "command": "npx",
-      "args": ["github:maanasa-s-5539/CrashPoint-IOS-MCP"],
+      "args": ["-p", "github:maanasa-s-5539/CrashPoint-IOS-MCP", "crashpoint-ios-core"],
       "env": {
         "CRASH_ANALYSIS_PARENT": "/path/to/ParentHolderFolder",
         "DSYM_PATH": "/path/to/MyApp.dSYM",
