@@ -95,6 +95,47 @@ export async function runBatch(
   return { succeeded, failed, total: files.length, results };
 }
 
+/**
+ * Symbolicate a specific list of crash file paths (instead of scanning a
+ * directory).  Used by the scoped pipeline flow when only the files that were
+ * just exported need to be symbolicated.
+ */
+export async function symbolicateFiles(
+  files: string[],
+  dsymPath: string,
+  outputDir: string,
+  manifest?: ProcessedManifest,
+): Promise<{ succeeded: number; failed: number; total: number; results: BatchResult[] }> {
+  fs.mkdirSync(outputDir, { recursive: true });
+
+  const results: BatchResult[] = [];
+  let succeeded = 0;
+  let failed = 0;
+
+  for (const crashPath of files) {
+    const file = path.basename(crashPath);
+    const outputPath = path.join(outputDir, file);
+
+    const incidentId = extractIncidentId(crashPath);
+    const manifestKey = incidentId ?? crashPath;
+    if (manifest && manifest.isProcessed(manifestKey)) {
+      results.push({ file, success: true });
+      continue;
+    }
+
+    const res = await symbolicateOne(crashPath, dsymPath, outputPath);
+    results.push({ file, ...res });
+    if (res.success) {
+      succeeded++;
+      manifest?.markProcessed(manifestKey);
+    } else {
+      failed++;
+    }
+  }
+
+  return { succeeded, failed, total: files.length, results };
+}
+
 export async function runBatchAll(
   dsymPath: string,
   manifest?: ProcessedManifest,

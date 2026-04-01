@@ -24641,10 +24641,9 @@ var ProgressTokenSchema = union([string2(), number2().int()]);
 var CursorSchema = string2();
 var TaskCreationParamsSchema = looseObject({
   /**
-   * Time in milliseconds to keep task results available after completion.
-   * If null, the task has unlimited lifetime until manually cleaned up.
+   * Requested duration in milliseconds to retain task from creation.
    */
-  ttl: union([number2(), _null3()]).optional(),
+  ttl: number2().optional(),
   /**
    * Time in milliseconds to wait between task status requests.
    */
@@ -24944,7 +24943,11 @@ var ClientCapabilitiesSchema = object2({
   /**
    * Present if the client supports task creation.
    */
-  tasks: ClientTasksCapabilitySchema.optional()
+  tasks: ClientTasksCapabilitySchema.optional(),
+  /**
+   * Extensions that the client supports. Keys are extension identifiers (vendor-prefix/extension-name).
+   */
+  extensions: record(string2(), AssertObjectSchema).optional()
 });
 var InitializeRequestParamsSchema = BaseRequestParamsSchema.extend({
   /**
@@ -25005,7 +25008,11 @@ var ServerCapabilitiesSchema = object2({
   /**
    * Present if the server supports task creation.
    */
-  tasks: ServerTasksCapabilitySchema.optional()
+  tasks: ServerTasksCapabilitySchema.optional(),
+  /**
+   * Extensions that the server supports. Keys are extension identifiers (vendor-prefix/extension-name).
+   */
+  extensions: record(string2(), AssertObjectSchema).optional()
 });
 var InitializeResultSchema = ResultSchema.extend({
   /**
@@ -25197,6 +25204,12 @@ var ResourceSchema = object2({
    * The MIME type of this resource, if known.
    */
   mimeType: optional(string2()),
+  /**
+   * The size of the raw resource content, in bytes (i.e., before base64 encoding or any tokenization), if known.
+   *
+   * This can be used by Hosts to display file sizes and estimate context window usage.
+   */
+  size: optional(number2()),
   /**
    * Optional annotations for the client.
    */
@@ -30176,18 +30189,31 @@ function extractIncidentId(filePath) {
   }
   return null;
 }
+function emptyManifestData() {
+  return { pipeline_runs: {}, export_entries: {}, symbolicate_entries: {}, analyze_entries: {} };
+}
 var ProcessedManifest = class {
-  constructor(parentDir) {
+  constructor(parentDir, stage) {
     this.data = null;
     this.manifestPath = path2.join(parentDir, "StateMaintenance", MANIFEST_FILENAME);
+    this.stage = stage;
+  }
+  sectionKey() {
+    return `${this.stage}_entries`;
   }
   load() {
     if (this.data !== null) return this.data;
     try {
       const raw = fs2.readFileSync(this.manifestPath, "utf-8");
-      this.data = JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      this.data = {
+        pipeline_runs: parsed.pipeline_runs ?? {},
+        export_entries: parsed.export_entries ?? {},
+        symbolicate_entries: parsed.symbolicate_entries ?? {},
+        analyze_entries: parsed.analyze_entries ?? {}
+      };
     } catch {
-      this.data = { entries: {} };
+      this.data = emptyManifestData();
     }
     return this.data;
   }
@@ -30201,32 +30227,66 @@ var ProcessedManifest = class {
   }
   isProcessed(crashId) {
     const data = this.load();
-    return crashId in data.entries;
+    return crashId in data[this.sectionKey()];
   }
   markProcessed(crashId) {
     const data = this.load();
-    data.entries[crashId] = { processedAt: (/* @__PURE__ */ new Date()).toISOString() };
+    data[this.sectionKey()][crashId] = { processedAt: (/* @__PURE__ */ new Date()).toISOString() };
     this.save();
   }
   getAll() {
-    return this.load().entries;
+    return this.load()[this.sectionKey()];
   }
   removeProcessed(crashId) {
     const data = this.load();
-    delete data.entries[crashId];
+    delete data[this.sectionKey()][crashId];
     this.save();
   }
   removeProcessedBatch(crashIds) {
     if (crashIds.length === 0) return;
     const data = this.load();
     for (const crashId of crashIds) {
-      delete data.entries[crashId];
+      delete data.export_entries[crashId];
+      delete data.symbolicate_entries[crashId];
+      delete data.analyze_entries[crashId];
     }
     this.save();
   }
   clear() {
-    this.data = { entries: {} };
+    this.data = emptyManifestData();
     this.save();
+  }
+  // ── Pipeline run tracking ──────────────────────────────────────────────────
+  isPipelineRunComplete(rangeKey) {
+    return rangeKey in this.load().pipeline_runs;
+  }
+  /**
+   * Check whether the union of all existing pipeline_runs fully covers the
+   * requested [startDate, endDate] range (inclusive).  Uses date comparison,
+   * not string comparison.
+   */
+  isRangeCovered(startDate, endDate) {
+    const reqStart = new Date(startDate);
+    const reqEnd = new Date(endDate);
+    if (isNaN(reqStart.getTime()) || isNaN(reqEnd.getTime())) return false;
+    const runs = Object.values(this.load().pipeline_runs);
+    if (runs.length === 0) return false;
+    const sorted = runs.map((r) => ({ start: new Date(r.startDate), end: new Date(r.endDate) })).filter((r) => !isNaN(r.start.getTime()) && !isNaN(r.end.getTime())).sort((a, b) => a.start.getTime() - b.start.getTime());
+    let coveredTime = reqStart.getTime();
+    for (const run of sorted) {
+      if (run.start.getTime() > coveredTime) break;
+      if (run.end.getTime() >= coveredTime) coveredTime = run.end.getTime();
+      if (coveredTime >= reqEnd.getTime()) return true;
+    }
+    return false;
+  }
+  recordPipelineRun(rangeKey, run) {
+    const data = this.load();
+    data.pipeline_runs[rangeKey] = run;
+    this.save();
+  }
+  getPipelineRun(rangeKey) {
+    return this.load().pipeline_runs[rangeKey];
   }
 };
 
@@ -30526,6 +30586,31 @@ async function runBatch(crashDir, dsymPath, outputDir, manifest) {
   }
   return { succeeded, failed, total: files.length, results };
 }
+async function symbolicateFiles(files, dsymPath, outputDir, manifest) {
+  fs4.mkdirSync(outputDir, { recursive: true });
+  const results = [];
+  let succeeded = 0;
+  let failed = 0;
+  for (const crashPath of files) {
+    const file2 = path4.basename(crashPath);
+    const outputPath = path4.join(outputDir, file2);
+    const incidentId = extractIncidentId(crashPath);
+    const manifestKey = incidentId ?? crashPath;
+    if (manifest && manifest.isProcessed(manifestKey)) {
+      results.push({ file: file2, success: true });
+      continue;
+    }
+    const res = await symbolicateOne(crashPath, dsymPath, outputPath);
+    results.push({ file: file2, ...res });
+    if (res.success) {
+      succeeded++;
+      manifest?.markProcessed(manifestKey);
+    } else {
+      failed++;
+    }
+  }
+  return { succeeded, failed, total: files.length, results };
+}
 async function runBatchAll(dsymPath, manifest) {
   const config2 = getConfig();
   const xcodeCrashDir = getXcodeCrashesDir(config2);
@@ -30706,6 +30791,61 @@ function analyzeDirectory(crashDir, fixStatuses, manifest) {
     crash_groups: sortedGroups
   };
 }
+function analyzeFiles(files, fixStatuses, manifest) {
+  const groups = /* @__PURE__ */ new Map();
+  let totalCrashes = 0;
+  for (const filepath of files) {
+    if (!fs5.existsSync(filepath)) continue;
+    const incidentId = extractIncidentId(filepath);
+    const manifestKey = incidentId ?? filepath;
+    if (manifest && manifest.isProcessed(manifestKey)) {
+      continue;
+    }
+    const meta3 = analyzeCrashFile(filepath);
+    if (!meta3) continue;
+    totalCrashes++;
+    const sig = buildSignature(meta3.exceptionType, meta3.topFrames);
+    if (!groups.has(sig)) {
+      groups.set(sig, {
+        rank: 0,
+        count: 0,
+        exception_type: meta3.exceptionType,
+        exception_codes: meta3.exceptionCodes,
+        crashed_thread: meta3.crashedThread,
+        top_frames: meta3.topFrames,
+        devices: {},
+        ios_versions: {},
+        app_versions: {},
+        sources: {},
+        affected_files: [],
+        signature: sig
+      });
+    }
+    const group = groups.get(sig);
+    group.count++;
+    group.affected_files.push(path5.basename(filepath));
+    increment(group.devices, meta3.hardwareModel);
+    increment(group.ios_versions, meta3.osVersion);
+    increment(group.app_versions, meta3.appVersion);
+    increment(group.sources, meta3.source);
+    manifest?.markProcessed(manifestKey);
+  }
+  const sortedGroups = Array.from(groups.values()).sort((a, b) => b.count - a.count).map((g, idx) => {
+    const fs22 = fixStatuses?.[g.signature];
+    return {
+      ...g,
+      rank: idx + 1,
+      fix_status: fs22 ? { fixed: fs22.fixed, note: fs22.note } : void 0
+    };
+  });
+  return {
+    report_date: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10),
+    source_dir: files.length > 0 ? path5.dirname(files[0]) : "multiple sources",
+    total_crashes: totalCrashes,
+    unique_crash_types: sortedGroups.length,
+    crash_groups: sortedGroups
+  };
+}
 var CRASH_DATE_RE = /^Date\/Time:\s+(.+)/m;
 function parseCrashDate(content, filePath) {
   const match = CRASH_DATE_RE.exec(content);
@@ -30743,40 +30883,7 @@ function cleanOldCrashes(beforeDate, dirs, dryRun = false, parentDir, manifest) 
       const incidentId = extractIncidentId(filepath);
       const manifestKey = incidentId ?? filepath;
       if (shouldDelete) {
-        if (!dryRun) {
-          try {
-            fs5.unlinkSync(filepath);
-            entry.deleted = true;
-            deletedManifestKeys.push(manifestKey);
-          } catch {
-          }
-        } else {
-          entry.deleted = true;
-        }
-        deleted++;
-      } else {
-        skipped++;
-      }
-      files.push(entry);
-    }
-  }
-  const REPORT_RE = /^report_(\d+)\.json$/;
-  if (parentDir && fs5.existsSync(parentDir)) {
-    const reportFiles = fs5.readdirSync(parentDir).filter((f) => REPORT_RE.test(f));
-    for (const file2 of reportFiles) {
-      const match = REPORT_RE.exec(file2);
-      if (!match) continue;
-      const ts = parseInt(match[1], 10);
-      const fileDate = new Date(ts);
-      const filepath = path5.join(parentDir, file2);
-      totalScanned++;
-      const shouldDelete = fileDate < before;
-      const entry = {
-        file: filepath,
-        crashDate: fileDate.toISOString(),
-        deleted: false
-      };
-      if (shouldDelete) {
+        deletedManifestKeys.push(manifestKey);
         if (!dryRun) {
           try {
             fs5.unlinkSync(filepath);
@@ -31123,7 +31230,7 @@ server.registerTool(
     const versions = input.versions?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
     const recursive = input.recursive ?? false;
     const dryRun = input.dryRun ?? false;
-    const manifest = dryRun || input.includeProcessedCrashes ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT);
+    const manifest = dryRun || input.includeProcessedCrashes ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT, "export");
     if (input.startDate !== void 0) {
       try {
         validateDateInput(input.startDate, "startDate");
@@ -31198,7 +31305,7 @@ server.registerTool(
     const xcodeCrashDir = getXcodeCrashesDir(config2);
     const appticsDir = getAppticsCrashesDir(config2);
     const otherDir = getOtherCrashesDir(config2);
-    const manifest = input.includeProcessedCrashes ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT);
+    const manifest = input.includeProcessedCrashes ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT, "symbolicate");
     const anyFiles = hasCrashFiles(xcodeCrashDir) || hasCrashFiles(appticsDir) || hasCrashFiles(otherDir);
     if (!anyFiles) {
       const result2 = {
@@ -31456,7 +31563,7 @@ server.registerTool(
     const config2 = getConfig();
     const crashDir = getSymbolicatedDir(config2);
     const fixStatuses = loadFixStatuses(config2.CRASH_ANALYSIS_PARENT);
-    const manifest = input.includeProcessedCrashes ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT);
+    const manifest = input.includeProcessedCrashes ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT, "analyze");
     const report = analyzeDirectory(crashDir, fixStatuses, manifest);
     const reportsDir = getAnalyzedReportsDir(config2);
     fs9.mkdirSync(reportsDir, { recursive: true });
@@ -31570,8 +31677,9 @@ server.registerTool(
     const inputDir = config2.CRASH_INPUT_DIR ?? config2.CRASH_ANALYSIS_PARENT;
     const basicDir = getXcodeCrashesDir(config2);
     const symbolicatedDir = getSymbolicatedDir(config2);
+    const dsymPath = config2.DSYM_PATH;
     const versions = input.versions?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
-    const manifest = input.includeProcessedCrashes ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT);
+    const includeProcessed = input.includeProcessedCrashes === true;
     if (input.startDate !== void 0) {
       try {
         validateDateInput(input.startDate, "startDate");
@@ -31586,8 +31694,79 @@ server.registerTool(
         return { content: [{ type: "text", text: err.message }] };
       }
     }
-    const exportResult = exportCrashLogs(inputDir, basicDir, versions, false, false, input.startDate, input.endDate, manifest);
-    const dsymPath = config2.DSYM_PATH;
+    const hasDateRange = input.startDate !== void 0 && input.endDate !== void 0;
+    if (hasDateRange) {
+      const rangeKey = `${input.startDate}..${input.endDate}`;
+      if (!includeProcessed) {
+        const fastPathManifest = new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT, "export");
+        if (fastPathManifest.isRangeCovered(input.startDate, input.endDate)) {
+          const skippedResult = {
+            export_result: { skipped: true, reason: `Range ${rangeKey} already fully processed` },
+            symbolication_result: { skipped: true, reason: `Range ${rangeKey} already fully processed` },
+            analysis_report: { skipped: true, reason: `Range ${rangeKey} already fully processed` }
+          };
+          return {
+            content: [{ type: "text", text: JSON.stringify(skippedResult, null, 2) }],
+            structuredContent: skippedResult
+          };
+        }
+      }
+      const exportManifest2 = includeProcessed ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT, "export");
+      const exportResult2 = exportCrashLogs(inputDir, basicDir, versions, false, false, input.startDate, input.endDate, exportManifest2);
+      const exportedPaths = exportResult2.files.filter((f) => !f.skipped).map((f) => f.destination);
+      let symbolicationResult2 = { skipped: true, reason: "DSYM_PATH not configured" };
+      let symbolicatedPaths = [];
+      if (dsymPath) {
+        if (exportedPaths.length === 0) {
+          symbolicationResult2 = { skipped: true, reason: "No new files were exported for this date range" };
+        } else {
+          const symbolicateManifest2 = includeProcessed ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT, "symbolicate");
+          const batchRes = await symbolicateFiles(exportedPaths, dsymPath, symbolicatedDir, symbolicateManifest2);
+          symbolicationResult2 = batchRes;
+          symbolicatedPaths = batchRes.results.filter((r) => r.success).map((r) => path10.join(symbolicatedDir, r.file));
+        }
+      }
+      const fixStatuses2 = loadFixStatuses(config2.CRASH_ANALYSIS_PARENT);
+      const analyzeManifest2 = includeProcessed ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT, "analyze");
+      const analysisReport2 = analyzeFiles(symbolicatedPaths, fixStatuses2, analyzeManifest2);
+      const reportsDir2 = getAnalyzedReportsDir(config2);
+      const ts2 = Date.now();
+      const reportFile2 = path10.join(reportsDir2, `jsonReport_${ts2}.json`);
+      const csvFile2 = path10.join(reportsDir2, `sheetReport_${ts2}.csv`);
+      try {
+        fs9.mkdirSync(reportsDir2, { recursive: true });
+        fs9.writeFileSync(reportFile2, JSON.stringify(analysisReport2, null, 2), "utf-8");
+        exportReportToCsv(analysisReport2, csvFile2);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`Warning: failed to save report to ${reportFile2}: ${msg}`);
+      }
+      const pipelineManifest = new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT, "export");
+      const resolvedCrashIds = exportedPaths.map((p) => extractIncidentId(p) ?? path10.basename(p));
+      pipelineManifest.recordPipelineRun(rangeKey, {
+        startDate: input.startDate,
+        endDate: input.endDate,
+        completedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        crashIds: resolvedCrashIds,
+        exportedCount: exportedPaths.length,
+        symbolicatedCount: symbolicatedPaths.length,
+        analyzedCount: analysisReport2.total_crashes,
+        reportPath: reportFile2
+      });
+      const result2 = {
+        export_result: exportResult2,
+        symbolication_result: symbolicationResult2,
+        analysis_report: analysisReport2
+      };
+      return {
+        content: [{ type: "text", text: JSON.stringify(result2, null, 2) }],
+        structuredContent: result2
+      };
+    }
+    const exportManifest = includeProcessed ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT, "export");
+    const symbolicateManifest = includeProcessed ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT, "symbolicate");
+    const analyzeManifest = includeProcessed ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT, "analyze");
+    const exportResult = exportCrashLogs(inputDir, basicDir, versions, false, false, void 0, void 0, exportManifest);
     let symbolicationResult = { skipped: true, reason: "DSYM_PATH not configured" };
     if (dsymPath) {
       const appticsDir = getAppticsCrashesDir(config2);
@@ -31599,11 +31778,11 @@ server.registerTool(
           reason: "No .crash or .ips files found in any crash logs folder"
         };
       } else {
-        symbolicationResult = await runBatchAll(dsymPath, manifest);
+        symbolicationResult = await runBatchAll(dsymPath, symbolicateManifest);
       }
     }
     const fixStatuses = loadFixStatuses(config2.CRASH_ANALYSIS_PARENT);
-    const analysisReport = analyzeDirectory(symbolicatedDir, fixStatuses, manifest);
+    const analysisReport = analyzeDirectory(symbolicatedDir, fixStatuses, analyzeManifest);
     const reportsDir = getAnalyzedReportsDir(config2);
     const ts = Date.now();
     const reportFile = path10.join(reportsDir, `jsonReport_${ts}.json`);
@@ -31662,7 +31841,7 @@ server.registerTool(
       getOtherCrashesDir(config2),
       getSymbolicatedDir(config2)
     ];
-    const result = cleanOldCrashes(input.beforeDate, dirs, dryRun, config2.CRASH_ANALYSIS_PARENT, dryRun ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT));
+    const result = cleanOldCrashes(input.beforeDate, dirs, dryRun, config2.CRASH_ANALYSIS_PARENT, dryRun ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT, "export"));
     return {
       content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       structuredContent: result

@@ -13873,18 +13873,31 @@ function extractIncidentId(filePath) {
   }
   return null;
 }
+function emptyManifestData() {
+  return { pipeline_runs: {}, export_entries: {}, symbolicate_entries: {}, analyze_entries: {} };
+}
 var ProcessedManifest = class {
-  constructor(parentDir) {
+  constructor(parentDir, stage) {
     this.data = null;
     this.manifestPath = path2.join(parentDir, "StateMaintenance", MANIFEST_FILENAME);
+    this.stage = stage;
+  }
+  sectionKey() {
+    return `${this.stage}_entries`;
   }
   load() {
     if (this.data !== null) return this.data;
     try {
       const raw = fs2.readFileSync(this.manifestPath, "utf-8");
-      this.data = JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      this.data = {
+        pipeline_runs: parsed.pipeline_runs ?? {},
+        export_entries: parsed.export_entries ?? {},
+        symbolicate_entries: parsed.symbolicate_entries ?? {},
+        analyze_entries: parsed.analyze_entries ?? {}
+      };
     } catch {
-      this.data = { entries: {} };
+      this.data = emptyManifestData();
     }
     return this.data;
   }
@@ -13898,32 +13911,66 @@ var ProcessedManifest = class {
   }
   isProcessed(crashId) {
     const data = this.load();
-    return crashId in data.entries;
+    return crashId in data[this.sectionKey()];
   }
   markProcessed(crashId) {
     const data = this.load();
-    data.entries[crashId] = { processedAt: (/* @__PURE__ */ new Date()).toISOString() };
+    data[this.sectionKey()][crashId] = { processedAt: (/* @__PURE__ */ new Date()).toISOString() };
     this.save();
   }
   getAll() {
-    return this.load().entries;
+    return this.load()[this.sectionKey()];
   }
   removeProcessed(crashId) {
     const data = this.load();
-    delete data.entries[crashId];
+    delete data[this.sectionKey()][crashId];
     this.save();
   }
   removeProcessedBatch(crashIds) {
     if (crashIds.length === 0) return;
     const data = this.load();
     for (const crashId of crashIds) {
-      delete data.entries[crashId];
+      delete data.export_entries[crashId];
+      delete data.symbolicate_entries[crashId];
+      delete data.analyze_entries[crashId];
     }
     this.save();
   }
   clear() {
-    this.data = { entries: {} };
+    this.data = emptyManifestData();
     this.save();
+  }
+  // ── Pipeline run tracking ──────────────────────────────────────────────────
+  isPipelineRunComplete(rangeKey) {
+    return rangeKey in this.load().pipeline_runs;
+  }
+  /**
+   * Check whether the union of all existing pipeline_runs fully covers the
+   * requested [startDate, endDate] range (inclusive).  Uses date comparison,
+   * not string comparison.
+   */
+  isRangeCovered(startDate, endDate) {
+    const reqStart = new Date(startDate);
+    const reqEnd = new Date(endDate);
+    if (isNaN(reqStart.getTime()) || isNaN(reqEnd.getTime())) return false;
+    const runs = Object.values(this.load().pipeline_runs);
+    if (runs.length === 0) return false;
+    const sorted = runs.map((r) => ({ start: new Date(r.startDate), end: new Date(r.endDate) })).filter((r) => !isNaN(r.start.getTime()) && !isNaN(r.end.getTime())).sort((a, b) => a.start.getTime() - b.start.getTime());
+    let coveredTime = reqStart.getTime();
+    for (const run of sorted) {
+      if (run.start.getTime() > coveredTime) break;
+      if (run.end.getTime() >= coveredTime) coveredTime = run.end.getTime();
+      if (coveredTime >= reqEnd.getTime()) return true;
+    }
+    return false;
+  }
+  recordPipelineRun(rangeKey, run) {
+    const data = this.load();
+    data.pipeline_runs[rangeKey] = run;
+    this.save();
+  }
+  getPipelineRun(rangeKey) {
+    return this.load().pipeline_runs[rangeKey];
   }
 };
 
@@ -14187,7 +14234,7 @@ async function cmdExport(flags) {
   }
   const dryRun = flags["dry-run"] === true;
   const includeProcessed = flags["include-processed"] === true;
-  const manifest = dryRun || includeProcessed ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT);
+  const manifest = dryRun || includeProcessed ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT, "export");
   const result = exportCrashLogs(inputDir, outputDir, versions, false, dryRun, startDate, endDate, manifest);
   console.log(JSON.stringify(result, null, 2));
 }
@@ -14257,6 +14304,31 @@ async function runBatch(crashDir, dsymPath, outputDir, manifest) {
   }
   return { succeeded, failed, total: files.length, results };
 }
+async function symbolicateFiles(files, dsymPath, outputDir, manifest) {
+  fs4.mkdirSync(outputDir, { recursive: true });
+  const results = [];
+  let succeeded = 0;
+  let failed = 0;
+  for (const crashPath of files) {
+    const file2 = path4.basename(crashPath);
+    const outputPath = path4.join(outputDir, file2);
+    const incidentId = extractIncidentId(crashPath);
+    const manifestKey = incidentId ?? crashPath;
+    if (manifest && manifest.isProcessed(manifestKey)) {
+      results.push({ file: file2, success: true });
+      continue;
+    }
+    const res = await symbolicateOne(crashPath, dsymPath, outputPath);
+    results.push({ file: file2, ...res });
+    if (res.success) {
+      succeeded++;
+      manifest?.markProcessed(manifestKey);
+    } else {
+      failed++;
+    }
+  }
+  return { succeeded, failed, total: files.length, results };
+}
 async function runBatchAll(dsymPath, manifest) {
   const config2 = getConfig();
   const xcodeCrashDir = getXcodeCrashesDir(config2);
@@ -14301,7 +14373,7 @@ async function cmdBatch(flags) {
   const outputDir = getSymbolicatedDir(config2);
   const dsymPath = config2.DSYM_PATH;
   const includeProcessed = flags["include-processed"] === true;
-  const manifest = includeProcessed ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT);
+  const manifest = includeProcessed ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT, "symbolicate");
   const filePath = flags["file"];
   if (!dsymPath) {
     console.error("Error: DSYM_PATH env var is required for batch symbolication.");
@@ -14507,6 +14579,61 @@ function analyzeDirectory(crashDir, fixStatuses, manifest) {
     crash_groups: sortedGroups
   };
 }
+function analyzeFiles(files, fixStatuses, manifest) {
+  const groups = /* @__PURE__ */ new Map();
+  let totalCrashes = 0;
+  for (const filepath of files) {
+    if (!fs5.existsSync(filepath)) continue;
+    const incidentId = extractIncidentId(filepath);
+    const manifestKey = incidentId ?? filepath;
+    if (manifest && manifest.isProcessed(manifestKey)) {
+      continue;
+    }
+    const meta3 = analyzeCrashFile(filepath);
+    if (!meta3) continue;
+    totalCrashes++;
+    const sig = buildSignature(meta3.exceptionType, meta3.topFrames);
+    if (!groups.has(sig)) {
+      groups.set(sig, {
+        rank: 0,
+        count: 0,
+        exception_type: meta3.exceptionType,
+        exception_codes: meta3.exceptionCodes,
+        crashed_thread: meta3.crashedThread,
+        top_frames: meta3.topFrames,
+        devices: {},
+        ios_versions: {},
+        app_versions: {},
+        sources: {},
+        affected_files: [],
+        signature: sig
+      });
+    }
+    const group = groups.get(sig);
+    group.count++;
+    group.affected_files.push(path7.basename(filepath));
+    increment(group.devices, meta3.hardwareModel);
+    increment(group.ios_versions, meta3.osVersion);
+    increment(group.app_versions, meta3.appVersion);
+    increment(group.sources, meta3.source);
+    manifest?.markProcessed(manifestKey);
+  }
+  const sortedGroups = Array.from(groups.values()).sort((a, b) => b.count - a.count).map((g, idx) => {
+    const fs22 = fixStatuses?.[g.signature];
+    return {
+      ...g,
+      rank: idx + 1,
+      fix_status: fs22 ? { fixed: fs22.fixed, note: fs22.note } : void 0
+    };
+  });
+  return {
+    report_date: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10),
+    source_dir: files.length > 0 ? path7.dirname(files[0]) : "multiple sources",
+    total_crashes: totalCrashes,
+    unique_crash_types: sortedGroups.length,
+    crash_groups: sortedGroups
+  };
+}
 var CRASH_DATE_RE = /^Date\/Time:\s+(.+)/m;
 function parseCrashDate(content, filePath) {
   const match = CRASH_DATE_RE.exec(content);
@@ -14544,40 +14671,7 @@ function cleanOldCrashes(beforeDate, dirs, dryRun = false, parentDir, manifest) 
       const incidentId = extractIncidentId(filepath);
       const manifestKey = incidentId ?? filepath;
       if (shouldDelete) {
-        if (!dryRun) {
-          try {
-            fs5.unlinkSync(filepath);
-            entry.deleted = true;
-            deletedManifestKeys.push(manifestKey);
-          } catch {
-          }
-        } else {
-          entry.deleted = true;
-        }
-        deleted++;
-      } else {
-        skipped++;
-      }
-      files.push(entry);
-    }
-  }
-  const REPORT_RE = /^report_(\d+)\.json$/;
-  if (parentDir && fs5.existsSync(parentDir)) {
-    const reportFiles = fs5.readdirSync(parentDir).filter((f) => REPORT_RE.test(f));
-    for (const file2 of reportFiles) {
-      const match = REPORT_RE.exec(file2);
-      if (!match) continue;
-      const ts = parseInt(match[1], 10);
-      const fileDate = new Date(ts);
-      const filepath = path7.join(parentDir, file2);
-      totalScanned++;
-      const shouldDelete = fileDate < before;
-      const entry = {
-        file: filepath,
-        crashDate: fileDate.toISOString(),
-        deleted: false
-      };
-      if (shouldDelete) {
+        deletedManifestKeys.push(manifestKey);
         if (!dryRun) {
           try {
             fs5.unlinkSync(filepath);
@@ -14731,7 +14825,7 @@ async function cmdAnalyze(flags) {
   const config2 = getConfig();
   const crashDir = getSymbolicatedDir(config2);
   const includeProcessed = flags["include-processed"] === true;
-  const manifest = includeProcessed ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT);
+  const manifest = includeProcessed ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT, "analyze");
   const fixStatuses = loadFixStatuses(config2.CRASH_ANALYSIS_PARENT);
   const report = analyzeDirectory(crashDir, fixStatuses, manifest);
   const json2 = JSON.stringify(report, null, 2);
@@ -14854,7 +14948,6 @@ async function cmdPipeline(flags) {
   const symbolicatedDir = getSymbolicatedDir(config2);
   const dsymPath = config2.DSYM_PATH;
   const includeProcessed = flags["include-processed"] === true;
-  const manifest = includeProcessed ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT);
   const versions = flags["versions"] ? flags["versions"].split(",").map((v) => v.trim()).filter(Boolean) : config2.CRASH_VERSIONS?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
   const startDate = flags["start-date"];
   const endDate = flags["end-date"];
@@ -14874,7 +14967,71 @@ async function cmdPipeline(flags) {
       process.exit(1);
     }
   }
-  const exportResult = exportCrashLogs(inputDir, basicDir, versions, false, false, startDate, endDate, manifest);
+  const hasDateRange = startDate !== void 0 && endDate !== void 0;
+  if (hasDateRange) {
+    const rangeKey = `${startDate}..${endDate}`;
+    if (!includeProcessed) {
+      const fastPathManifest = new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT, "export");
+      if (fastPathManifest.isRangeCovered(startDate, endDate)) {
+        console.log(`
+Pipeline skipped: Range ${rangeKey} already fully processed.`);
+        return;
+      }
+    }
+    const exportManifest2 = includeProcessed ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT, "export");
+    const exportResult2 = exportCrashLogs(inputDir, basicDir, versions, false, false, startDate, endDate, exportManifest2);
+    console.log("\n\u2500\u2500 Export \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500");
+    console.log(JSON.stringify(exportResult2, null, 2));
+    const exportedPaths = exportResult2.files.filter((f) => !f.skipped).map((f) => f.destination);
+    let symbolicationResult2 = null;
+    let symbolicatedPaths = [];
+    console.log("\n\u2500\u2500 Symbolication \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500");
+    if (dsymPath) {
+      if (exportedPaths.length === 0) {
+        symbolicationResult2 = { skipped: true, reason: "No new files were exported for this date range" };
+      } else {
+        const symbolicateManifest2 = includeProcessed ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT, "symbolicate");
+        const batchRes = await symbolicateFiles(exportedPaths, dsymPath, symbolicatedDir, symbolicateManifest2);
+        symbolicationResult2 = batchRes;
+        symbolicatedPaths = batchRes.results.filter((r) => r.success).map((r) => path12.join(symbolicatedDir, r.file));
+      }
+      console.log(JSON.stringify(symbolicationResult2, null, 2));
+    } else {
+      symbolicationResult2 = { skipped: true, reason: "DSYM_PATH not set" };
+      console.log(JSON.stringify(symbolicationResult2, null, 2));
+    }
+    const fixStatuses2 = loadFixStatuses(config2.CRASH_ANALYSIS_PARENT);
+    const analyzeManifest2 = includeProcessed ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT, "analyze");
+    const report2 = analyzeFiles(symbolicatedPaths, fixStatuses2, analyzeManifest2);
+    const reportsDir2 = getAnalyzedReportsDir(config2);
+    fs10.mkdirSync(reportsDir2, { recursive: true });
+    const ts2 = Date.now();
+    const reportFile2 = path12.join(reportsDir2, `jsonReport_${ts2}.json`);
+    const csvFile2 = path12.join(reportsDir2, `sheetReport_${ts2}.csv`);
+    fs10.writeFileSync(reportFile2, JSON.stringify(report2, null, 2), "utf-8");
+    exportReportToCsv(report2, csvFile2);
+    console.log("\n\u2500\u2500 Analysis \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500");
+    console.log(JSON.stringify(report2, null, 2));
+    console.log(`JSON report saved to: ${reportFile2}`);
+    console.log(`CSV report saved to: ${csvFile2}`);
+    const pipelineManifest = new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT, "export");
+    const resolvedCrashIds = exportedPaths.map((p) => extractIncidentId(p) ?? path12.basename(p));
+    pipelineManifest.recordPipelineRun(rangeKey, {
+      startDate,
+      endDate,
+      completedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      crashIds: resolvedCrashIds,
+      exportedCount: exportedPaths.length,
+      symbolicatedCount: symbolicatedPaths.length,
+      analyzedCount: report2.total_crashes,
+      reportPath: reportFile2
+    });
+    return;
+  }
+  const exportManifest = includeProcessed ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT, "export");
+  const symbolicateManifest = includeProcessed ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT, "symbolicate");
+  const analyzeManifest = includeProcessed ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT, "analyze");
+  const exportResult = exportCrashLogs(inputDir, basicDir, versions, false, false, void 0, void 0, exportManifest);
   console.log("\n\u2500\u2500 Export \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500");
   console.log(JSON.stringify(exportResult, null, 2));
   let symbolicationResult = null;
@@ -14887,7 +15044,7 @@ async function cmdPipeline(flags) {
         reason: "No .crash or .ips files found in MainCrashLogsFolder/XCodeCrashLogs, MainCrashLogsFolder/AppticsCrashLogs, or MainCrashLogsFolder/OtherCrashLogs"
       };
     } else {
-      symbolicationResult = await runBatchAll(dsymPath, manifest);
+      symbolicationResult = await runBatchAll(dsymPath, symbolicateManifest);
     }
     console.log("\n\u2500\u2500 Symbolication \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500");
     console.log(JSON.stringify(symbolicationResult, null, 2));
@@ -14896,7 +15053,7 @@ async function cmdPipeline(flags) {
     console.log(JSON.stringify({ skipped: true, reason: "DSYM_PATH not set" }, null, 2));
   }
   const fixStatuses = loadFixStatuses(config2.CRASH_ANALYSIS_PARENT);
-  const report = analyzeDirectory(symbolicatedDir, fixStatuses, manifest);
+  const report = analyzeDirectory(symbolicatedDir, fixStatuses, analyzeManifest);
   const reportsDir = getAnalyzedReportsDir(config2);
   fs10.mkdirSync(reportsDir, { recursive: true });
   const ts = Date.now();
@@ -14931,7 +15088,7 @@ function cmdClean(flags) {
     getOtherCrashesDir(config2),
     getSymbolicatedDir(config2)
   ];
-  const manifest = dryRun ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT);
+  const manifest = dryRun ? void 0 : new ProcessedManifest(config2.CRASH_ANALYSIS_PARENT, "export");
   const result = cleanOldCrashes(beforeDate, dirs, dryRun, config2.CRASH_ANALYSIS_PARENT, manifest);
   console.log(JSON.stringify(result, null, 2));
   if (dryRun) {

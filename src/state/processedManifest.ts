@@ -30,14 +30,26 @@ interface ManifestEntry {
   processedAt: string;
 }
 
+export interface PipelineRun {
+  startDate: string;
+  endDate: string;
+  completedAt: string;
+  crashIds: string[];
+  exportedCount: number;
+  symbolicatedCount: number;
+  analyzedCount: number;
+  reportPath?: string;
+}
+
 interface ManifestData {
+  pipeline_runs: Record<string, PipelineRun>;
   export_entries: Record<string, ManifestEntry>;
   symbolicate_entries: Record<string, ManifestEntry>;
   analyze_entries: Record<string, ManifestEntry>;
 }
 
 function emptyManifestData(): ManifestData {
-  return { export_entries: {}, symbolicate_entries: {}, analyze_entries: {} };
+  return { pipeline_runs: {}, export_entries: {}, symbolicate_entries: {}, analyze_entries: {} };
 }
 
 export class ProcessedManifest {
@@ -50,8 +62,8 @@ export class ProcessedManifest {
     this.stage = stage;
   }
 
-  private sectionKey(): keyof ManifestData {
-    return `${this.stage}_entries` as keyof ManifestData;
+  private sectionKey(): "export_entries" | "symbolicate_entries" | "analyze_entries" {
+    return `${this.stage}_entries` as "export_entries" | "symbolicate_entries" | "analyze_entries";
   }
 
   private load(): ManifestData {
@@ -60,6 +72,7 @@ export class ProcessedManifest {
       const raw = fs.readFileSync(this.manifestPath, "utf-8");
       const parsed = JSON.parse(raw) as Partial<ManifestData>;
       this.data = {
+        pipeline_runs: parsed.pipeline_runs ?? {},
         export_entries: parsed.export_entries ?? {},
         symbolicate_entries: parsed.symbolicate_entries ?? {},
         analyze_entries: parsed.analyze_entries ?? {},
@@ -115,5 +128,50 @@ export class ProcessedManifest {
   clear(): void {
     this.data = emptyManifestData();
     this.save();
+  }
+
+  // ── Pipeline run tracking ──────────────────────────────────────────────────
+
+  isPipelineRunComplete(rangeKey: string): boolean {
+    return rangeKey in this.load().pipeline_runs;
+  }
+
+  /**
+   * Check whether the union of all existing pipeline_runs fully covers the
+   * requested [startDate, endDate] range (inclusive).  Uses date comparison,
+   * not string comparison.
+   */
+  isRangeCovered(startDate: string, endDate: string): boolean {
+    const reqStart = new Date(startDate);
+    const reqEnd = new Date(endDate);
+    if (isNaN(reqStart.getTime()) || isNaN(reqEnd.getTime())) return false;
+
+    const runs = Object.values(this.load().pipeline_runs);
+    if (runs.length === 0) return false;
+
+    // Sort runs by their startDate
+    const sorted = runs
+      .map((r) => ({ start: new Date(r.startDate), end: new Date(r.endDate) }))
+      .filter((r) => !isNaN(r.start.getTime()) && !isNaN(r.end.getTime()))
+      .sort((a, b) => a.start.getTime() - b.start.getTime());
+
+    // Walk through sorted runs trying to tile [reqStart, reqEnd]
+    let coveredTime = reqStart.getTime();
+    for (const run of sorted) {
+      if (run.start.getTime() > coveredTime) break; // gap — cannot tile further
+      if (run.end.getTime() >= coveredTime) coveredTime = run.end.getTime();
+      if (coveredTime >= reqEnd.getTime()) return true;
+    }
+    return false;
+  }
+
+  recordPipelineRun(rangeKey: string, run: PipelineRun): void {
+    const data = this.load();
+    data.pipeline_runs[rangeKey] = run;
+    this.save();
+  }
+
+  getPipelineRun(rangeKey: string): PipelineRun | undefined {
+    return this.load().pipeline_runs[rangeKey];
   }
 }
