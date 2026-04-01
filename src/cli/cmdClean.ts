@@ -25,7 +25,7 @@ export function cmdClean(flags: Record<string, string | boolean>): void {
     getSymbolicatedDir(config),
   ];
 
-  const manifest = dryRun ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT);
+  const manifest = dryRun ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "export");
   const result = cleanOldCrashes(beforeDate, dirs, dryRun, config.CRASH_ANALYSIS_PARENT, manifest);
   console.log(JSON.stringify(result, null, 2));
   if (dryRun) {

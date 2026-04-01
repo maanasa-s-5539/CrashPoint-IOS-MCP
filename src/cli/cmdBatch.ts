@@ -9,7 +9,7 @@ export async function cmdBatch(flags: Record<string, string | boolean>): Promise
   const outputDir = getSymbolicatedDir(config);
   const dsymPath = config.DSYM_PATH;
   const includeProcessed = flags["include-processed"] === true;
-  const manifest = includeProcessed ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT);
+  const manifest = includeProcessed ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "symbolicate");
   const filePath = flags["file"] as string | undefined;
 
   if (!dsymPath) {

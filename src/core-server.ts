@@ -134,7 +134,7 @@ server.registerTool(
     const versions = input.versions?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
     const recursive = input.recursive ?? false;
     const dryRun = input.dryRun ?? false;
-    const manifest = dryRun || input.includeProcessedCrashes ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT);
+    const manifest = dryRun || input.includeProcessedCrashes ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "export");
 
     if (input.startDate !== undefined) {
       try {
@@ -218,7 +218,7 @@ server.registerTool(
     const xcodeCrashDir = getXcodeCrashesDir(config);
     const appticsDir = getAppticsCrashesDir(config);
     const otherDir = getOtherCrashesDir(config);
-    const manifest = input.includeProcessedCrashes ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT);
+    const manifest = input.includeProcessedCrashes ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "symbolicate");
 
     const anyFiles = hasCrashFiles(xcodeCrashDir) || hasCrashFiles(appticsDir) || hasCrashFiles(otherDir);
 
@@ -511,7 +511,7 @@ server.registerTool(
     const config = getConfig();
     const crashDir = getSymbolicatedDir(config);
     const fixStatuses = loadFixStatuses(config.CRASH_ANALYSIS_PARENT);
-    const manifest = input.includeProcessedCrashes ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT);
+    const manifest = input.includeProcessedCrashes ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "analyze");
     const report = analyzeDirectory(crashDir, fixStatuses, manifest);
 
     const reportsDir = getAnalyzedReportsDir(config);
@@ -640,7 +640,9 @@ server.registerTool(
     const symbolicatedDir = getSymbolicatedDir(config);
     const versions =
       input.versions?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
-    const manifest = input.includeProcessedCrashes ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT);
+    const exportManifest = input.includeProcessedCrashes ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "export");
+    const symbolicateManifest = input.includeProcessedCrashes ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "symbolicate");
+    const analyzeManifest = input.includeProcessedCrashes ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "analyze");
 
     if (input.startDate !== undefined) {
       try {
@@ -658,7 +660,7 @@ server.registerTool(
     }
 
     // Step 1: Export
-    const exportResult = exportCrashLogs(inputDir, basicDir, versions, false, false, input.startDate, input.endDate, manifest);
+    const exportResult = exportCrashLogs(inputDir, basicDir, versions, false, false, input.startDate, input.endDate, exportManifest);
 
     // Step 2: Symbolicate
     const dsymPath = config.DSYM_PATH;
@@ -677,13 +679,13 @@ server.registerTool(
           reason: "No .crash or .ips files found in any crash logs folder",
         };
       } else {
-        symbolicationResult = await runBatchAll(dsymPath, manifest);
+        symbolicationResult = await runBatchAll(dsymPath, symbolicateManifest);
       }
     }
 
     // Step 3: Analyze
     const fixStatuses = loadFixStatuses(config.CRASH_ANALYSIS_PARENT);
-    const analysisReport = analyzeDirectory(symbolicatedDir, fixStatuses, manifest);
+    const analysisReport = analyzeDirectory(symbolicatedDir, fixStatuses, analyzeManifest);
     const reportsDir = getAnalyzedReportsDir(config);
     const ts = Date.now();
     const reportFile = path.join(reportsDir, `jsonReport_${ts}.json`);
@@ -749,7 +751,7 @@ server.registerTool(
       getSymbolicatedDir(config),
     ];
 
-    const result = cleanOldCrashes(input.beforeDate, dirs, dryRun, config.CRASH_ANALYSIS_PARENT, dryRun ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT));
+    const result = cleanOldCrashes(input.beforeDate, dirs, dryRun, config.CRASH_ANALYSIS_PARENT, dryRun ? undefined : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "export"));
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
       structuredContent: result as unknown as Record<string, unknown>,

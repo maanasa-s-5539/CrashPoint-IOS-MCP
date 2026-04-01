@@ -3,10 +3,13 @@
  * UUID, or null if not found (e.g. non-standard / .ips format without it).
  */
 export declare function extractIncidentId(filePath: string): string | null;
+export type ManifestStage = "export" | "symbolicate" | "analyze";
 export declare class ProcessedManifest {
     private manifestPath;
     private data;
-    constructor(parentDir: string);
+    private stage;
+    constructor(parentDir: string, stage: ManifestStage);
+    private sectionKey;
     private load;
     private save;
     isProcessed(crashId: string): boolean;
