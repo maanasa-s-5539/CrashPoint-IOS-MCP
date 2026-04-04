@@ -30,13 +30,12 @@ CrashPoint iOS MCP gives your AI assistant the ability to:
 
 ## Installation
 
-Install directly from GitHub (NOT from npm registry):
-
 ```bash
-npm install github:maanasa-s-5539/CrashPoint-IOS-MCP
+git clone https://github.com/maanasa-s-5539/CrashPoint-IOS-MCP.git
+cd CrashPoint-IOS-MCP
+npm install
+npm run build
 ```
-
-This automatically compiles the TypeScript source during installation via the `prepare` script.
 
 ---
 
