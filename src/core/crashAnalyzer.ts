@@ -82,7 +82,11 @@ export function parseCrashMetadata(lines: string[]): CrashMetadata {
     if (ovMatch) osVersion = ovMatch[1].trim();
 
     const avMatch = APP_VERSION_RE.exec(line);
-    if (avMatch) appVersion = avMatch[1].trim();
+    if (avMatch) {
+      const raw = avMatch[1].trim();
+      const parenIdx = raw.indexOf(" (");
+      appVersion = parenIdx !== -1 ? raw.slice(0, parenIdx) : raw;
+    }
 
     const ctMatch = CRASHED_THREAD_RE.exec(line);
     if (ctMatch && !crashedThreadFound) {

@@ -49,7 +49,9 @@ export function extractVersion(crashFilePath: string): string {
     for (const line of lines) {
       const match = VERSION_REGEX.exec(line);
       if (match) {
-        return match[1].trim();
+        const raw = match[1].trim();
+        const parenIdx = raw.indexOf(" (");
+        return parenIdx !== -1 ? raw.slice(0, parenIdx) : raw;
       }
     }
   } catch {

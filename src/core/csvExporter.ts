@@ -23,7 +23,11 @@ function escapeCsvValue(value: string): string {
 function formatAppVersions(appVersions: Record<string, number>): string {
   return Object.entries(appVersions)
     .sort(([, a], [, b]) => b - a)
-    .map(([ver, count]) => `${ver} (${count})`)
+    .map(([ver, count]) => {
+      const parenIdx = ver.indexOf(" (");
+      const shortVer = parenIdx !== -1 ? ver.slice(0, parenIdx) : ver;
+      return `${shortVer} (${count})`;
+    })
     .join(", ");
 }
 
