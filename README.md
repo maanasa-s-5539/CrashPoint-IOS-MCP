@@ -180,12 +180,6 @@ node dist/cli.js fix-status --action list
 node dist/cli.js pipeline
 ```
 
-If installed globally, you can also use:
-
-```bash
-crashpoint-ios-cli analyze
-```
-
 ---
 
 ## Symbolication Notes
