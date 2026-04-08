@@ -50,8 +50,8 @@
 | Parameter | Description |
 |---|---|
 | `dsymPath` | Path to `.dSYM` bundle (defaults to `DSYM_PATH` env var). Must be provided together with `crashPath`/`crashDir`, or omitted entirely. |
-| `crashPath` | Path to a single `.crash` or `.ips` file to compare UUIDs against. Must be provided together with `dsymPath`, or omitted entirely. |
-| `crashDir` | Directory of crash files to compare UUIDs against. Must be provided together with `dsymPath`, or omitted entirely. |
+| `crashPath` | Path to a single `.crash` or `.ips` file to compare UUIDs against. Must be within `MainCrashLogsFolder`. Must be provided together with `dsymPath`, or omitted entirely. |
+| `crashDir` | Directory of crash files to compare UUIDs against. Must be within `MainCrashLogsFolder`. Must be provided together with `dsymPath`, or omitted entirely. |
 
 ### `setup_folders` Parameters
 
