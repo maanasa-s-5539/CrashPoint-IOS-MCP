@@ -251,7 +251,7 @@ server.registerTool(
   "verify_dsym",
   {
     description:
-      "Validate a .dSYM bundle and check if its UUIDs match those in crash files. Runs dwarfdump --uuid on the dSYM and parses Binary Images sections from crash files. Requires macOS with Xcode CLI tools. When no dsymPath is given, resolves the dSYM_File symlink in CRASH_ANALYSIS_PARENT. When no crashPath/crashDir is given, auto-collects crash files from all MainCrashLogsFolder subfolders (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs). dsymPath and crashPath/crashDir must be provided together, or neither.",
+      "Validate a .dSYM bundle and check if its UUIDs match those in crash files collected from MainCrashLogsFolder (the post-export location where XCode crash logs and other crashes live). Runs dwarfdump --uuid on the dSYM and parses Binary Images sections from crash files. Requires macOS with Xcode CLI tools. When no dsymPath is given, resolves the dSYM_File symlink in CRASH_ANALYSIS_PARENT. When no crashPath/crashDir is given, auto-collects crash files from all MainCrashLogsFolder subfolders (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs). crashDir must be within MainCrashLogsFolder. dsymPath and crashPath/crashDir must be provided together, or neither. If APP_NAME is set, only the UUID of the app binary is extracted from crash files (recommended to avoid false mismatches from system framework UUIDs).",
     inputSchema: z.object({
       dsymPath: z.string().optional().describe("Path to .dSYM bundle (defaults to DSYM_PATH env var, then dSYM_File symlink in CRASH_ANALYSIS_PARENT). Must be provided together with crashPath/crashDir, or omitted entirely."),
       crashPath: z.string().optional().describe("Path to a single .crash or .ips file to compare UUIDs against. Must be provided together with dsymPath, or omitted entirely."),
@@ -385,10 +385,11 @@ server.registerTool(
     if (hasCrashInput) {
       if (input.crashPath) {
         assertNoTraversal(input.crashPath);
+        assertPathUnderBase(input.crashPath, getMainCrashLogsDir(config));
         crashFiles.push(input.crashPath);
       }
       if (input.crashDir) {
-        assertPathUnderBase(input.crashDir, config.CRASH_ANALYSIS_PARENT);
+        assertPathUnderBase(input.crashDir, getMainCrashLogsDir(config));
         if (fs.existsSync(input.crashDir)) {
           fs.readdirSync(input.crashDir)
             .filter((f) => f.endsWith(".crash") || f.endsWith(".ips"))
@@ -423,7 +424,8 @@ server.registerTool(
       };
     }
 
-    const binaryImgRe = /^\s*0x[0-9a-fA-F]+\s+-\s+0x[0-9a-fA-F]+\s+\S+\s+\S+\s+<([0-9a-f]{32})>/gim;
+    const binaryImgRe = /^\s*0x[0-9a-fA-F]+\s+-\s+0x[0-9a-fA-F]+\s+(\S+)\s+\S+\s+<([0-9a-f]{32})>/gim;
+    const appName = config.APP_NAME;
     const crashFileUuids: Array<{ file: string; uuid: string }> = [];
 
     for (const crashFile of crashFiles) {
@@ -437,7 +439,12 @@ server.registerTool(
       let m: RegExpExecArray | null;
       binaryImgRe.lastIndex = 0;
       while ((m = binaryImgRe.exec(content)) !== null) {
-        const raw = m[1].toUpperCase();
+        const binaryName = m[1];
+        const rawUuid = m[2];
+        if (appName && binaryName !== appName) {
+          continue;
+        }
+        const raw = rawUuid.toUpperCase();
         const uuid = `${raw.slice(0, 8)}-${raw.slice(8, 12)}-${raw.slice(12, 16)}-${raw.slice(16, 20)}-${raw.slice(20)}`;
         if (!seen.has(uuid)) {
           seen.add(uuid);

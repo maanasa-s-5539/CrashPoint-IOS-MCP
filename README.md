@@ -124,7 +124,7 @@ The `StateMaintenance/` folder holds `processed_manifest.json` (tracks which cra
 | 2 | `list_versions` | List all app versions found in `.xccrashpoint` files |
 | 3 | `export_crashes` | Export `.crash` files from `.xccrashpoint` packages to `MainCrashLogsFolder/XCodeCrashLogs`. Add `dryRun: true` to preview without writing |
 | 4 | `symbolicate_batch` | Symbolicate crash files. Pass optional `file` param for a single file, or batch-process all of `MainCrashLogsFolder` (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs) |
-| 5 | `verify_dsym` | Validate a `.dSYM` bundle and check if its UUIDs match those in crash files |
+| 5 | `verify_dsym` | Validate a `.dSYM` bundle and check if its UUIDs match those in crash files from `MainCrashLogsFolder` (the post-export location where XCode crash logs and other crashes live) |
 | 6 | `analyze_crashes` | Group & deduplicate crashes by signature; includes fix status. Always auto-generates JSON + CSV reports in `AnalyzedReportsFolder` |
 | 7 | `fix_status` | Unified fix tracking: `action='set'` to mark fixed/unfixed, `action='unset'` to clear, `action='list'` to view all |
 | 8 | `run_full_pipeline` | Run the complete pipeline: export → symbolicate → analyze |
@@ -149,9 +149,9 @@ node dist/cli.js setup --master-branch /path/to/master --dev-branch /path/to/dev
 # List versions in .xccrashpoint files
 node dist/cli.js list-versions
 
-# Validate a dSYM bundle and check UUID matches
+# Validate a dSYM bundle and check UUID matches against crashes in MainCrashLogsFolder
 node dist/cli.js verify-dsym
-node dist/cli.js verify-dsym --crash-dir /path/to/crashes/ --dsym /path/to/MyApp.dSYM
+node dist/cli.js verify-dsym --crash-dir /path/to/MainCrashLogsFolder/XCodeCrashLogs/ --dsym /path/to/MyApp.dSYM
 
 # Export crash logs from Xcode Organizer
 node dist/cli.js export

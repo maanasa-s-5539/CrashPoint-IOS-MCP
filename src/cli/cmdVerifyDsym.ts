@@ -2,8 +2,8 @@ import fs from "fs";
 import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { getConfig, getXcodeCrashesDir, getAppticsCrashesDir, getOtherCrashesDir } from "../config.js";
-import { assertNoTraversal } from "../pathSafety.js";
+import { getConfig, getXcodeCrashesDir, getAppticsCrashesDir, getOtherCrashesDir, getMainCrashLogsDir } from "../config.js";
+import { assertNoTraversal, assertPathUnderBase } from "../pathSafety.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -80,9 +80,11 @@ export async function cmdVerifyDsym(flags: Record<string, string | boolean>): Pr
     // User explicitly provided crash flags
     if (crashPath) {
       assertNoTraversal(crashPath);
+      assertPathUnderBase(crashPath, getMainCrashLogsDir(config));
       crashFiles.push(crashPath);
     }
     if (crashDir) {
+      assertPathUnderBase(crashDir, getMainCrashLogsDir(config));
       if (fs.existsSync(crashDir)) {
         fs.readdirSync(crashDir)
           .filter((f) => f.endsWith(".crash") || f.endsWith(".ips"))
@@ -110,7 +112,8 @@ export async function cmdVerifyDsym(flags: Record<string, string | boolean>): Pr
     return;
   }
 
-  const binaryImgRe = /^\s*0x[0-9a-fA-F]+\s+-\s+0x[0-9a-fA-F]+\s+\S+\s+\S+\s+<([0-9a-f]{32})>/gim;
+  const binaryImgRe = /^\s*0x[0-9a-fA-F]+\s+-\s+0x[0-9a-fA-F]+\s+(\S+)\s+\S+\s+<([0-9a-f]{32})>/gim;
+  const appName = config.APP_NAME;
   const crashFileUuids: Array<{ file: string; uuid: string }> = [];
 
   for (const cf of crashFiles) {
@@ -124,7 +127,12 @@ export async function cmdVerifyDsym(flags: Record<string, string | boolean>): Pr
     let m: RegExpExecArray | null;
     binaryImgRe.lastIndex = 0;
     while ((m = binaryImgRe.exec(content)) !== null) {
-      const raw = m[1].toUpperCase();
+      const binaryName = m[1];
+      const rawUuid = m[2];
+      if (appName && binaryName !== appName) {
+        continue;
+      }
+      const raw = rawUuid.toUpperCase();
       const uuid = `${raw.slice(0, 8)}-${raw.slice(8, 12)}-${raw.slice(12, 16)}-${raw.slice(16, 20)}-${raw.slice(20)}`;
       if (!seen.has(uuid)) {
         seen.add(uuid);
