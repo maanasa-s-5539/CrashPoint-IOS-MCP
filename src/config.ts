@@ -55,6 +55,10 @@ export function getStateMaintenanceDir(config: CrashPointConfig): string {
   return path.join(config.CRASH_ANALYSIS_PARENT, "StateMaintenance");
 }
 
+export function getAutomationDir(config: CrashPointConfig): string {
+  return path.join(config.CRASH_ANALYSIS_PARENT, "Automation");
+}
+
 export function hasCrashFiles(dir: string): boolean {
   return (
     fs.existsSync(dir) &&
