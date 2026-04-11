@@ -50,6 +50,7 @@ server.registerTool(
       parentDir: z.string(),
       created: z.array(z.string()),
       symlinks: z.array(z.object({ link: z.string(), target: z.string(), status: z.string() })),
+      scaffoldedFiles: z.array(z.string()),
       warnings: z.array(z.string()),
     }),
   },

@@ -1,0 +1,1 @@
+{"version":3,"file":"automationTemplates.d.ts","sourceRoot":"","sources":["../../src/core/automationTemplates.ts"],"names":[],"mappings":"AAAA,MAAM,WAAW,kBAAkB;IACjC,QAAQ,EAAE,MAAM,CAAC;IACjB,OAAO,EAAE,MAAM,CAAC;IAChB,UAAU,EAAE,OAAO,CAAC;CACrB;AAiMD,wBAAgB,sBAAsB,CAAC,SAAS,EAAE,MAAM,GAAG,kBAAkB,EAAE,CAyB9E"}

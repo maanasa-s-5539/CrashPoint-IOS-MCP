@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { getConfig, getMainCrashLogsDir, getXcodeCrashesDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir, getAnalyzedReportsDir, getStateMaintenanceDir, getAutomationDir } from "../config.js";
 import { assertNoTraversal, assertSafeSymlinkTarget } from "../pathSafety.js";
+import { getAutomationTemplates } from "./automationTemplates.js";
 
 export interface SetupOptions {
   masterBranchPath?: string;
@@ -14,6 +15,7 @@ export interface SetupResult {
   parentDir: string;
   created: string[];
   symlinks: Array<{ link: string; target: string; status: string }>;
+  scaffoldedFiles: string[];
   warnings: string[];
 }
 
@@ -37,6 +39,22 @@ export function setupWorkspace(options: SetupOptions = {}): SetupResult {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
       created.push(dir);
+    }
+  }
+
+  // ─── Scaffold automation templates ────────────────────────────────────────
+  const automationDir = getAutomationDir(config);
+  const scaffoldedFiles: string[] = [];
+  const templates = getAutomationTemplates(parentDir);
+
+  for (const { filename, content, executable } of templates) {
+    const destPath = path.join(automationDir, filename);
+    if (!fs.existsSync(destPath)) {
+      fs.writeFileSync(destPath, content, "utf-8");
+      if (executable) {
+        fs.chmodSync(destPath, 0o755);
+      }
+      scaffoldedFiles.push(destPath);
     }
   }
 
@@ -95,5 +113,5 @@ export function setupWorkspace(options: SetupOptions = {}): SetupResult {
     symlinks.push({ link: linkPath, target: resolvedTarget, status });
   }
 
-  return { parentDir, created, symlinks, warnings };
+  return { parentDir, created, symlinks, scaffoldedFiles, warnings };
 }

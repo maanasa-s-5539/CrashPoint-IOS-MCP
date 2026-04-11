@@ -12,6 +12,7 @@ export interface SetupResult {
         target: string;
         status: string;
     }>;
+    scaffoldedFiles: string[];
     warnings: string[];
 }
 export declare function setupWorkspace(options?: SetupOptions): SetupResult;
