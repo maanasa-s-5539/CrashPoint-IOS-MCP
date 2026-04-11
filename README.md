@@ -41,11 +41,13 @@ npm run build
 
 ## Configuration
 
-Copy `.env.example` to `.env` and fill in your values:
+Copy `crashpoint.config.example.json` from the repo root to `<ParentHolderFolder>/crashpoint.config.json` and fill in your values:
 
 ```bash
-cp .env.example .env
+cp crashpoint.config.example.json /path/to/ParentHolderFolder/crashpoint.config.json
 ```
+
+This JSON config file is the **primary** source of configuration for both CrashPoint MCPs. When both the JSON config file and environment variables provide the same key, **environment variables win** — values in `process.env` override values from the JSON config file. This means MCP client `env` blocks (or a `.env` file used as a fallback) can always override the JSON config.
 
 ### Cursor / Claude Desktop
 
@@ -127,7 +129,7 @@ The `StateMaintenance/` folder holds `processed_manifest.json` (tracks which cra
 | 5 | `verify_dsym` | Validate a `.dSYM` bundle and check if its UUIDs match those in crash files from `MainCrashLogsFolder` (the post-export location where XCode crash logs and other crashes live) |
 | 6 | `analyze_crashes` | Group & deduplicate crashes by signature; includes fix status. Always auto-generates JSON + CSV reports in `AnalyzedReportsFolder` |
 | 7 | `fix_status` | Unified fix tracking: `action='set'` to mark fixed/unfixed, `action='unset'` to clear, `action='list'` to view all |
-| 8 | `run_full_pipeline` | Run the complete pipeline: export → symbolicate → analyze |
+| 8 | `run_basic_pipeline` | Run the basic pipeline: export → symbolicate → analyze |
 | 9 | `clean_old_crashes` | Delete `.crash`/`.ips` files older than a given date across all crash directories |
 
 For detailed parameter documentation, see [Tool Parameters](docs/TOOL_PARAMETERS.md).
@@ -176,7 +178,7 @@ node dist/cli.js fix-status --action set --signature "EXC_BAD_ACCESS SIGSEGV" --
 node dist/cli.js fix-status --action unset --signature "EXC_BAD_ACCESS SIGSEGV"
 node dist/cli.js fix-status --action list
 
-# Run full pipeline (export → symbolicate → analyze)
+# Run basic pipeline (export → symbolicate → analyze)
 node dist/cli.js pipeline
 ```
 

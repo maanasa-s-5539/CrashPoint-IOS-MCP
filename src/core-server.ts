@@ -629,12 +629,12 @@ server.registerTool(
   }
 );
 
-// ── Tool 8: run_full_pipeline ───────────────────────────────────────────────
+// ── Tool 8: run_basic_pipeline ───────────────────────────────────────────────
 server.registerTool(
-  "run_full_pipeline",
+  "run_basic_pipeline",
   {
     description:
-      "Run the complete crash analysis pipeline: export → symbolicate → analyze. All paths (dSYM, app, directories) are auto-configured from environment variables — no path input is required.",
+      "Run the basic crash analysis pipeline: export → symbolicate → analyze. All paths (dSYM, app, directories) are auto-configured from environment variables — no path input is required.",
     inputSchema: z.object({
       versions: z.string().optional().describe("Comma-separated version filter for export"),
       startDate: z.string().optional().describe("ISO date string to filter crashes from (e.g. 2026-03-01)"),
