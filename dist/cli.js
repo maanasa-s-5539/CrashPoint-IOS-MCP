@@ -1139,10 +1139,17 @@ if [ ! -f "$CONFIG_JSON" ]; then
   exit 1
 fi
 
-APP_DISPLAY_NAME=$(node -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));console.log(c.APP_DISPLAY_NAME||'')" "$CONFIG_JSON")
-APPTICS_MCP_NAME=$(node -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));console.log(c.APPTICS_MCP_NAME||'')" "$CONFIG_JSON")
-PROJECTS_MCP_NAME=$(node -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));console.log(c.PROJECTS_MCP_NAME||'')" "$CONFIG_JSON")
-CRASH_VERSIONS=$(node -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));console.log(c.CRASH_VERSIONS||'')" "$CONFIG_JSON")
+# Validate that the config file contains valid JSON
+if ! node -e "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'))" "$CONFIG_JSON" 2>/dev/null; then
+  echo "ERROR: Config file at $CONFIG_JSON contains invalid JSON"
+  exit 1
+fi
+
+# Read automation variables FROM config file
+APP_DISPLAY_NAME=$(node -e "console.log(require(process.argv[1]).APP_DISPLAY_NAME || '')" "$CONFIG_JSON")
+APPTICS_MCP_NAME=$(node -e "console.log(require(process.argv[1]).APPTICS_MCP_NAME || '')" "$CONFIG_JSON")
+PROJECTS_MCP_NAME=$(node -e "console.log(require(process.argv[1]).PROJECTS_MCP_NAME || '')" "$CONFIG_JSON")
+CRASH_VERSIONS=$(node -e "console.log(require(process.argv[1]).CRASH_VERSIONS || '')" "$CONFIG_JSON")
 
 # \u2500\u2500\u2500 PRE-STEP: Clear latest report pointer copies only \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 # Removes ONLY latest.json/latest.csv (the stable pointers/copies)
@@ -1179,12 +1186,17 @@ if [ ! -x "$CLAUDE_PATH" ]; then
   exit 1
 fi
 
+# \u2500\u2500\u2500 COMPUTE TARGET DATE (N days ago, macOS date syntax) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+CRASH_DATE_OFFSET=$(node -e "console.log(require(process.argv[1]).CRASH_DATE_OFFSET || '3')" "$CONFIG_JSON")
+TARGET_DATE=$(date -v-\${CRASH_DATE_OFFSET}d +"%Y-%m-%d")
+
 # \u2500\u2500\u2500 SUBSTITUTE PLACEHOLDERS FROM config file \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 PROMPT=$(sed \\
   -e "s|{{APP_DISPLAY_NAME}}|\${APP_DISPLAY_NAME}|g" \\
   -e "s|{{APPTICS_MCP_NAME}}|\${APPTICS_MCP_NAME}|g" \\
   -e "s|{{PROJECTS_MCP_NAME}}|\${PROJECTS_MCP_NAME}|g" \\
   -e "s|{{CRASH_VERSIONS}}|\${CRASH_VERSIONS}|g" \\
+  -e "s|{{TARGET_DATE}}|\${TARGET_DATE}|g" \\
   "$PROMPT_FILE")
 
 # \u2500\u2500\u2500 BUILD --allowedTools DYNAMICALLY FROM config file MCP NAMES \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -1198,6 +1210,7 @@ LOG_FILE="$LOG_DIR/pipeline_\${TIMESTAMP}.log"
   echo "=== Crash Pipeline Run: $TIMESTAMP ==="
   echo "App:           \${APP_DISPLAY_NAME}"
   echo "Version:       \${CRASH_VERSIONS}"
+  echo "Target Date:   \${TARGET_DATE} (offset: \${CRASH_DATE_OFFSET} days)"
   echo "Apptics MCP:   \${APPTICS_MCP_NAME}"
   echo "Projects MCP:  \${PROJECTS_MCP_NAME}"
   echo "Allowed Tools: \${ALLOWED_TOOLS}"
@@ -1225,13 +1238,13 @@ exit "$EXIT_CODE"
 var DAILY_CRASH_PIPELINE_PROMPT_MD = `You are running an automated daily crash analysis pipeline. Execute these steps in order, stopping if any step fails:
 
 ## Step 1: Download Crashes from Apptics
-Use the {{APPTICS_MCP_NAME}} MCP server. Fetch all crashes and crash details for {{APP_DISPLAY_NAME}} iOS app, for the version number {{CRASH_VERSIONS}} from the previous 24 hours. Save the crash details to 'AppticsCrash_<number>.crash' text files in 'AppticsCrashLogs/' directory.
+Use the {{APPTICS_MCP_NAME}} MCP server. Fetch all crashes and crash details for {{APP_DISPLAY_NAME}} iOS app, for the version number {{CRASH_VERSIONS}} from {{TARGET_DATE}} only (a single day). Save the crash details to 'AppticsCrash_<number>.crash' text files in 'AppticsCrashLogs/' directory.
 
 ## Step 2: Export Crash Logs
-Use CrashPoint-IOS-MCP to run the basic pipeline from the previous 24 hours.
+Use CrashPoint-IOS-MCP to run the full pipeline with startDate={{TARGET_DATE}} and endDate={{TARGET_DATE}} so only crashes from that single day are exported.
 
 ## Step 3: Notify Cliq
-Use the Crashpoint-integrations-mcp. Using the analyzed jsonReport_<timestamp> inside ParentHolderFolder -> AnalyzedReportsFolder, notify_cliq about all the crashes from the latest report.
+Use the Crashpoint-integrations-mcp. Using the analyzed latest.json inside ParentHolderFolder -> AnalyzedReportsFolder , notify_cliq about all the crashes from the latest report.
 
 ## Step 4: Create/Update Bugs in Zoho Projects
 Use the Crashpoint-integrations-mcp and {{PROJECTS_MCP_NAME}} MCPs and the latest report. Use the portal id, project id and field id values from the config file. Use these tools from {{PROJECTS_MCP_NAME}} MCP : getProjectsIssues, createProjectIssue, updateIssue.
@@ -1281,7 +1294,7 @@ var COM_CRASHPIPELINE_DAILY_PLIST_EXAMPLE = `<?xml version="1.0" encoding="UTF-8
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>{{PARENT_HOLDER_FOLDER}}/Automation/run_crash_pipeline.sh</string>
+        <string><REPLACE_WITH_PATH_TO>/automation/run_crash_pipeline.sh</string>
     </array>
 
     <key>StartCalendarInterval</key>
@@ -1327,7 +1340,7 @@ function getAutomationTemplates(parentDir) {
     },
     {
       filename: "com.crashpipeline.daily.plist.example",
-      content: fill(COM_CRASHPIPELINE_DAILY_PLIST_EXAMPLE),
+      content: COM_CRASHPIPELINE_DAILY_PLIST_EXAMPLE,
       executable: false
     }
   ];
