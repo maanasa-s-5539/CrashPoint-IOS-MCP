@@ -1,8 +1,9 @@
 import fs from "fs";
+import os from "os";
 import path from "path";
 import { getConfig, getMainCrashLogsDir, getXcodeCrashesDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir, getAnalyzedReportsDir, getStateMaintenanceDir, getAutomationDir } from "../config.js";
 import { assertNoTraversal, assertSafeSymlinkTarget } from "../pathSafety.js";
-import { getAutomationTemplates } from "./automationTemplates.js";
+import { getAutomationTemplates, generateMcpJson, generatePlist, FullCrashPointConfig } from "./automationTemplates.js";
 
 export interface SetupOptions {
   masterBranchPath?: string;
@@ -55,6 +56,50 @@ export function setupWorkspace(options: SetupOptions = {}): SetupResult {
         fs.chmodSync(destPath, 0o755);
       }
       scaffoldedFiles.push(destPath);
+    }
+  }
+
+  // ─── Build full config from raw JSON + typed config ───────────────────────
+  const configJsonPath = path.join(parentDir, "crashpoint.config.json");
+  let rawConfig: Record<string, string> = {};
+  if (fs.existsSync(configJsonPath)) {
+    try {
+      rawConfig = JSON.parse(fs.readFileSync(configJsonPath, "utf-8")) as Record<string, string>;
+    } catch {
+      // ignore parse errors — rawConfig stays empty
+    }
+  }
+  const fullConfig: FullCrashPointConfig = {
+    ...rawConfig,
+    CRASH_ANALYSIS_PARENT: config.CRASH_ANALYSIS_PARENT,
+    DSYM_PATH: config.DSYM_PATH,
+    APP_PATH: config.APP_PATH,
+    APP_NAME: config.APP_NAME,
+    MASTER_BRANCH_PATH: config.MASTER_BRANCH_PATH,
+    DEV_BRANCH_PATH: config.DEV_BRANCH_PATH,
+    CRASH_VERSIONS: config.CRASH_VERSIONS,
+  };
+
+  // ─── Generate .mcp.json if not already present ───────────────────────────
+  const mcpJsonPath = path.join(parentDir, ".mcp.json");
+  if (!fs.existsSync(mcpJsonPath)) {
+    fs.writeFileSync(mcpJsonPath, generateMcpJson(fullConfig), "utf-8");
+    scaffoldedFiles.push(mcpJsonPath);
+  }
+
+  // ─── Generate launchd plist if not already present ───────────────────────
+  const launchAgentsDir = path.join(os.homedir(), "Library", "LaunchAgents");
+  const plistPath = path.join(launchAgentsDir, "com.crashpipeline.daily_mcp.plist");
+  if (!fs.existsSync(plistPath)) {
+    try {
+      if (!fs.existsSync(launchAgentsDir)) {
+        fs.mkdirSync(launchAgentsDir, { recursive: true });
+      }
+      fs.writeFileSync(plistPath, generatePlist(fullConfig), "utf-8");
+      scaffoldedFiles.push(plistPath);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      warnings.push(`Could not write launchd plist to ${plistPath}: ${msg}`);
     }
   }
 

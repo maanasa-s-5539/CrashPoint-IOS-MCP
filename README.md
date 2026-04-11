@@ -47,7 +47,65 @@ Copy `crashpoint.config.example.json` from the repo root to `<ParentHolderFolder
 cp crashpoint.config.example.json /path/to/ParentHolderFolder/crashpoint.config.json
 ```
 
-This JSON config file is the **primary** source of configuration for both CrashPoint MCPs. When both the JSON config file and environment variables provide the same key, **environment variables win** — values in `process.env` override values from the JSON config file. This means MCP client `env` blocks (or a `.env` file used as a fallback) can always override the JSON config.
+This JSON config file is the **single source of truth** for all user configuration — you only need to edit this one file. The `.mcp.json` (used by Claude CLI for the automation pipeline) and the launchd `.plist` (for scheduled daily runs) are **auto-generated** from it by `setup_folders` and by `run_crash_pipeline.sh` on first run.
+
+When both the JSON config file and environment variables provide the same key, **environment variables win** — values in `process.env` override values from the JSON config file. This means MCP client `env` blocks (or a `.env` file used as a fallback) can always override the JSON config.
+
+### Complete `crashpoint.config.json` example
+
+```json
+{
+  "CRASH_ANALYSIS_PARENT": "/path/to/ParentHolderFolder",
+  "CLAUDE_CLI_PATH": "/Users/name/.local/bin/claude",
+
+  "DSYM_PATH": "/path/to/MyApp.app.dSYM",
+  "APP_PATH": "/path/to/MyApp.app",
+  "APP_NAME": "MyApp",
+  "MASTER_BRANCH_PATH": "/path/to/master",
+  "DEV_BRANCH_PATH": "/path/to/dev",
+
+  "CRASH_INPUT_DIR": "",
+  "CRASH_VERSIONS": "1.0.0",
+  "CRASH_DATE_OFFSET": "3",
+
+  "APP_DISPLAY_NAME": "MyApp",
+  "APPTICS_MCP_NAME": "apptics-mcp",
+  "PROJECTS_MCP_NAME": "zoho-projects-mcp",
+
+  "ZOHO_CLIQ_WEBHOOK_URL": "https://cliq.zoho.in/...",
+  "ZOHO_PROJECTS_MCP_URL": "http://localhost:3000",
+  "ZOHO_PROJECTS_PORTAL_ID": "12345",
+  "ZOHO_PROJECTS_PROJECT_ID": "67890",
+  "ZOHO_BUG_STATUS_OPEN": "status-id",
+  "ZOHO_BUG_APP_VERSION": "field-name",
+  "ZOHO_BUG_NUM_OF_OCCURRENCES": "field-name"
+}
+```
+
+### Config key reference
+
+| Key | Required | Description |
+|---|---|---|
+| `CRASH_ANALYSIS_PARENT` | **Yes** | Path to your ParentHolderFolder |
+| `CLAUDE_CLI_PATH` | **Yes** (automation) | Absolute path to the Claude CLI binary (e.g. `~/.local/bin/claude`) |
+| `DSYM_PATH` | Recommended | Path to `MyApp.dSYM` bundle — required for symbolication |
+| `APP_PATH` | Recommended | Path to `MyApp.app` bundle |
+| `APP_NAME` | Optional | App binary name (e.g. `MyApp`) — used to filter frames in reports |
+| `MASTER_BRANCH_PATH` | Optional | Path to master/live branch checkout (creates `CurrentMasterLiveBranch` symlink) |
+| `DEV_BRANCH_PATH` | Optional | Path to dev branch checkout (creates `CurrentDevelopmentBranch` symlink) |
+| `CRASH_INPUT_DIR` | Optional | Override directory searched for `.xccrashpoint` files |
+| `CRASH_VERSIONS` | Optional | Comma-separated version filter for exports |
+| `CRASH_DATE_OFFSET` | Optional | Days ago to target for daily run (default: `"3"`) |
+| `APP_DISPLAY_NAME` | Optional | App name shown in pipeline prompts and Cliq notifications |
+| `APPTICS_MCP_NAME` | Optional | Name of your Apptics MCP server (`claude mcp list`) |
+| `PROJECTS_MCP_NAME` | Optional | Name of your Zoho Projects MCP server (`claude mcp list`) |
+| `ZOHO_CLIQ_WEBHOOK_URL` | Optional | Webhook URL for Zoho Cliq crash notifications |
+| `ZOHO_PROJECTS_MCP_URL` | Optional | Base URL of your Zoho Projects MCP server |
+| `ZOHO_PROJECTS_PORTAL_ID` | Optional | Zoho Projects portal ID |
+| `ZOHO_PROJECTS_PROJECT_ID` | Optional | Zoho Projects project ID |
+| `ZOHO_BUG_STATUS_OPEN` | Optional | Status ID for "Open" bugs in Zoho Projects |
+| `ZOHO_BUG_APP_VERSION` | Optional | Custom field name for app version on bug items |
+| `ZOHO_BUG_NUM_OF_OCCURRENCES` | Optional | Custom field name for occurrence count on bug items |
 
 ### Cursor / Claude Desktop
 
@@ -60,17 +118,14 @@ Add the following configuration to your MCP client:
       "command": "npx",
       "args": ["-p", "github:maanasa-s-5539/CrashPoint-IOS-MCP", "crashpoint-ios-core"],
       "env": {
-        "CRASH_ANALYSIS_PARENT": "/path/to/ParentHolderFolder",
-        "DSYM_PATH": "/path/to/MyApp.dSYM",
-        "APP_PATH": "/path/to/MyApp.app",
-        "APP_NAME": "MyApp",
-        "MASTER_BRANCH_PATH": "/path/to/app-ios-master",
-        "DEV_BRANCH_PATH": "/path/to/app-ios-dev"
+        "CRASH_ANALYSIS_PARENT": "/path/to/ParentHolderFolder"
       }
     }
   }
 }
 ```
+
+All other values (paths, app name, etc.) are read automatically from `crashpoint.config.json`.
 
 **Config file paths:**
 - **Claude Desktop (macOS):** `~/Library/Application Support/Claude/claude_desktop_config.json`
@@ -79,6 +134,8 @@ Add the following configuration to your MCP client:
 ---
 
 ## Environment Variables
+
+Environment variables override corresponding keys in `crashpoint.config.json` (env always wins). You can still pass them via MCP client `env` blocks for per-client overrides.
 
 | Variable | Required | Description |
 |---|---|---|
@@ -99,6 +156,8 @@ CrashPoint iOS MCP uses a `ParentHolderFolder` to organize crash data:
 
 ```
 ParentHolderFolder/                   ← CRASH_ANALYSIS_PARENT
+├── crashpoint.config.json            ← Single source of truth for all configuration
+├── .mcp.json                         ← Auto-generated by setup_folders (do not edit manually)
 ├── MainCrashLogsFolder/
 │   ├── XCodeCrashLogs/               ← Exported raw .crash files from Xcode Organizer
 │   ├── AppticsCrashLogs/             ← User-placed Apptics SDK crash logs
@@ -106,13 +165,17 @@ ParentHolderFolder/                   ← CRASH_ANALYSIS_PARENT
 ├── SymbolicatedCrashLogsFolder/      ← Symbolicated .crash files
 ├── AnalyzedReportsFolder/            ← Auto-generated JSON + CSV analysis reports
 ├── StateMaintenance/                 ← Internal state (processed manifest, fix tracking)
+├── Automation/
+│   ├── run_crash_pipeline.sh         ← Auto-generated shell script for scheduled runs
+│   ├── daily_crash_pipeline_prompt.md ← Prompt template for Claude CLI
+│   └── ScheduledRunLogs/             ← Per-run log files
 ├── CurrentMasterLiveBranch -> ...    ← Symlink to master branch (optional)
 ├── CurrentDevelopmentBranch -> ...   ← Symlink to dev branch (optional)
 ├── dSYM_File -> ...                  ← Symlink to .dSYM bundle (optional)
 └── app_File -> ...                   ← Symlink to .app bundle (optional)
 ```
 
-Run `setup_folders` (MCP tool) or `node dist/cli.js setup` to create this structure.
+Run `setup_folders` (MCP tool) or `node dist/cli.js setup` to create this structure. `setup_folders` also auto-generates `.mcp.json` in your ParentHolderFolder and the launchd plist at `~/Library/LaunchAgents/com.crashpipeline.daily_mcp.plist` — both only if they don't already exist, so your customizations are never overwritten.
 
 The `StateMaintenance/` folder holds `processed_manifest.json` (tracks which crash files have already been processed, keyed by `Incident Identifier` UUID) and `fix_status.json` (local fix tracking database). This prevents re-exporting and re-symbolicating the same crashes across sessions. Pass `includeProcessedCrashes: true` (MCP) or `--include-processed` (CLI) to override and reprocess all files.
 
