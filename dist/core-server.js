@@ -6,7 +6,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z as z2 } from "zod";
 import fs9 from "fs";
-import path10 from "path";
+import path11 from "path";
 import { execFile as execFile2 } from "child_process";
 import { promisify as promisify2 } from "util";
 
@@ -983,9 +983,85 @@ function exportReportToCsv(report, outputPath) {
 
 // src/core/setup.ts
 import fs8 from "fs";
-import path9 from "path";
+import os2 from "os";
+import path10 from "path";
 
 // src/core/automationTemplates.ts
+import os from "os";
+import path9 from "path";
+function generateMcpJson(config) {
+  const getConfigValue = (k) => config[k] ?? "";
+  const json = {
+    mcpServers: {
+      "crashpoint-ios": {
+        command: "npx",
+        args: ["-p", "github:maanasa-s-5539/CrashPoint-IOS-MCP", "crashpoint-ios-core"],
+        env: {
+          CRASH_ANALYSIS_PARENT: getConfigValue("CRASH_ANALYSIS_PARENT"),
+          DSYM_PATH: getConfigValue("DSYM_PATH"),
+          APP_PATH: getConfigValue("APP_PATH"),
+          APP_NAME: getConfigValue("APP_NAME"),
+          MASTER_BRANCH_PATH: getConfigValue("MASTER_BRANCH_PATH"),
+          DEV_BRANCH_PATH: getConfigValue("DEV_BRANCH_PATH")
+        }
+      },
+      "crashpoint-integrations": {
+        command: "npx",
+        args: ["-p", "github:maanasa-s-5539/CrashPoint-Integrations-MCP", "crashpoint-integrations"],
+        env: {
+          CRASH_ANALYSIS_PARENT: getConfigValue("CRASH_ANALYSIS_PARENT"),
+          ZOHO_CLIQ_WEBHOOK_URL: getConfigValue("ZOHO_CLIQ_WEBHOOK_URL"),
+          ZOHO_PROJECTS_PORTAL_ID: getConfigValue("ZOHO_PROJECTS_PORTAL_ID"),
+          ZOHO_PROJECTS_PROJECT_ID: getConfigValue("ZOHO_PROJECTS_PROJECT_ID"),
+          ZOHO_BUG_STATUS_OPEN: getConfigValue("ZOHO_BUG_STATUS_OPEN"),
+          ZOHO_BUG_APP_VERSION: getConfigValue("ZOHO_BUG_APP_VERSION"),
+          ZOHO_BUG_NUM_OF_OCCURRENCES: getConfigValue("ZOHO_BUG_NUM_OF_OCCURRENCES"),
+          CRASH_VERSIONS: getConfigValue("CRASH_VERSIONS")
+        }
+      }
+    }
+  };
+  return JSON.stringify(json, null, 2);
+}
+function generatePlist(config) {
+  const scriptPath = path9.join(config.CRASH_ANALYSIS_PARENT, "Automation", "run_crash_pipeline.sh");
+  const homeDir = os.homedir();
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.crashpipeline.daily_mcp</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>${scriptPath}</string>
+    </array>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>9</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/crashpipeline_stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/crashpipeline_stderr.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+        <key>HOME</key>
+        <string>${homeDir}</string>
+    </dict>
+</dict>
+</plist>`;
+}
 var RUN_CRASH_PIPELINE_SH = `#!/bin/bash
 set -euo pipefail
 
@@ -1017,6 +1093,13 @@ APPTICS_MCP_NAME=$(node -e "console.log(require(process.argv[1]).APPTICS_MCP_NAM
 PROJECTS_MCP_NAME=$(node -e "console.log(require(process.argv[1]).PROJECTS_MCP_NAME || '')" "$CONFIG_JSON")
 CRASH_VERSIONS=$(node -e "console.log(require(process.argv[1]).CRASH_VERSIONS || '')" "$CONFIG_JSON")
 
+# \u2500\u2500\u2500 CLAUDE CLI PATH \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+CLAUDE_PATH=$(node -e "console.log(require(process.argv[1]).CLAUDE_CLI_PATH || '')" "$CONFIG_JSON")
+if [ -z "$CLAUDE_PATH" ]; then
+  echo "ERROR: CLAUDE_CLI_PATH not set in $CONFIG_JSON"
+  exit 1
+fi
+
 # \u2500\u2500\u2500 PRE-STEP: Clear latest report pointer copies only \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 # Removes ONLY latest.json/latest.csv (the stable pointers/copies)
 # Keeps all timestamped history (jsonReport_<ts>.json, sheetReport_<ts>.csv)
@@ -1035,9 +1118,101 @@ fi
 
 mkdir -p "$ANALYZED_DIR"
 
-# \u2500\u2500\u2500 CLAUDE CLI PATH \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-# Edit this to the path of your Claude CLI binary
-CLAUDE_PATH="<REPLACE_WITH_CLAUDE_CLI_PATH>"
+# \u2500\u2500\u2500 PRE-STEP: Generate .mcp.json if not already present \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+MCP_JSON_FILE="$PARENT_HOLDER_FOLDER/.mcp.json"
+if [ ! -f "$MCP_JSON_FILE" ]; then
+  echo "Generating $MCP_JSON_FILE from $CONFIG_JSON..."
+  _DSYM_PATH=$(node -e "console.log(require(process.argv[1]).DSYM_PATH || '')" "$CONFIG_JSON")
+  _APP_PATH=$(node -e "console.log(require(process.argv[1]).APP_PATH || '')" "$CONFIG_JSON")
+  _APP_NAME=$(node -e "console.log(require(process.argv[1]).APP_NAME || '')" "$CONFIG_JSON")
+  _MASTER_BRANCH=$(node -e "console.log(require(process.argv[1]).MASTER_BRANCH_PATH || '')" "$CONFIG_JSON")
+  _DEV_BRANCH=$(node -e "console.log(require(process.argv[1]).DEV_BRANCH_PATH || '')" "$CONFIG_JSON")
+  _CLIQ_URL=$(node -e "console.log(require(process.argv[1]).ZOHO_CLIQ_WEBHOOK_URL || '')" "$CONFIG_JSON")
+  _PORTAL_ID=$(node -e "console.log(require(process.argv[1]).ZOHO_PROJECTS_PORTAL_ID || '')" "$CONFIG_JSON")
+  _PROJECT_ID=$(node -e "console.log(require(process.argv[1]).ZOHO_PROJECTS_PROJECT_ID || '')" "$CONFIG_JSON")
+  _STATUS_ID=$(node -e "console.log(require(process.argv[1]).ZOHO_BUG_STATUS_OPEN || '')" "$CONFIG_JSON")
+  _APP_VER_FIELD=$(node -e "console.log(require(process.argv[1]).ZOHO_BUG_APP_VERSION || '')" "$CONFIG_JSON")
+  _OCC_FIELD=$(node -e "console.log(require(process.argv[1]).ZOHO_BUG_NUM_OF_OCCURRENCES || '')" "$CONFIG_JSON")
+  cat > "$MCP_JSON_FILE" << MCP_JSON_EOF
+{
+  "mcpServers": {
+    "crashpoint-ios": {
+      "command": "npx",
+      "args": ["-p", "github:maanasa-s-5539/CrashPoint-IOS-MCP", "crashpoint-ios-core"],
+      "env": {
+        "CRASH_ANALYSIS_PARENT": "$PARENT_HOLDER_FOLDER",
+        "DSYM_PATH": "$_DSYM_PATH",
+        "APP_PATH": "$_APP_PATH",
+        "APP_NAME": "$_APP_NAME",
+        "MASTER_BRANCH_PATH": "$_MASTER_BRANCH",
+        "DEV_BRANCH_PATH": "$_DEV_BRANCH"
+      }
+    },
+    "crashpoint-integrations": {
+      "command": "npx",
+      "args": ["-p", "github:maanasa-s-5539/CrashPoint-Integrations-MCP", "crashpoint-integrations"],
+      "env": {
+        "CRASH_ANALYSIS_PARENT": "$PARENT_HOLDER_FOLDER",
+        "ZOHO_CLIQ_WEBHOOK_URL": "$_CLIQ_URL",
+        "ZOHO_PROJECTS_PORTAL_ID": "$_PORTAL_ID",
+        "ZOHO_PROJECTS_PROJECT_ID": "$_PROJECT_ID",
+        "ZOHO_BUG_STATUS_OPEN": "$_STATUS_ID",
+        "ZOHO_BUG_APP_VERSION": "$_APP_VER_FIELD",
+        "ZOHO_BUG_NUM_OF_OCCURRENCES": "$_OCC_FIELD",
+        "CRASH_VERSIONS": "$CRASH_VERSIONS"
+      }
+    }
+  }
+}
+MCP_JSON_EOF
+  echo "Generated $MCP_JSON_FILE"
+fi
+
+# \u2500\u2500\u2500 PRE-STEP: Generate launchd plist if not already present \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+PLIST_FILE="$HOME/Library/LaunchAgents/com.crashpipeline.daily_mcp.plist"
+if [ ! -f "$PLIST_FILE" ]; then
+  echo "Generating $PLIST_FILE..."
+  mkdir -p "$HOME/Library/LaunchAgents"
+  cat > "$PLIST_FILE" << PLIST_EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.crashpipeline.daily_mcp</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>$SCRIPT_DIR/run_crash_pipeline.sh</string>
+    </array>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>9</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/crashpipeline_stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/crashpipeline_stderr.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+        <key>HOME</key>
+        <string>$HOME</string>
+    </dict>
+</dict>
+</plist>
+PLIST_EOF
+  launchctl load "$PLIST_FILE" 2>/dev/null || true
+  echo "Generated and loaded $PLIST_FILE"
+fi
 
 # \u2500\u2500\u2500 PROMPT TEMPLATE \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 PROMPT_FILE="$SCRIPT_DIR/daily_crash_pipeline_prompt.md"
@@ -1119,73 +1294,6 @@ If an issue with the same crash signature exists already, update the existing cr
 
 After completing all steps, output a summary of what was processed.
 `;
-var MCP_JSON_EXAMPLE = `{
-  "mcpServers": {
-    "crashpoint-ios": {
-      "command": "npx",
-      "args": ["-p", "github:maanasa-s-5539/CrashPoint-IOS-MCP", "crashpoint-ios-core"],
-      "env": {
-        "CRASH_ANALYSIS_PARENT": "{{PARENT_HOLDER_FOLDER}}",
-        "DSYM_PATH": "<REPLACE_WITH_DSYM_PATH>",
-        "APP_PATH": "<REPLACE_WITH_APP_PATH>",
-        "APP_NAME": "<REPLACE_WITH_APP_NAME>",
-        "MASTER_BRANCH_PATH": "<REPLACE_WITH_MASTER_BRANCH_PATH>",
-        "DEV_BRANCH_PATH": "<REPLACE_WITH_DEV_BRANCH_PATH>"
-      }
-    },
-    "crashpoint-integrations": {
-      "command": "npx",
-      "args": ["-p", "github:maanasa-s-5539/CrashPoint-Integrations-MCP", "crashpoint-integrations"],
-      "env": {
-        "CRASH_ANALYSIS_PARENT": "{{PARENT_HOLDER_FOLDER}}",
-        "ZOHO_CLIQ_WEBHOOK_URL": "<REPLACE_WITH_CLIQ_WEBHOOK_URL>",
-        "ZOHO_PROJECTS_PORTAL_ID": "<REPLACE_WITH_PORTAL_ID>",
-        "ZOHO_PROJECTS_PROJECT_ID": "<REPLACE_WITH_PROJECT_ID>",
-        "ZOHO_BUG_STATUS_OPEN": "<REPLACE_WITH_STATUS_ID>",
-        "ZOHO_BUG_APP_VERSION": "<REPLACE_WITH_FIELD_NAME>",
-        "ZOHO_BUG_NUM_OF_OCCURRENCES": "<REPLACE_WITH_FIELD_NAME>",
-        "CRASH_VERSIONS": "<REPLACE_WITH_APP_VERSION>"
-      }
-    }
-  }
-}
-`;
-var COM_CRASHPIPELINE_DAILY_PLIST_EXAMPLE = `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.crashpipeline.daily_mcp</string>
-
-    <key>ProgramArguments</key>
-    <array>
-        <string>/bin/bash</string>
-        <string><REPLACE_WITH_PATH_TO>/automation/run_crash_pipeline.sh</string>
-    </array>
-
-    <key>StartCalendarInterval</key>
-    <dict>
-        <key>Hour</key>
-        <integer>9</integer>
-        <key>Minute</key>
-        <integer>0</integer>
-    </dict>
-
-    <key>StandardOutPath</key>
-    <string>/tmp/crashpipeline_stdout.log</string>
-    <key>StandardErrorPath</key>
-    <string>/tmp/crashpipeline_stderr.log</string>
-
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>PATH</key>
-        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
-        <key>HOME</key>
-        <string><REPLACE_WITH_HOME_DIR></string>
-    </dict>
-</dict>
-</plist>
-`;
 function getAutomationTemplates(parentDir) {
   const fill = (content) => content.replaceAll("{{PARENT_HOLDER_FOLDER}}", parentDir);
   return [
@@ -1197,16 +1305,6 @@ function getAutomationTemplates(parentDir) {
     {
       filename: "daily_crash_pipeline_prompt.md",
       content: DAILY_CRASH_PIPELINE_PROMPT_MD,
-      executable: false
-    },
-    {
-      filename: ".mcp.json.example",
-      content: fill(MCP_JSON_EXAMPLE),
-      executable: false
-    },
-    {
-      filename: "com.crashpipeline.daily_mcp.plist.example",
-      content: COM_CRASHPIPELINE_DAILY_PLIST_EXAMPLE,
       executable: false
     }
   ];
@@ -1244,13 +1342,50 @@ function setupWorkspace(options = {}) {
   const scaffoldedFiles = [];
   const templates = getAutomationTemplates(parentDir);
   for (const { filename, content, executable } of templates) {
-    const destPath = path9.join(automationDir, filename);
+    const destPath = path10.join(automationDir, filename);
     if (!fs8.existsSync(destPath)) {
       fs8.writeFileSync(destPath, content, "utf-8");
       if (executable) {
         fs8.chmodSync(destPath, 493);
       }
       scaffoldedFiles.push(destPath);
+    }
+  }
+  const configJsonPath = path10.join(parentDir, "crashpoint.config.json");
+  let rawConfig = {};
+  if (fs8.existsSync(configJsonPath)) {
+    try {
+      rawConfig = JSON.parse(fs8.readFileSync(configJsonPath, "utf-8"));
+    } catch {
+    }
+  }
+  const fullConfig = {
+    ...rawConfig,
+    CRASH_ANALYSIS_PARENT: config.CRASH_ANALYSIS_PARENT,
+    DSYM_PATH: config.DSYM_PATH,
+    APP_PATH: config.APP_PATH,
+    APP_NAME: config.APP_NAME,
+    MASTER_BRANCH_PATH: config.MASTER_BRANCH_PATH,
+    DEV_BRANCH_PATH: config.DEV_BRANCH_PATH,
+    CRASH_VERSIONS: config.CRASH_VERSIONS
+  };
+  const mcpJsonPath = path10.join(parentDir, ".mcp.json");
+  if (!fs8.existsSync(mcpJsonPath)) {
+    fs8.writeFileSync(mcpJsonPath, generateMcpJson(fullConfig), "utf-8");
+    scaffoldedFiles.push(mcpJsonPath);
+  }
+  const launchAgentsDir = path10.join(os2.homedir(), "Library", "LaunchAgents");
+  const plistPath = path10.join(launchAgentsDir, "com.crashpipeline.daily_mcp.plist");
+  if (!fs8.existsSync(plistPath)) {
+    try {
+      if (!fs8.existsSync(launchAgentsDir)) {
+        fs8.mkdirSync(launchAgentsDir, { recursive: true });
+      }
+      fs8.writeFileSync(plistPath, generatePlist(fullConfig), "utf-8");
+      scaffoldedFiles.push(plistPath);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      warnings.push(`Could not write launchd plist to ${plistPath}: ${msg}`);
     }
   }
   const symlinkDefs = [
@@ -1264,8 +1399,8 @@ function setupWorkspace(options = {}) {
     if (!target) continue;
     assertNoTraversal(target);
     assertSafeSymlinkTarget(target);
-    const resolvedTarget = path9.resolve(target);
-    const linkPath = path9.join(parentDir, name);
+    const resolvedTarget = path10.resolve(target);
+    const linkPath = path10.join(parentDir, name);
     let status;
     if (!fs8.existsSync(resolvedTarget)) {
       warnings.push(`Target for ${name} does not exist: ${resolvedTarget}`);
@@ -1280,7 +1415,7 @@ function setupWorkspace(options = {}) {
       symlinkType = fs8.statSync(resolvedTarget).isDirectory() ? "dir" : "file";
     } else {
       const lowerTarget = resolvedTarget.toLowerCase();
-      if (lowerTarget.endsWith(".dsym") || lowerTarget.endsWith(".app") || lowerTarget.endsWith(".framework") || !path9.extname(resolvedTarget)) {
+      if (lowerTarget.endsWith(".dsym") || lowerTarget.endsWith(".app") || lowerTarget.endsWith(".framework") || !path10.extname(resolvedTarget)) {
         symlinkType = "dir";
       }
     }
@@ -1456,13 +1591,13 @@ server.registerTool(
     }
     if (input.file) {
       assertNoTraversal(input.file);
-      const outputPath = path10.join(outputDir, path10.basename(input.file));
+      const outputPath = path11.join(outputDir, path11.basename(input.file));
       const res = await symbolicateOne(input.file, dsymPath, outputPath);
       const result2 = {
         succeeded: res.success ? 1 : 0,
         failed: res.success ? 0 : 1,
         total: 1,
-        results: [{ file: path10.basename(input.file), success: res.success }]
+        results: [{ file: path11.basename(input.file), success: res.success }]
       };
       return {
         content: [{ type: "text", text: JSON.stringify(result2, null, 2) }],
@@ -1548,7 +1683,7 @@ server.registerTool(
     } else if (config.DSYM_PATH) {
       dsymPath = config.DSYM_PATH;
     } else {
-      const symlinkPath = path10.join(config.CRASH_ANALYSIS_PARENT, "dSYM_File");
+      const symlinkPath = path11.join(config.CRASH_ANALYSIS_PARENT, "dSYM_File");
       try {
         dsymPath = fs9.realpathSync(symlinkPath);
       } catch {
@@ -1628,7 +1763,7 @@ server.registerTool(
       if (input.crashDir) {
         assertPathUnderBase(input.crashDir, getMainCrashLogsDir(config));
         if (fs9.existsSync(input.crashDir)) {
-          fs9.readdirSync(input.crashDir).filter((f) => f.endsWith(".crash") || f.endsWith(".ips")).forEach((f) => crashFiles.push(path10.join(input.crashDir, f)));
+          fs9.readdirSync(input.crashDir).filter((f) => f.endsWith(".crash") || f.endsWith(".ips")).forEach((f) => crashFiles.push(path11.join(input.crashDir, f)));
         }
       }
     } else {
@@ -1639,7 +1774,7 @@ server.registerTool(
       ];
       for (const dir of dirs) {
         if (fs9.existsSync(dir)) {
-          fs9.readdirSync(dir).filter((f) => f.endsWith(".crash") || f.endsWith(".ips")).forEach((f) => crashFiles.push(path10.join(dir, f)));
+          fs9.readdirSync(dir).filter((f) => f.endsWith(".crash") || f.endsWith(".ips")).forEach((f) => crashFiles.push(path11.join(dir, f)));
         }
       }
     }
@@ -1678,7 +1813,7 @@ server.registerTool(
         const uuid = `${raw.slice(0, 8)}-${raw.slice(8, 12)}-${raw.slice(12, 16)}-${raw.slice(16, 20)}-${raw.slice(20)}`;
         if (!seen.has(uuid)) {
           seen.add(uuid);
-          crashFileUuids.push({ file: path10.basename(crashFile), uuid });
+          crashFileUuids.push({ file: path11.basename(crashFile), uuid });
         }
       }
     }
@@ -1742,12 +1877,12 @@ server.registerTool(
     const reportsDir = getAnalyzedReportsDir(config);
     fs9.mkdirSync(reportsDir, { recursive: true });
     const ts = Date.now();
-    const jsonReportPath = path10.join(reportsDir, `jsonReport_${ts}.json`);
-    const csvReportPath = path10.join(reportsDir, `sheetReport_${ts}.csv`);
+    const jsonReportPath = path11.join(reportsDir, `jsonReport_${ts}.json`);
+    const csvReportPath = path11.join(reportsDir, `sheetReport_${ts}.csv`);
     fs9.writeFileSync(jsonReportPath, JSON.stringify(report, null, 2), "utf-8");
     const csvExport = exportReportToCsv(report, csvReportPath);
-    const latestJsonPath = path10.join(reportsDir, "latest.json");
-    const latestCsvPath = path10.join(reportsDir, "latest.csv");
+    const latestJsonPath = path11.join(reportsDir, "latest.json");
+    const latestCsvPath = path11.join(reportsDir, "latest.csv");
     fs9.copyFileSync(jsonReportPath, latestJsonPath);
     fs9.copyFileSync(csvReportPath, latestCsvPath);
     const result = {
@@ -1901,7 +2036,7 @@ server.registerTool(
           const symbolicateManifest2 = includeProcessed ? void 0 : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "symbolicate");
           const batchRes = await symbolicateFiles(exportedPaths, dsymPath, symbolicatedDir, symbolicateManifest2);
           symbolicationResult2 = batchRes;
-          symbolicatedPaths = batchRes.results.filter((r) => r.success).map((r) => path10.join(symbolicatedDir, r.file));
+          symbolicatedPaths = batchRes.results.filter((r) => r.success).map((r) => path11.join(symbolicatedDir, r.file));
         }
       }
       const fixStatuses2 = loadFixStatuses(config.CRASH_ANALYSIS_PARENT);
@@ -1909,14 +2044,14 @@ server.registerTool(
       const analysisReport2 = analyzeFiles(symbolicatedPaths, fixStatuses2, analyzeManifest2);
       const reportsDir2 = getAnalyzedReportsDir(config);
       const ts2 = Date.now();
-      const reportFile2 = path10.join(reportsDir2, `jsonReport_${ts2}.json`);
-      const csvFile2 = path10.join(reportsDir2, `sheetReport_${ts2}.csv`);
+      const reportFile2 = path11.join(reportsDir2, `jsonReport_${ts2}.json`);
+      const csvFile2 = path11.join(reportsDir2, `sheetReport_${ts2}.csv`);
       try {
         fs9.mkdirSync(reportsDir2, { recursive: true });
         fs9.writeFileSync(reportFile2, JSON.stringify(analysisReport2, null, 2), "utf-8");
         exportReportToCsv(analysisReport2, csvFile2);
-        const latestJsonPath = path10.join(reportsDir2, "latest.json");
-        const latestCsvPath = path10.join(reportsDir2, "latest.csv");
+        const latestJsonPath = path11.join(reportsDir2, "latest.json");
+        const latestCsvPath = path11.join(reportsDir2, "latest.csv");
         fs9.copyFileSync(reportFile2, latestJsonPath);
         fs9.copyFileSync(csvFile2, latestCsvPath);
       } catch (err) {
@@ -1924,7 +2059,7 @@ server.registerTool(
         console.error(`Warning: failed to save report to ${reportFile2}: ${msg}`);
       }
       const pipelineManifest = new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "export");
-      const resolvedCrashIds = exportedPaths.map((p) => extractIncidentId(p) ?? path10.basename(p));
+      const resolvedCrashIds = exportedPaths.map((p) => extractIncidentId(p) ?? path11.basename(p));
       pipelineManifest.recordPipelineRun(rangeKey, {
         startDate: input.startDate,
         endDate: input.endDate,
@@ -1967,14 +2102,14 @@ server.registerTool(
     const analysisReport = analyzeDirectory(symbolicatedDir, fixStatuses, analyzeManifest);
     const reportsDir = getAnalyzedReportsDir(config);
     const ts = Date.now();
-    const reportFile = path10.join(reportsDir, `jsonReport_${ts}.json`);
-    const csvFile = path10.join(reportsDir, `sheetReport_${ts}.csv`);
+    const reportFile = path11.join(reportsDir, `jsonReport_${ts}.json`);
+    const csvFile = path11.join(reportsDir, `sheetReport_${ts}.csv`);
     try {
       fs9.mkdirSync(reportsDir, { recursive: true });
       fs9.writeFileSync(reportFile, JSON.stringify(analysisReport, null, 2), "utf-8");
       exportReportToCsv(analysisReport, csvFile);
-      const latestJsonPath = path10.join(reportsDir, "latest.json");
-      const latestCsvPath = path10.join(reportsDir, "latest.csv");
+      const latestJsonPath = path11.join(reportsDir, "latest.json");
+      const latestCsvPath = path11.join(reportsDir, "latest.csv");
       fs9.copyFileSync(reportFile, latestJsonPath);
       fs9.copyFileSync(csvFile, latestCsvPath);
     } catch (err) {
