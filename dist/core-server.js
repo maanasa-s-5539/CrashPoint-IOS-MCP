@@ -1028,6 +1028,12 @@ function generateMcpJson(config) {
 function generatePlist(config) {
   const scriptPath = path9.join(config.CRASH_ANALYSIS_PARENT, "Automation", "run_crash_pipeline.sh");
   const homeDir = os.homedir();
+  const scheduledRunTime = config.SCHEDULED_RUN_TIME ?? "11:00";
+  const timeParts = scheduledRunTime.split(":");
+  const parsedHour = parseInt(timeParts[0] ?? "11", 10);
+  const parsedMinute = parseInt(timeParts[1] ?? "0", 10);
+  const hour = !isNaN(parsedHour) && parsedHour >= 0 && parsedHour <= 23 ? parsedHour : 11;
+  const minute = !isNaN(parsedMinute) && parsedMinute >= 0 && parsedMinute <= 59 ? parsedMinute : 0;
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -1044,9 +1050,9 @@ function generatePlist(config) {
     <key>StartCalendarInterval</key>
     <dict>
         <key>Hour</key>
-        <integer>9</integer>
+        <integer>${hour}</integer>
         <key>Minute</key>
-        <integer>0</integer>
+        <integer>${minute}</integer>
     </dict>
 
     <key>StandardOutPath</key>
@@ -1094,6 +1100,15 @@ APP_DISPLAY_NAME=$(node -e "console.log(require(process.argv[1]).APP_DISPLAY_NAM
 APPTICS_MCP_NAME=$(node -e "console.log(require(process.argv[1]).APPTICS_MCP_NAME || '')" "$CONFIG_JSON")
 PROJECTS_MCP_NAME=$(node -e "console.log(require(process.argv[1]).PROJECTS_MCP_NAME || '')" "$CONFIG_JSON")
 CRASH_VERSIONS=$(node -e "console.log(require(process.argv[1]).CRASH_VERSIONS || '')" "$CONFIG_JSON")
+SCHEDULED_RUN_TIME=$(node -e "console.log(require(process.argv[1]).SCHEDULED_RUN_TIME || '11:00')" "$CONFIG_JSON")
+IFS=':' read -r SCHED_HOUR SCHED_MINUTE <<< "$SCHEDULED_RUN_TIME"
+SCHED_HOUR=$((10#\${SCHED_HOUR:-11}))
+SCHED_MINUTE=$((10#\${SCHED_MINUTE:-0}))
+if [ "$SCHED_HOUR" -lt 0 ] || [ "$SCHED_HOUR" -gt 23 ] || [ "$SCHED_MINUTE" -lt 0 ] || [ "$SCHED_MINUTE" -gt 59 ]; then
+  echo "WARNING: SCHEDULED_RUN_TIME '$SCHEDULED_RUN_TIME' is invalid, defaulting to 11:00"
+  SCHED_HOUR=11
+  SCHED_MINUTE=0
+fi
 
 # \u2500\u2500\u2500 CLAUDE CLI PATH \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 CLAUDE_PATH=$(node -e "console.log(require(process.argv[1]).CLAUDE_CLI_PATH || '')" "$CONFIG_JSON")
@@ -1194,9 +1209,9 @@ if [ ! -f "$PLIST_FILE" ]; then
     <key>StartCalendarInterval</key>
     <dict>
         <key>Hour</key>
-        <integer>9</integer>
+        <integer>$SCHED_HOUR</integer>
         <key>Minute</key>
-        <integer>0</integer>
+        <integer>$SCHED_MINUTE</integer>
     </dict>
 
     <key>StandardOutPath</key>
