@@ -51,6 +51,7 @@ export function generateMcpJson(config: FullCrashPointConfig): string {
         env: {
           CRASH_ANALYSIS_PARENT: getConfigValue("CRASH_ANALYSIS_PARENT"),
           ZOHO_CLIQ_WEBHOOK_URL: getConfigValue("ZOHO_CLIQ_WEBHOOK_URL"),
+          ZOHO_PROJECTS_MCP_URL: getConfigValue("ZOHO_PROJECTS_MCP_URL"),
           ZOHO_PROJECTS_PORTAL_ID: getConfigValue("ZOHO_PROJECTS_PORTAL_ID"),
           ZOHO_PROJECTS_PROJECT_ID: getConfigValue("ZOHO_PROJECTS_PROJECT_ID"),
           ZOHO_BUG_STATUS_OPEN: getConfigValue("ZOHO_BUG_STATUS_OPEN"),
@@ -170,6 +171,7 @@ if [ ! -f "$MCP_JSON_FILE" ]; then
   _MASTER_BRANCH=$(node -e "console.log(require(process.argv[1]).MASTER_BRANCH_PATH || '')" "$CONFIG_JSON")
   _DEV_BRANCH=$(node -e "console.log(require(process.argv[1]).DEV_BRANCH_PATH || '')" "$CONFIG_JSON")
   _CLIQ_URL=$(node -e "console.log(require(process.argv[1]).ZOHO_CLIQ_WEBHOOK_URL || '')" "$CONFIG_JSON")
+  _MCP_URL=$(node -e "console.log(require(process.argv[1]).ZOHO_PROJECTS_MCP_URL || '')" "$CONFIG_JSON")
   _PORTAL_ID=$(node -e "console.log(require(process.argv[1]).ZOHO_PROJECTS_PORTAL_ID || '')" "$CONFIG_JSON")
   _PROJECT_ID=$(node -e "console.log(require(process.argv[1]).ZOHO_PROJECTS_PROJECT_ID || '')" "$CONFIG_JSON")
   _STATUS_ID=$(node -e "console.log(require(process.argv[1]).ZOHO_BUG_STATUS_OPEN || '')" "$CONFIG_JSON")
@@ -196,6 +198,7 @@ if [ ! -f "$MCP_JSON_FILE" ]; then
       "env": {
         "CRASH_ANALYSIS_PARENT": "$PARENT_HOLDER_FOLDER",
         "ZOHO_CLIQ_WEBHOOK_URL": "$_CLIQ_URL",
+        "ZOHO_PROJECTS_MCP_URL": "$_MCP_URL",
         "ZOHO_PROJECTS_PORTAL_ID": "$_PORTAL_ID",
         "ZOHO_PROJECTS_PROJECT_ID": "$_PROJECT_ID",
         "ZOHO_BUG_STATUS_OPEN": "$_STATUS_ID",

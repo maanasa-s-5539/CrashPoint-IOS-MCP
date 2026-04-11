@@ -26,6 +26,7 @@ function loadCrashpointConfigObject(): Record<string, unknown> {
 
 const envSchema = z.object({
   CRASH_ANALYSIS_PARENT: z.string().min(1).describe("Path to ParentHolderFolder"),
+  CLAUDE_CLI_PATH: z.string().optional().describe("Absolute path to the Claude CLI binary"),
   DSYM_PATH: z.string().optional().describe("Path to MyApp.dSYM"),
   APP_PATH: z.string().optional().describe("Path to MyApp.app"),
   APP_NAME: z.string().optional().describe("App binary name e.g. MyApp"),
