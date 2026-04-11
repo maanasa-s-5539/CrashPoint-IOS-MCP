@@ -88,7 +88,7 @@ When both the JSON config file and environment variables provide the same key, *
 |---|---|
 | `CRASH_ANALYSIS_PARENT` | Path to your ParentHolderFolder |
 | `CLAUDE_CLI_PATH` | Absolute path to the Claude CLI binary (e.g. `~/.local/bin/claude`) |
-| `DSYM_PATH` | Path to `MyApp.dSYM` bundle — required for symbolication |
+| `DSYM_PATH` | Path to `MyApp.dSYM` bundle — needed for symbolication |
 | `APP_PATH` | Path to `MyApp.app` bundle |
 | `APP_NAME` | App binary name (e.g. `MyApp`) — used to filter frames in reports |
 | `MASTER_BRANCH_PATH` | Path to master/live branch checkout (creates `CurrentMasterLiveBranch` symlink) |
