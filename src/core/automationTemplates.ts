@@ -110,7 +110,7 @@ exit "\$EXIT_CODE"
 const DAILY_CRASH_PIPELINE_PROMPT_MD = `You are running an automated daily crash analysis pipeline. Execute these steps in order, stopping if any step fails:
 
 ## Step 1: Download Crashes from Apptics
-Use the {{APPTICS_MCP_NAME}} MCP server. Fetch all crashes and crash details for {{APP_DISPLAY_NAME}} iOS app, for the version number in the .env file from the previous 24 hours. Save the crash details to 'AppticsCrash_<number>.crash' text files, in AppticsCrashLogs.in 'AppticsCrashLogs/' directory.
+Use the {{APPTICS_MCP_NAME}} MCP server. Fetch all crashes and crash details for {{APP_DISPLAY_NAME}} iOS app, for the version number in the .env file from the previous 24 hours. Save the crash details to 'AppticsCrash_<number>.crash' text files in 'AppticsCrashLogs/' directory.
 
 ## Step 2: Export Crash Logs
 Use CrashPoint-IOS-MCP to run the full pipeline from the previous 24 hours.
