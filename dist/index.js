@@ -13818,6 +13818,9 @@ function getAnalyzedReportsDir(config2) {
 function getStateMaintenanceDir(config2) {
   return path.join(config2.CRASH_ANALYSIS_PARENT, "StateMaintenance");
 }
+function getAutomationDir(config2) {
+  return path.join(config2.CRASH_ANALYSIS_PARENT, "Automation");
+}
 function hasCrashFiles(dir) {
   return fs.existsSync(dir) && fs.readdirSync(dir).some((f) => f.endsWith(".crash") || f.endsWith(".ips"));
 }
@@ -13988,7 +13991,11 @@ function parseCrashMetadata(lines) {
     const ovMatch = OS_VERSION_RE.exec(line);
     if (ovMatch) osVersion = ovMatch[1].trim();
     const avMatch = APP_VERSION_RE.exec(line);
-    if (avMatch) appVersion = avMatch[1].trim();
+    if (avMatch) {
+      const raw = avMatch[1].trim();
+      const parenIdx = raw.indexOf(" (");
+      appVersion = parenIdx !== -1 ? raw.slice(0, parenIdx) : raw;
+    }
     const ctMatch = CRASHED_THREAD_RE.exec(line);
     if (ctMatch && !crashedThreadFound) {
       crashedThreadId = parseInt(ctMatch[1], 10);
@@ -14220,7 +14227,9 @@ function extractVersion(crashFilePath) {
     for (const line of lines) {
       const match = VERSION_REGEX.exec(line);
       if (match) {
-        return match[1].trim();
+        const raw = match[1].trim();
+        const parenIdx = raw.indexOf(" (");
+        return parenIdx !== -1 ? raw.slice(0, parenIdx) : raw;
       }
     }
   } catch {
@@ -14506,7 +14515,11 @@ function escapeCsvValue(value) {
   return `"${escaped}"`;
 }
 function formatAppVersions(appVersions) {
-  return Object.entries(appVersions).sort(([, a], [, b]) => b - a).map(([ver, count]) => `${ver} (${count})`).join(", ");
+  return Object.entries(appVersions).sort(([, a], [, b]) => b - a).map(([ver, count]) => {
+    const parenIdx = ver.indexOf(" (");
+    const shortVer = parenIdx !== -1 ? ver.slice(0, parenIdx) : ver;
+    return `${shortVer} (${count})`;
+  }).join(", ");
 }
 function formatDevices(devices) {
   return Object.entries(devices).sort(([, a], [, b]) => b - a).map(([device, count]) => `${device} (${count})`).join(", ");
@@ -14622,7 +14635,8 @@ function setupWorkspace(options = {}) {
     otherDir,
     symbolicatedDir,
     getAnalyzedReportsDir(config2),
-    getStateMaintenanceDir(config2)
+    getStateMaintenanceDir(config2),
+    getAutomationDir(config2)
   ];
   for (const dir of dirsToCreate) {
     if (!fs7.existsSync(dir)) {
@@ -14752,6 +14766,7 @@ export {
   filterUnfixedGroups,
   getAnalyzedReportsDir,
   getAppticsCrashesDir,
+  getAutomationDir,
   getConfig,
   getMainCrashLogsDir,
   getOtherCrashesDir,
