@@ -1,6 +1,7 @@
 import { z } from "zod";
 declare const envSchema: z.ZodObject<{
     CRASH_ANALYSIS_PARENT: z.ZodString;
+    CLAUDE_CLI_PATH: z.ZodOptional<z.ZodString>;
     DSYM_PATH: z.ZodOptional<z.ZodString>;
     APP_PATH: z.ZodOptional<z.ZodString>;
     APP_NAME: z.ZodOptional<z.ZodString>;
