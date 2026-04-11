@@ -84,28 +84,28 @@ When both the JSON config file and environment variables provide the same key, *
 
 ### Config key reference
 
-| Key | Required | Description |
-|---|---|---|
-| `CRASH_ANALYSIS_PARENT` | **Yes** | Path to your ParentHolderFolder |
-| `CLAUDE_CLI_PATH` | **Yes** (automation) | Absolute path to the Claude CLI binary (e.g. `~/.local/bin/claude`) |
-| `DSYM_PATH` | Recommended | Path to `MyApp.dSYM` bundle — required for symbolication |
-| `APP_PATH` | Recommended | Path to `MyApp.app` bundle |
-| `APP_NAME` | Optional | App binary name (e.g. `MyApp`) — used to filter frames in reports |
-| `MASTER_BRANCH_PATH` | Optional | Path to master/live branch checkout (creates `CurrentMasterLiveBranch` symlink) |
-| `DEV_BRANCH_PATH` | Optional | Path to dev branch checkout (creates `CurrentDevelopmentBranch` symlink) |
-| `CRASH_INPUT_DIR` | Optional | Override directory searched for `.xccrashpoint` files |
-| `CRASH_VERSIONS` | Optional | Comma-separated version filter for exports |
-| `CRASH_DATE_OFFSET` | Optional | Days ago to target for daily run (default: `"3"`) |
-| `APP_DISPLAY_NAME` | Optional | App name shown in pipeline prompts and Cliq notifications |
-| `APPTICS_MCP_NAME` | Optional | Name of your Apptics MCP server (`claude mcp list`) |
-| `PROJECTS_MCP_NAME` | Optional | Name of your Zoho Projects MCP server (`claude mcp list`) |
-| `ZOHO_CLIQ_WEBHOOK_URL` | Optional | Webhook URL for Zoho Cliq crash notifications |
-| `ZOHO_PROJECTS_MCP_URL` | Optional | Base URL of your Zoho Projects MCP server |
-| `ZOHO_PROJECTS_PORTAL_ID` | Optional | Zoho Projects portal ID |
-| `ZOHO_PROJECTS_PROJECT_ID` | Optional | Zoho Projects project ID |
-| `ZOHO_BUG_STATUS_OPEN` | Optional | Status ID for "Open" bugs in Zoho Projects |
-| `ZOHO_BUG_APP_VERSION` | Optional | Custom field name for app version on bug items |
-| `ZOHO_BUG_NUM_OF_OCCURRENCES` | Optional | Custom field name for occurrence count on bug items |
+| Key | Description |
+|---|---|
+| `CRASH_ANALYSIS_PARENT` | Path to your ParentHolderFolder |
+| `CLAUDE_CLI_PATH` | Absolute path to the Claude CLI binary (e.g. `~/.local/bin/claude`) |
+| `DSYM_PATH` | Path to `MyApp.dSYM` bundle — needed for symbolication |
+| `APP_PATH` | Path to `MyApp.app` bundle |
+| `APP_NAME` | App binary name (e.g. `MyApp`) — used to filter frames in reports |
+| `MASTER_BRANCH_PATH` | Path to master/live branch checkout (creates `CurrentMasterLiveBranch` symlink) |
+| `DEV_BRANCH_PATH` | Path to dev branch checkout (creates `CurrentDevelopmentBranch` symlink) |
+| `CRASH_INPUT_DIR` | Override directory searched for `.xccrashpoint` files |
+| `CRASH_VERSIONS` | Comma-separated version filter for exports |
+| `CRASH_DATE_OFFSET` | Days ago to target for daily run (default: `"3"`) |
+| `APP_DISPLAY_NAME` | App name shown in pipeline prompts and Cliq notifications |
+| `APPTICS_MCP_NAME` | Name of your Apptics MCP server (`claude mcp list`) |
+| `PROJECTS_MCP_NAME` | Name of your Zoho Projects MCP server (`claude mcp list`) |
+| `ZOHO_CLIQ_WEBHOOK_URL` | Webhook URL for Zoho Cliq crash notifications |
+| `ZOHO_PROJECTS_MCP_URL` | Base URL of your Zoho Projects MCP server |
+| `ZOHO_PROJECTS_PORTAL_ID` | Zoho Projects portal ID |
+| `ZOHO_PROJECTS_PROJECT_ID` | Zoho Projects project ID |
+| `ZOHO_BUG_STATUS_OPEN` | Status ID for "Open" bugs in Zoho Projects |
+| `ZOHO_BUG_APP_VERSION` | Custom field name for app version on bug items |
+| `ZOHO_BUG_NUM_OF_OCCURRENCES` | Custom field name for occurrence count on bug items |
 
 ### Cursor / Claude Desktop
 
