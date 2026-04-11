@@ -23,6 +23,7 @@ export interface FullCrashPointConfig {
     ZOHO_BUG_STATUS_OPEN?: string;
     ZOHO_BUG_APP_VERSION?: string;
     ZOHO_BUG_NUM_OF_OCCURRENCES?: string;
+    SCHEDULED_RUN_TIME?: string;
 }
 export declare function generateMcpJson(config: FullCrashPointConfig): string;
 export declare function generatePlist(config: FullCrashPointConfig): string;

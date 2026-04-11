@@ -67,6 +67,7 @@ When both the JSON config file and environment variables provide the same key, *
   "CRASH_INPUT_DIR": "",
   "CRASH_VERSIONS": "1.0.0",
   "CRASH_DATE_OFFSET": "3",
+  "SCHEDULED_RUN_TIME": "11:00",
 
   "APP_DISPLAY_NAME": "MyApp",
   "APPTICS_MCP_NAME": "apptics-mcp",
@@ -96,6 +97,7 @@ When both the JSON config file and environment variables provide the same key, *
 | `CRASH_INPUT_DIR` | Override directory searched for `.xccrashpoint` files |
 | `CRASH_VERSIONS` | Comma-separated version filter for exports |
 | `CRASH_DATE_OFFSET` | Days ago to target for daily run (default: `"3"`) |
+| `SCHEDULED_RUN_TIME` | Time of day for the scheduled launchd pipeline run in HH:MM 24-hour format, where HH is 0–23 and MM is 0–59 (default: `"11:00"`) |
 | `APP_DISPLAY_NAME` | App name shown in pipeline prompts and Cliq notifications |
 | `APPTICS_MCP_NAME` | Name of your Apptics MCP server (`claude mcp list`) |
 | `PROJECTS_MCP_NAME` | Name of your Zoho Projects MCP server (`claude mcp list`) |
@@ -176,6 +178,12 @@ ParentHolderFolder/                   ← CRASH_ANALYSIS_PARENT
 ```
 
 Run `setup_folders` (MCP tool) or `node dist/cli.js setup` to create this structure. `setup_folders` also auto-generates `.mcp.json` in your ParentHolderFolder and the launchd plist at `~/Library/LaunchAgents/com.crashpipeline.daily_mcp.plist` — both only if they don't already exist, so your customizations are never overwritten.
+
+> **Note:** macOS must be awake for the scheduled launchd job to run. If the Mac is asleep at the scheduled time, the job will run once the next time the Mac wakes up. To guarantee the job runs at the configured time, schedule a system wake event a few minutes before the run using:
+> ```bash
+> sudo pmset repeat wakeorpoweron MTWRFSU HH:MM:00
+> ```
+> Replace `HH:MM` with a time a few minutes before your `SCHEDULED_RUN_TIME` (e.g. if `SCHEDULED_RUN_TIME` is `"11:00"`, use `10:55:00`).
 
 The `StateMaintenance/` folder holds `processed_manifest.json` (tracks which crash files have already been processed, keyed by `Incident Identifier` UUID) and `fix_status.json` (local fix tracking database). This prevents re-exporting and re-symbolicating the same crashes across sessions. Pass `includeProcessedCrashes: true` (MCP) or `--include-processed` (CLI) to override and reprocess all files.
 
