@@ -176,7 +176,7 @@ const COM_CRASHPIPELINE_DAILY_PLIST_EXAMPLE = `<?xml version="1.0" encoding="UTF
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.crashpipeline.daily</string>
+    <string>com.crashpipeline.daily_mcp</string>
 
     <key>ProgramArguments</key>
     <array>
@@ -228,7 +228,7 @@ export function getAutomationTemplates(parentDir: string): AutomationTemplate[] 
       executable: false,
     },
     {
-      filename: "com.crashpipeline.daily.plist.example",
+      filename: "com.crashpipeline.daily_mcp.plist.example",
       content: COM_CRASHPIPELINE_DAILY_PLIST_EXAMPLE,
       executable: false,
     },
