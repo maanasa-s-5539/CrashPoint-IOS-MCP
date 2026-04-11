@@ -531,6 +531,11 @@ server.registerTool(
     fs.writeFileSync(jsonReportPath, JSON.stringify(report, null, 2), "utf-8");
     const csvExport = exportReportToCsv(report, csvReportPath);
 
+    const latestJsonPath = path.join(reportsDir, "latest.json");
+    const latestCsvPath = path.join(reportsDir, "latest.csv");
+    fs.copyFileSync(jsonReportPath, latestJsonPath);
+    fs.copyFileSync(csvReportPath, latestCsvPath);
+
     const result = {
       ...report,
       json_report_path: jsonReportPath,
@@ -727,6 +732,10 @@ server.registerTool(
         fs.mkdirSync(reportsDir, { recursive: true });
         fs.writeFileSync(reportFile, JSON.stringify(analysisReport, null, 2), "utf-8");
         exportReportToCsv(analysisReport, csvFile);
+        const latestJsonPath = path.join(reportsDir, "latest.json");
+        const latestCsvPath = path.join(reportsDir, "latest.csv");
+        fs.copyFileSync(reportFile, latestJsonPath);
+        fs.copyFileSync(csvFile, latestCsvPath);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error(`Warning: failed to save report to ${reportFile}: ${msg}`);
@@ -796,6 +805,10 @@ server.registerTool(
       fs.mkdirSync(reportsDir, { recursive: true });
       fs.writeFileSync(reportFile, JSON.stringify(analysisReport, null, 2), "utf-8");
       exportReportToCsv(analysisReport, csvFile);
+      const latestJsonPath = path.join(reportsDir, "latest.json");
+      const latestCsvPath = path.join(reportsDir, "latest.csv");
+      fs.copyFileSync(reportFile, latestJsonPath);
+      fs.copyFileSync(csvFile, latestCsvPath);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`Warning: failed to save report to ${reportFile}: ${msg}`);

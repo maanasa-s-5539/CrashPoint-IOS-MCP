@@ -33,5 +33,10 @@ export async function cmdAnalyze(flags: Record<string, string | boolean>): Promi
   } else {
     console.error(`CSV export failed: ${csvResult.message}`);
   }
+
+  const latestJsonPath = path.join(reportsDir, "latest.json");
+  const latestCsvPath = path.join(reportsDir, "latest.csv");
+  fs.copyFileSync(jsonFile, latestJsonPath);
+  fs.copyFileSync(csvFile, latestCsvPath);
 }
 

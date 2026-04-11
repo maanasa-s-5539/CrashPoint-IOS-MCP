@@ -13847,6 +13847,9 @@ function getAnalyzedReportsDir(config2) {
 function getStateMaintenanceDir(config2) {
   return path.join(config2.CRASH_ANALYSIS_PARENT, "StateMaintenance");
 }
+function getAutomationDir(config2) {
+  return path.join(config2.CRASH_ANALYSIS_PARENT, "Automation");
+}
 function hasCrashFiles(dir) {
   return fs.existsSync(dir) && fs.readdirSync(dir).some((f) => f.endsWith(".crash") || f.endsWith(".ips"));
 }
@@ -14012,7 +14015,9 @@ function extractVersion(crashFilePath) {
     for (const line of lines) {
       const match = VERSION_REGEX.exec(line);
       if (match) {
-        return match[1].trim();
+        const raw = match[1].trim();
+        const parenIdx = raw.indexOf(" (");
+        return parenIdx !== -1 ? raw.slice(0, parenIdx) : raw;
       }
     }
   } catch {
@@ -14351,6 +14356,14 @@ async function runBatchAll(dsymPath, manifest) {
 
 // src/pathSafety.ts
 import path5 from "path";
+function assertPathUnderBase(userPath, base) {
+  const resolved = path5.resolve(userPath);
+  const resolvedBase = path5.resolve(base);
+  if (!resolved.startsWith(resolvedBase + path5.sep) && resolved !== resolvedBase) {
+    throw new Error(`Path "${userPath}" is outside the allowed directory "${base}"`);
+  }
+  return resolved;
+}
 function assertNoTraversal(userPath) {
   if (userPath.includes("..")) {
     throw new Error(`Path "${userPath}" contains directory traversal`);
@@ -14453,7 +14466,11 @@ function parseCrashMetadata(lines) {
     const ovMatch = OS_VERSION_RE.exec(line);
     if (ovMatch) osVersion = ovMatch[1].trim();
     const avMatch = APP_VERSION_RE.exec(line);
-    if (avMatch) appVersion = avMatch[1].trim();
+    if (avMatch) {
+      const raw = avMatch[1].trim();
+      const parenIdx = raw.indexOf(" (");
+      appVersion = parenIdx !== -1 ? raw.slice(0, parenIdx) : raw;
+    }
     const ctMatch = CRASHED_THREAD_RE.exec(line);
     if (ctMatch && !crashedThreadFound) {
       crashedThreadId = parseInt(ctMatch[1], 10);
@@ -14702,7 +14719,11 @@ function escapeCsvValue(value) {
   return `"${escaped}"`;
 }
 function formatAppVersions(appVersions) {
-  return Object.entries(appVersions).sort(([, a], [, b]) => b - a).map(([ver, count]) => `${ver} (${count})`).join(", ");
+  return Object.entries(appVersions).sort(([, a], [, b]) => b - a).map(([ver, count]) => {
+    const parenIdx = ver.indexOf(" (");
+    const shortVer = parenIdx !== -1 ? ver.slice(0, parenIdx) : ver;
+    return `${shortVer} (${count})`;
+  }).join(", ");
 }
 function formatDevices(devices) {
   return Object.entries(devices).sort(([, a], [, b]) => b - a).map(([device, count]) => `${device} (${count})`).join(", ");
@@ -14843,6 +14864,10 @@ async function cmdAnalyze(flags) {
   } else {
     console.error(`CSV export failed: ${csvResult.message}`);
   }
+  const latestJsonPath = path10.join(reportsDir, "latest.json");
+  const latestCsvPath = path10.join(reportsDir, "latest.csv");
+  fs8.copyFileSync(jsonFile, latestJsonPath);
+  fs8.copyFileSync(csvFile, latestCsvPath);
 }
 
 // src/core/setup.ts
@@ -14866,7 +14891,8 @@ function setupWorkspace(options = {}) {
     otherDir,
     symbolicatedDir,
     getAnalyzedReportsDir(config2),
-    getStateMaintenanceDir(config2)
+    getStateMaintenanceDir(config2),
+    getAutomationDir(config2)
   ];
   for (const dir of dirsToCreate) {
     if (!fs9.existsSync(dir)) {
@@ -15010,6 +15036,10 @@ Pipeline skipped: Range ${rangeKey} already fully processed.`);
     const csvFile2 = path12.join(reportsDir2, `sheetReport_${ts2}.csv`);
     fs10.writeFileSync(reportFile2, JSON.stringify(report2, null, 2), "utf-8");
     exportReportToCsv(report2, csvFile2);
+    const latestJsonPath = path12.join(reportsDir2, "latest.json");
+    const latestCsvPath = path12.join(reportsDir2, "latest.csv");
+    fs10.copyFileSync(reportFile2, latestJsonPath);
+    fs10.copyFileSync(csvFile2, latestCsvPath);
     console.log("\n\u2500\u2500 Analysis \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500");
     console.log(JSON.stringify(report2, null, 2));
     console.log(`JSON report saved to: ${reportFile2}`);
@@ -15163,9 +15193,11 @@ async function cmdVerifyDsym(flags) {
   if (hasCrashFlag) {
     if (crashPath) {
       assertNoTraversal(crashPath);
+      assertPathUnderBase(crashPath, getMainCrashLogsDir(config2));
       crashFiles.push(crashPath);
     }
     if (crashDir) {
+      assertPathUnderBase(crashDir, getMainCrashLogsDir(config2));
       if (fs11.existsSync(crashDir)) {
         fs11.readdirSync(crashDir).filter((f) => f.endsWith(".crash") || f.endsWith(".ips")).forEach((f) => crashFiles.push(path13.join(crashDir, f)));
       }
@@ -15186,7 +15218,8 @@ async function cmdVerifyDsym(flags) {
     console.log(JSON.stringify({ valid: true, dsymPath, dsymUuids, detail: `dSYM is valid. Found ${dsymUuids.length} UUID(s). No crash files found for UUID comparison.` }, null, 2));
     return;
   }
-  const binaryImgRe = /^\s*0x[0-9a-fA-F]+\s+-\s+0x[0-9a-fA-F]+\s+\S+\s+\S+\s+<([0-9a-f]{32})>/gim;
+  const binaryImgRe = /^\s*0x[0-9a-fA-F]+\s+-\s+0x[0-9a-fA-F]+\s+(\S+)\s+\S+\s+<([0-9a-f]{32})>/gim;
+  const appName = config2.APP_NAME;
   const crashFileUuids = [];
   for (const cf of crashFiles) {
     let content = "";
@@ -15199,7 +15232,12 @@ async function cmdVerifyDsym(flags) {
     let m;
     binaryImgRe.lastIndex = 0;
     while ((m = binaryImgRe.exec(content)) !== null) {
-      const raw = m[1].toUpperCase();
+      const binaryName = m[1];
+      const rawUuid = m[2];
+      if (appName && binaryName !== appName) {
+        continue;
+      }
+      const raw = rawUuid.toUpperCase();
       const uuid3 = `${raw.slice(0, 8)}-${raw.slice(8, 12)}-${raw.slice(12, 16)}-${raw.slice(16, 20)}-${raw.slice(20)}`;
       if (!seen.has(uuid3)) {
         seen.add(uuid3);
@@ -15287,13 +15325,15 @@ Commands:
   clean                 Delete crash files older than a given date
     --before-date <date> ISO date \u2014 files with crash dates before this are deleted (required)
     --dry-run           Preview what would be deleted without deleting
-  verify-dsym           Validate a .dSYM bundle and check UUID matches against crash files
+  verify-dsym           Validate a .dSYM bundle and check UUID matches against crash files in MainCrashLogsFolder
+                        (the post-export location where XCode crash logs and other crashes live).
                         With no flags: dSYM is resolved from the dSYM_File symlink in CRASH_ANALYSIS_PARENT,
                         and crashes are collected from all MainCrashLogsFolder subfolders automatically.
                         --dsym and --crash/--crash-dir must be provided together, or neither.
+                        --crash-dir must be within MainCrashLogsFolder.
     --dsym <path>       Path to .dSYM bundle (overrides DSYM_PATH env var and dSYM_File symlink)
-    --crash <path>      Path to a single .crash or .ips file to compare UUIDs against
-    --crash-dir <dir>   Directory of crash files to compare UUIDs against
+    --crash <path>      Path to a single .crash or .ips file (must be within MainCrashLogsFolder) to compare UUIDs against
+    --crash-dir <dir>   Directory of crash files within MainCrashLogsFolder to compare UUIDs against
   fix-status            Manage crash fix statuses (unified command)
     --action <set|unset|list>  Action to perform (required)
     --signature <sig>   Crash signature (required for set/unset)

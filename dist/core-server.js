@@ -30163,6 +30163,9 @@ function getAnalyzedReportsDir(config2) {
 function getStateMaintenanceDir(config2) {
   return path.join(config2.CRASH_ANALYSIS_PARENT, "StateMaintenance");
 }
+function getAutomationDir(config2) {
+  return path.join(config2.CRASH_ANALYSIS_PARENT, "Automation");
+}
 function hasCrashFiles(dir) {
   return fs.existsSync(dir) && fs.readdirSync(dir).some((f) => f.endsWith(".crash") || f.endsWith(".ips"));
 }
@@ -30328,7 +30331,9 @@ function extractVersion(crashFilePath) {
     for (const line of lines) {
       const match = VERSION_REGEX.exec(line);
       if (match) {
-        return match[1].trim();
+        const raw = match[1].trim();
+        const parenIdx = raw.indexOf(" (");
+        return parenIdx !== -1 ? raw.slice(0, parenIdx) : raw;
       }
     }
   } catch {
@@ -30665,7 +30670,11 @@ function parseCrashMetadata(lines) {
     const ovMatch = OS_VERSION_RE.exec(line);
     if (ovMatch) osVersion = ovMatch[1].trim();
     const avMatch = APP_VERSION_RE.exec(line);
-    if (avMatch) appVersion = avMatch[1].trim();
+    if (avMatch) {
+      const raw = avMatch[1].trim();
+      const parenIdx = raw.indexOf(" (");
+      appVersion = parenIdx !== -1 ? raw.slice(0, parenIdx) : raw;
+    }
     const ctMatch = CRASHED_THREAD_RE.exec(line);
     if (ctMatch && !crashedThreadFound) {
       crashedThreadId = parseInt(ctMatch[1], 10);
@@ -31001,7 +31010,11 @@ function escapeCsvValue(value) {
   return `"${escaped}"`;
 }
 function formatAppVersions(appVersions) {
-  return Object.entries(appVersions).sort(([, a], [, b]) => b - a).map(([ver, count]) => `${ver} (${count})`).join(", ");
+  return Object.entries(appVersions).sort(([, a], [, b]) => b - a).map(([ver, count]) => {
+    const parenIdx = ver.indexOf(" (");
+    const shortVer = parenIdx !== -1 ? ver.slice(0, parenIdx) : ver;
+    return `${shortVer} (${count})`;
+  }).join(", ");
 }
 function formatDevices(devices) {
   return Object.entries(devices).sort(([, a], [, b]) => b - a).map(([device, count]) => `${device} (${count})`).join(", ");
@@ -31079,7 +31092,8 @@ function setupWorkspace(options = {}) {
     otherDir,
     symbolicatedDir,
     getAnalyzedReportsDir(config2),
-    getStateMaintenanceDir(config2)
+    getStateMaintenanceDir(config2),
+    getAutomationDir(config2)
   ];
   for (const dir of dirsToCreate) {
     if (!fs8.existsSync(dir)) {
@@ -31140,7 +31154,7 @@ var server = new McpServer({
 server.registerTool(
   "setup_folders",
   {
-    description: "Create the ParentHolderFolder directory structure (MainCrashLogsFolder/XCodeCrashLogs, MainCrashLogsFolder/AppticsCrashLogs, MainCrashLogsFolder/OtherCrashLogs, SymbolicatedCrashLogsFolder) and optional symlinks for master/dev branches. All symlink paths are pre-configured via environment variables \u2014 do NOT ask the user for them unless they explicitly want to override.",
+    description: "Create the ParentHolderFolder directory structure (MainCrashLogsFolder/XCodeCrashLogs, MainCrashLogsFolder/AppticsCrashLogs, MainCrashLogsFolder/OtherCrashLogs, SymbolicatedCrashLogsFolder, AnalyzedReportsFolder, StateMaintenance, Automation) and optional symlinks for master/dev branches. All symlink paths are pre-configured via environment variables \u2014 do NOT ask the user for them unless they explicitly want to override.",
     inputSchema: external_exports3.object({
       masterBranchPath: external_exports3.string().optional().describe("ALREADY CONFIGURED via MASTER_BRANCH_PATH env var. Do NOT ask the user. Only provide to override. Creates CurrentMasterLiveBranch symlink."),
       devBranchPath: external_exports3.string().optional().describe("ALREADY CONFIGURED via DEV_BRANCH_PATH env var. Do NOT ask the user. Only provide to override. Creates CurrentDevelopmentBranch symlink."),
@@ -31331,7 +31345,7 @@ server.registerTool(
 server.registerTool(
   "verify_dsym",
   {
-    description: "Validate a .dSYM bundle and check if its UUIDs match those in crash files. Runs dwarfdump --uuid on the dSYM and parses Binary Images sections from crash files. Requires macOS with Xcode CLI tools. When no dsymPath is given, resolves the dSYM_File symlink in CRASH_ANALYSIS_PARENT. When no crashPath/crashDir is given, auto-collects crash files from all MainCrashLogsFolder subfolders (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs). dsymPath and crashPath/crashDir must be provided together, or neither.",
+    description: "Validate a .dSYM bundle and check if its UUIDs match those in crash files collected from MainCrashLogsFolder (the post-export location where XCode crash logs and other crashes live). Runs dwarfdump --uuid on the dSYM and parses Binary Images sections from crash files. Requires macOS with Xcode CLI tools. When no dsymPath is given, resolves the dSYM_File symlink in CRASH_ANALYSIS_PARENT. When no crashPath/crashDir is given, auto-collects crash files from all MainCrashLogsFolder subfolders (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs). crashDir must be within MainCrashLogsFolder. dsymPath and crashPath/crashDir must be provided together, or neither. If APP_NAME is set, only the UUID of the app binary is extracted from crash files (recommended to avoid false mismatches from system framework UUIDs).",
     inputSchema: external_exports3.object({
       dsymPath: external_exports3.string().optional().describe("Path to .dSYM bundle (defaults to DSYM_PATH env var, then dSYM_File symlink in CRASH_ANALYSIS_PARENT). Must be provided together with crashPath/crashDir, or omitted entirely."),
       crashPath: external_exports3.string().optional().describe("Path to a single .crash or .ips file to compare UUIDs against. Must be provided together with dsymPath, or omitted entirely."),
@@ -31455,10 +31469,11 @@ server.registerTool(
     if (hasCrashInput) {
       if (input.crashPath) {
         assertNoTraversal(input.crashPath);
+        assertPathUnderBase(input.crashPath, getMainCrashLogsDir(config2));
         crashFiles.push(input.crashPath);
       }
       if (input.crashDir) {
-        assertPathUnderBase(input.crashDir, config2.CRASH_ANALYSIS_PARENT);
+        assertPathUnderBase(input.crashDir, getMainCrashLogsDir(config2));
         if (fs9.existsSync(input.crashDir)) {
           fs9.readdirSync(input.crashDir).filter((f) => f.endsWith(".crash") || f.endsWith(".ips")).forEach((f) => crashFiles.push(path10.join(input.crashDir, f)));
         }
@@ -31487,7 +31502,8 @@ server.registerTool(
         structuredContent: result2
       };
     }
-    const binaryImgRe = /^\s*0x[0-9a-fA-F]+\s+-\s+0x[0-9a-fA-F]+\s+\S+\s+\S+\s+<([0-9a-f]{32})>/gim;
+    const binaryImgRe = /^\s*0x[0-9a-fA-F]+\s+-\s+0x[0-9a-fA-F]+\s+(\S+)\s+\S+\s+<([0-9a-f]{32})>/gim;
+    const appName = config2.APP_NAME;
     const crashFileUuids = [];
     for (const crashFile of crashFiles) {
       let content = "";
@@ -31500,7 +31516,12 @@ server.registerTool(
       let m;
       binaryImgRe.lastIndex = 0;
       while ((m = binaryImgRe.exec(content)) !== null) {
-        const raw = m[1].toUpperCase();
+        const binaryName = m[1];
+        const rawUuid = m[2];
+        if (appName && binaryName !== appName) {
+          continue;
+        }
+        const raw = rawUuid.toUpperCase();
         const uuid3 = `${raw.slice(0, 8)}-${raw.slice(8, 12)}-${raw.slice(12, 16)}-${raw.slice(16, 20)}-${raw.slice(20)}`;
         if (!seen.has(uuid3)) {
           seen.add(uuid3);
@@ -31572,6 +31593,10 @@ server.registerTool(
     const csvReportPath = path10.join(reportsDir, `sheetReport_${ts}.csv`);
     fs9.writeFileSync(jsonReportPath, JSON.stringify(report, null, 2), "utf-8");
     const csvExport = exportReportToCsv(report, csvReportPath);
+    const latestJsonPath = path10.join(reportsDir, "latest.json");
+    const latestCsvPath = path10.join(reportsDir, "latest.csv");
+    fs9.copyFileSync(jsonReportPath, latestJsonPath);
+    fs9.copyFileSync(csvReportPath, latestCsvPath);
     const result = {
       ...report,
       json_report_path: jsonReportPath,
@@ -31737,6 +31762,10 @@ server.registerTool(
         fs9.mkdirSync(reportsDir2, { recursive: true });
         fs9.writeFileSync(reportFile2, JSON.stringify(analysisReport2, null, 2), "utf-8");
         exportReportToCsv(analysisReport2, csvFile2);
+        const latestJsonPath = path10.join(reportsDir2, "latest.json");
+        const latestCsvPath = path10.join(reportsDir2, "latest.csv");
+        fs9.copyFileSync(reportFile2, latestJsonPath);
+        fs9.copyFileSync(csvFile2, latestCsvPath);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error(`Warning: failed to save report to ${reportFile2}: ${msg}`);
@@ -31791,6 +31820,10 @@ server.registerTool(
       fs9.mkdirSync(reportsDir, { recursive: true });
       fs9.writeFileSync(reportFile, JSON.stringify(analysisReport, null, 2), "utf-8");
       exportReportToCsv(analysisReport, csvFile);
+      const latestJsonPath = path10.join(reportsDir, "latest.json");
+      const latestCsvPath = path10.join(reportsDir, "latest.csv");
+      fs9.copyFileSync(reportFile, latestJsonPath);
+      fs9.copyFileSync(csvFile, latestCsvPath);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`Warning: failed to save report to ${reportFile}: ${msg}`);

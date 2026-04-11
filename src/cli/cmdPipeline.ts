@@ -97,6 +97,10 @@ export async function cmdPipeline(flags: Record<string, string | boolean>): Prom
     const csvFile = path.join(reportsDir, `sheetReport_${ts}.csv`);
     fs.writeFileSync(reportFile, JSON.stringify(report, null, 2), "utf-8");
     exportReportToCsv(report, csvFile);
+    const latestJsonPath = path.join(reportsDir, "latest.json");
+    const latestCsvPath = path.join(reportsDir, "latest.csv");
+    fs.copyFileSync(reportFile, latestJsonPath);
+    fs.copyFileSync(csvFile, latestCsvPath);
     console.log("\n── Analysis ────────────────────────────────────────");
     console.log(JSON.stringify(report, null, 2));
     console.log(`JSON report saved to: ${reportFile}`);
