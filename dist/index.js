@@ -5,9 +5,6 @@ var __export = (target, all) => {
     __defProp(target, name, { get: all[name], enumerable: true });
 };
 
-// src/config.ts
-import dotenv from "dotenv";
-
 // node_modules/zod/v4/classic/external.js
 var external_exports = {};
 __export(external_exports, {
@@ -13779,7 +13776,26 @@ config(en_default());
 // src/config.ts
 import path from "path";
 import fs from "fs";
-dotenv.config({ path: path.resolve(__dirname, "..", ".env"), quiet: true });
+function readJsonIfExists(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) return void 0;
+    const raw = fs.readFileSync(filePath, "utf-8");
+    return JSON.parse(raw);
+  } catch {
+    return void 0;
+  }
+}
+function loadCrashpointConfigObject() {
+  if (process.env.CRASHPOINT_CONFIG_PATH) {
+    return readJsonIfExists(process.env.CRASHPOINT_CONFIG_PATH) ?? {};
+  }
+  const parentDir = process.env.CRASH_ANALYSIS_PARENT;
+  if (parentDir) {
+    const configPath = path.join(parentDir, "crashpoint.config.json");
+    return readJsonIfExists(configPath) ?? {};
+  }
+  return {};
+}
 var envSchema = external_exports.object({
   CRASH_ANALYSIS_PARENT: external_exports.string().min(1).describe("Path to ParentHolderFolder"),
   DSYM_PATH: external_exports.string().optional().describe("Path to MyApp.dSYM"),
@@ -13793,7 +13809,8 @@ var envSchema = external_exports.object({
 var cachedConfig;
 function getConfig() {
   if (!cachedConfig) {
-    cachedConfig = envSchema.parse(process.env);
+    const fileCfg = loadCrashpointConfigObject();
+    cachedConfig = envSchema.parse({ ...fileCfg, ...process.env });
   }
   return cachedConfig;
 }
@@ -13820,6 +13837,12 @@ function getStateMaintenanceDir(config2) {
 }
 function getAutomationDir(config2) {
   return path.join(config2.CRASH_ANALYSIS_PARENT, "Automation");
+}
+function getLatestJsonReportPath(config2) {
+  return path.join(getAnalyzedReportsDir(config2), "latest.json");
+}
+function getLatestCsvReportPath(config2) {
+  return path.join(getAnalyzedReportsDir(config2), "latest.csv");
 }
 function hasCrashFiles(dir) {
   return fs.existsSync(dir) && fs.readdirSync(dir).some((f) => f.endsWith(".crash") || f.endsWith(".ips"));
@@ -14627,19 +14650,19 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG_DIR="$SCRIPT_DIR/ScheduledRunLogs"
 mkdir -p "$LOG_DIR"
 
-# \u2500\u2500\u2500 LOAD .env \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+# \u2500\u2500\u2500 LOAD CONFIG FILE \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 PARENT_HOLDER_FOLDER="{{PARENT_HOLDER_FOLDER}}"
-ENV_FILE="$PARENT_HOLDER_FOLDER/.env"
+CONFIG_JSON="$PARENT_HOLDER_FOLDER/crashpoint.config.json"
 
-if [ ! -f "$ENV_FILE" ]; then
-  echo "ERROR: .env file not found at $ENV_FILE"
+if [ ! -f "$CONFIG_JSON" ]; then
+  echo "ERROR: Config file not found at $CONFIG_JSON"
   exit 1
 fi
 
-set -a
-# shellcheck source=/dev/null
-source "$ENV_FILE"
-set +a
+APP_DISPLAY_NAME=$(node -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));console.log(c.APP_DISPLAY_NAME||'')" "$CONFIG_JSON")
+APPTICS_MCP_NAME=$(node -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));console.log(c.APPTICS_MCP_NAME||'')" "$CONFIG_JSON")
+PROJECTS_MCP_NAME=$(node -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));console.log(c.PROJECTS_MCP_NAME||'')" "$CONFIG_JSON")
+CRASH_VERSIONS=$(node -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));console.log(c.CRASH_VERSIONS||'')" "$CONFIG_JSON")
 
 # \u2500\u2500\u2500 PRE-STEP: Clear latest report pointer copies only \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 # Removes ONLY latest.json/latest.csv (the stable pointers/copies)
@@ -14676,7 +14699,7 @@ if [ ! -x "$CLAUDE_PATH" ]; then
   exit 1
 fi
 
-# \u2500\u2500\u2500 SUBSTITUTE PLACEHOLDERS FROM .env \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+# \u2500\u2500\u2500 SUBSTITUTE PLACEHOLDERS FROM config file \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 PROMPT=$(sed \\
   -e "s|{{APP_DISPLAY_NAME}}|\${APP_DISPLAY_NAME}|g" \\
   -e "s|{{APPTICS_MCP_NAME}}|\${APPTICS_MCP_NAME}|g" \\
@@ -14684,7 +14707,7 @@ PROMPT=$(sed \\
   -e "s|{{CRASH_VERSIONS}}|\${CRASH_VERSIONS}|g" \\
   "$PROMPT_FILE")
 
-# \u2500\u2500\u2500 BUILD --allowedTools DYNAMICALLY FROM .env MCP NAMES \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+# \u2500\u2500\u2500 BUILD --allowedTools DYNAMICALLY FROM config file MCP NAMES \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 ALLOWED_TOOLS="mcp__crashpoint-ios__*,mcp__crashpoint-integrations__*,mcp__claude_ai_\${APPTICS_MCP_NAME}__*,mcp__claude_ai_\${PROJECTS_MCP_NAME}__*"
 
 # \u2500\u2500\u2500 TIMESTAMP & LOG FILE \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -14722,10 +14745,10 @@ exit "$EXIT_CODE"
 var DAILY_CRASH_PIPELINE_PROMPT_MD = `You are running an automated daily crash analysis pipeline. Execute these steps in order, stopping if any step fails:
 
 ## Step 1: Download Crashes from Apptics
-Use the {{APPTICS_MCP_NAME}} MCP server. Fetch all crashes and crash details for {{APP_DISPLAY_NAME}} iOS app, for the version number in the .env file from the previous 24 hours. Save the crash details to 'AppticsCrash_<number>.crash' text files in 'AppticsCrashLogs/' directory.
+Use the {{APPTICS_MCP_NAME}} MCP server. Fetch all crashes and crash details for {{APP_DISPLAY_NAME}} iOS app, for the version number {{CRASH_VERSIONS}} from the previous 24 hours. Save the crash details to 'AppticsCrash_<number>.crash' text files in 'AppticsCrashLogs/' directory.
 
 ## Step 2: Export Crash Logs
-Use CrashPoint-IOS-MCP to run the full pipeline from the previous 24 hours.
+Use CrashPoint-IOS-MCP to run the basic pipeline from the previous 24 hours.
 
 ## Step 3: Notify Cliq
 Use the Crashpoint-integrations-mcp. Using the analyzed jsonReport_<timestamp> inside ParentHolderFolder -> AnalyzedReportsFolder, notify_cliq about all the crashes from the latest report.
@@ -14995,6 +15018,8 @@ export {
   getAppticsCrashesDir,
   getAutomationDir,
   getConfig,
+  getLatestCsvReportPath,
+  getLatestJsonReportPath,
   getMainCrashLogsDir,
   getOtherCrashesDir,
   getStateMaintenanceDir,

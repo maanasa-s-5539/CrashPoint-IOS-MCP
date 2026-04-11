@@ -19,6 +19,8 @@ export declare function getSymbolicatedDir(config: CrashPointConfig): string;
 export declare function getAnalyzedReportsDir(config: CrashPointConfig): string;
 export declare function getStateMaintenanceDir(config: CrashPointConfig): string;
 export declare function getAutomationDir(config: CrashPointConfig): string;
+export declare function getLatestJsonReportPath(config: CrashPointConfig): string;
+export declare function getLatestCsvReportPath(config: CrashPointConfig): string;
 export declare function hasCrashFiles(dir: string): boolean;
 export {};
 //# sourceMappingURL=config.d.ts.map

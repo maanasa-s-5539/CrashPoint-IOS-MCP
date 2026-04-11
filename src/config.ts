@@ -1,9 +1,28 @@
-import dotenv from "dotenv";
 import { z } from "zod";
 import path from "path";
 import fs from "fs";
 
-dotenv.config({ path: path.resolve(__dirname, "..", ".env"), quiet: true });
+function readJsonIfExists(filePath: string): Record<string, unknown> | undefined {
+  try {
+    if (!fs.existsSync(filePath)) return undefined;
+    const raw = fs.readFileSync(filePath, "utf-8");
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
+}
+
+function loadCrashpointConfigObject(): Record<string, unknown> {
+  if (process.env.CRASHPOINT_CONFIG_PATH) {
+    return readJsonIfExists(process.env.CRASHPOINT_CONFIG_PATH) ?? {};
+  }
+  const parentDir = process.env.CRASH_ANALYSIS_PARENT;
+  if (parentDir) {
+    const configPath = path.join(parentDir, "crashpoint.config.json");
+    return readJsonIfExists(configPath) ?? {};
+  }
+  return {};
+}
 
 const envSchema = z.object({
   CRASH_ANALYSIS_PARENT: z.string().min(1).describe("Path to ParentHolderFolder"),
@@ -22,7 +41,8 @@ let cachedConfig: CrashPointConfig | undefined;
 
 export function getConfig(): CrashPointConfig {
   if (!cachedConfig) {
-    cachedConfig = envSchema.parse(process.env);
+    const fileCfg = loadCrashpointConfigObject();
+    cachedConfig = envSchema.parse({ ...fileCfg, ...process.env });
   }
   return cachedConfig;
 }
@@ -57,6 +77,14 @@ export function getStateMaintenanceDir(config: CrashPointConfig): string {
 
 export function getAutomationDir(config: CrashPointConfig): string {
   return path.join(config.CRASH_ANALYSIS_PARENT, "Automation");
+}
+
+export function getLatestJsonReportPath(config: CrashPointConfig): string {
+  return path.join(getAnalyzedReportsDir(config), "latest.json");
+}
+
+export function getLatestCsvReportPath(config: CrashPointConfig): string {
+  return path.join(getAnalyzedReportsDir(config), "latest.csv");
 }
 
 export function hasCrashFiles(dir: string): boolean {
