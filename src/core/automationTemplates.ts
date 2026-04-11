@@ -30,33 +30,33 @@ export interface FullCrashPointConfig {
 }
 
 export function generateMcpJson(config: FullCrashPointConfig): string {
-  const v = (k: keyof FullCrashPointConfig): string => (config[k] as string | undefined) ?? "";
+  const getConfigValue = (k: keyof FullCrashPointConfig): string => (config[k] as string | undefined) ?? "";
   const json = {
     mcpServers: {
       "crashpoint-ios": {
         command: "npx",
         args: ["-p", "github:maanasa-s-5539/CrashPoint-IOS-MCP", "crashpoint-ios-core"],
         env: {
-          CRASH_ANALYSIS_PARENT: v("CRASH_ANALYSIS_PARENT"),
-          DSYM_PATH: v("DSYM_PATH"),
-          APP_PATH: v("APP_PATH"),
-          APP_NAME: v("APP_NAME"),
-          MASTER_BRANCH_PATH: v("MASTER_BRANCH_PATH"),
-          DEV_BRANCH_PATH: v("DEV_BRANCH_PATH"),
+          CRASH_ANALYSIS_PARENT: getConfigValue("CRASH_ANALYSIS_PARENT"),
+          DSYM_PATH: getConfigValue("DSYM_PATH"),
+          APP_PATH: getConfigValue("APP_PATH"),
+          APP_NAME: getConfigValue("APP_NAME"),
+          MASTER_BRANCH_PATH: getConfigValue("MASTER_BRANCH_PATH"),
+          DEV_BRANCH_PATH: getConfigValue("DEV_BRANCH_PATH"),
         },
       },
       "crashpoint-integrations": {
         command: "npx",
         args: ["-p", "github:maanasa-s-5539/CrashPoint-Integrations-MCP", "crashpoint-integrations"],
         env: {
-          CRASH_ANALYSIS_PARENT: v("CRASH_ANALYSIS_PARENT"),
-          ZOHO_CLIQ_WEBHOOK_URL: v("ZOHO_CLIQ_WEBHOOK_URL"),
-          ZOHO_PROJECTS_PORTAL_ID: v("ZOHO_PROJECTS_PORTAL_ID"),
-          ZOHO_PROJECTS_PROJECT_ID: v("ZOHO_PROJECTS_PROJECT_ID"),
-          ZOHO_BUG_STATUS_OPEN: v("ZOHO_BUG_STATUS_OPEN"),
-          ZOHO_BUG_APP_VERSION: v("ZOHO_BUG_APP_VERSION"),
-          ZOHO_BUG_NUM_OF_OCCURRENCES: v("ZOHO_BUG_NUM_OF_OCCURRENCES"),
-          CRASH_VERSIONS: v("CRASH_VERSIONS"),
+          CRASH_ANALYSIS_PARENT: getConfigValue("CRASH_ANALYSIS_PARENT"),
+          ZOHO_CLIQ_WEBHOOK_URL: getConfigValue("ZOHO_CLIQ_WEBHOOK_URL"),
+          ZOHO_PROJECTS_PORTAL_ID: getConfigValue("ZOHO_PROJECTS_PORTAL_ID"),
+          ZOHO_PROJECTS_PROJECT_ID: getConfigValue("ZOHO_PROJECTS_PROJECT_ID"),
+          ZOHO_BUG_STATUS_OPEN: getConfigValue("ZOHO_BUG_STATUS_OPEN"),
+          ZOHO_BUG_APP_VERSION: getConfigValue("ZOHO_BUG_APP_VERSION"),
+          ZOHO_BUG_NUM_OF_OCCURRENCES: getConfigValue("ZOHO_BUG_NUM_OF_OCCURRENCES"),
+          CRASH_VERSIONS: getConfigValue("CRASH_VERSIONS"),
         },
       },
     },

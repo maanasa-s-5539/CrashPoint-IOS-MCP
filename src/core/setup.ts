@@ -61,10 +61,10 @@ export function setupWorkspace(options: SetupOptions = {}): SetupResult {
 
   // ─── Build full config from raw JSON + typed config ───────────────────────
   const configJsonPath = path.join(parentDir, "crashpoint.config.json");
-  let rawConfig: Record<string, string> = {};
+  let rawConfig: Record<string, unknown> = {};
   if (fs.existsSync(configJsonPath)) {
     try {
-      rawConfig = JSON.parse(fs.readFileSync(configJsonPath, "utf-8")) as Record<string, string>;
+      rawConfig = JSON.parse(fs.readFileSync(configJsonPath, "utf-8")) as Record<string, unknown>;
     } catch {
       // ignore parse errors — rawConfig stays empty
     }
