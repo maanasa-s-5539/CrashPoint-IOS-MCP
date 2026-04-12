@@ -1356,7 +1356,8 @@ function setupWorkspace(options = {}) {
     symbolicatedDir,
     getAnalyzedReportsDir(config),
     getStateMaintenanceDir(config),
-    getAutomationDir(config)
+    getAutomationDir(config),
+    path10.join(getAutomationDir(config), "FixPlans")
   ];
   for (const dir of dirsToCreate) {
     if (!fs8.existsSync(dir)) {
@@ -1467,7 +1468,7 @@ var server = new McpServer({
 server.registerTool(
   "setup_folders",
   {
-    description: "Create the ParentHolderFolder directory structure (MainCrashLogsFolder/XCodeCrashLogs, MainCrashLogsFolder/AppticsCrashLogs, MainCrashLogsFolder/OtherCrashLogs, SymbolicatedCrashLogsFolder, AnalyzedReportsFolder, StateMaintenance, Automation) and optional symlinks for master/dev branches. All symlink paths are pre-configured via environment variables \u2014 do NOT ask the user for them unless they explicitly want to override.",
+    description: "Create the ParentHolderFolder directory structure (MainCrashLogsFolder/XCodeCrashLogs, MainCrashLogsFolder/AppticsCrashLogs, MainCrashLogsFolder/OtherCrashLogs, SymbolicatedCrashLogsFolder, AnalyzedReportsFolder, StateMaintenance, Automation, Automation/FixPlans) and optional symlinks for master/dev branches. All symlink paths are pre-configured via environment variables \u2014 do NOT ask the user for them unless they explicitly want to override.",
     inputSchema: z2.object({
       masterBranchPath: z2.string().optional().describe("ALREADY CONFIGURED via MASTER_BRANCH_PATH env var. Do NOT ask the user. Only provide to override. Creates CurrentMasterLiveBranch symlink."),
       devBranchPath: z2.string().optional().describe("ALREADY CONFIGURED via DEV_BRANCH_PATH env var. Do NOT ask the user. Only provide to override. Creates CurrentDevelopmentBranch symlink."),

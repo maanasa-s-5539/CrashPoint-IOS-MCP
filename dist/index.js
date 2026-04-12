@@ -1227,7 +1227,8 @@ function setupWorkspace(options = {}) {
     symbolicatedDir,
     getAnalyzedReportsDir(config),
     getStateMaintenanceDir(config),
-    getAutomationDir(config)
+    getAutomationDir(config),
+    path9.join(getAutomationDir(config), "FixPlans")
   ];
   for (const dir of dirsToCreate) {
     if (!fs7.existsSync(dir)) {
