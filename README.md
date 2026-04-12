@@ -168,7 +168,8 @@ ParentHolderFolder/                   ← CRASH_ANALYSIS_PARENT
 ├── Automation/
 │   ├── run_crash_pipeline.sh         ← Auto-generated shell script for scheduled runs
 │   ├── daily_crash_pipeline_prompt.md ← Prompt template for Claude CLI
-│   └── ScheduledRunLogs/             ← Per-run log files
+│   ├── ScheduledRunLogs/             ← Per-run log files
+│   └── FixPlans/                     ← Fix plan documents
 ├── CurrentMasterLiveBranch -> ...    ← Symlink to master branch (optional)
 ├── CurrentDevelopmentBranch -> ...   ← Symlink to dev branch (optional)
 ├── dSYM_File -> ...                  ← Symlink to .dSYM bundle (optional)

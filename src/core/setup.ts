@@ -35,6 +35,7 @@ export function setupWorkspace(options: SetupOptions = {}): SetupResult {
   const dirsToCreate = [
     parentDir, mainCrashDir, xcodeCrashDir, appticsDir, otherDir,
     symbolicatedDir, getAnalyzedReportsDir(config), getStateMaintenanceDir(config), getAutomationDir(config),
+    path.join(getAutomationDir(config), "FixPlans"),
   ];
   for (const dir of dirsToCreate) {
     if (!fs.existsSync(dir)) {
