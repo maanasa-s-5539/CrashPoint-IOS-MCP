@@ -11,6 +11,8 @@
   "CRASH_INPUT_DIR": "",
   "CRASH_VERSIONS": "1.0.0",
   "CRASH_DATE_OFFSET": "3",
+  "CRASH_NUM_DAYS": "1",
+  "SCHEDULED_RUN_TIME": "11:00",
 
   "APP_DISPLAY_NAME": "MyApp",
   "APPTICS_MCP_NAME": "apptics-mcp",

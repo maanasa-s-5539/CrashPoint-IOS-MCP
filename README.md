@@ -67,6 +67,7 @@ When both the JSON config file and environment variables provide the same key, *
   "CRASH_INPUT_DIR": "",
   "CRASH_VERSIONS": "1.0.0",
   "CRASH_DATE_OFFSET": "3",
+  "CRASH_NUM_DAYS": "1",
   "SCHEDULED_RUN_TIME": "11:00",
 
   "APP_DISPLAY_NAME": "MyApp",
@@ -97,6 +98,7 @@ When both the JSON config file and environment variables provide the same key, *
 | `CRASH_INPUT_DIR` | Override directory searched for `.xccrashpoint` files |
 | `CRASH_VERSIONS` | Comma-separated version filter for exports |
 | `CRASH_DATE_OFFSET` | Days ago to target for daily run (default: `"3"`) |
+| `CRASH_NUM_DAYS` | Number of days to process in the crash window (1–180, default: `"1"`) |
 | `SCHEDULED_RUN_TIME` | Time of day for the scheduled launchd pipeline run in HH:MM 24-hour format, where HH is 0–23 and MM is 0–59 (default: `"11:00"`) |
 | `APP_DISPLAY_NAME` | App name shown in pipeline prompts and Cliq notifications |
 | `APPTICS_MCP_NAME` | Name of your Apptics MCP server (`claude mcp list`) |
