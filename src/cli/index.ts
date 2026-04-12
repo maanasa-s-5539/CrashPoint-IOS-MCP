@@ -31,8 +31,7 @@ CrashPoint iOS CLI — node dist/cli.js <command> [options]
 Commands:
   export                Export .crash files from .xccrashpoint packages into MainCrashLogsFolder/XCodeCrashLogs
     --dry-run           Preview what would be exported without writing files
-    --start-date <date> ISO date string to filter crashes from (e.g. 2026-03-01)
-    --end-date <date>   ISO date string to filter crashes until (e.g. 2026-03-20)
+    --num-days <n>      Number of days to process (1–180, default: CRASH_NUM_DAYS from config or 1)
   batch                 Symbolicate all crash files in MainCrashLogsFolder (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs)
                         using Xcode's symbolicatecrash tool
     --file <path>       Symbolicate only this single .crash file instead of batch processing all directories
@@ -47,8 +46,7 @@ Commands:
     --recursive         Search recursively
   pipeline              Full export → symbolicate → analyze
     --versions v1,v2    Comma-separated version filter
-    --start-date <date> ISO date string to filter crashes from (e.g. 2026-03-01)
-    --end-date <date>   ISO date string to filter crashes until (e.g. 2026-03-20)
+    --num-days <n>      Number of days to process (1–180, default: CRASH_NUM_DAYS from config or 1)
   clean                 Delete crash files older than a given date
     --before-date <date> ISO date — files with crash dates before this are deleted (required)
     --dry-run           Preview what would be deleted without deleting

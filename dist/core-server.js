@@ -42,6 +42,8 @@ var envSchema = z.object({
   APP_NAME: z.string().optional().describe("App binary name e.g. MyApp"),
   CRASH_INPUT_DIR: z.string().optional().describe("Override .xccrashpoint search dir"),
   CRASH_VERSIONS: z.string().optional().describe("Comma-separated version filter"),
+  CRASH_NUM_DAYS: z.string().optional().describe("Number of days to process (1\u2013180, default: 1)"),
+  CRASH_DATE_OFFSET: z.string().optional().describe("Days offset from today for end date (default: 4)"),
   MASTER_BRANCH_PATH: z.string().optional().describe("Path to current master/live branch checkout"),
   DEV_BRANCH_PATH: z.string().optional().describe("Path to current development branch checkout")
 });
@@ -213,6 +215,17 @@ function validateDateInput(dateString, paramName) {
     );
   }
   return parsed;
+}
+function computeDateRange(numDays, dateOffset) {
+  const n = Math.max(1, Math.min(numDays, 180));
+  const endDate = /* @__PURE__ */ new Date();
+  endDate.setDate(endDate.getDate() - dateOffset);
+  const startDate = new Date(endDate);
+  startDate.setDate(startDate.getDate() - n + 1);
+  return {
+    startDateISO: startDate.toISOString().slice(0, 10),
+    endDateISO: endDate.toISOString().slice(0, 10)
+  };
 }
 
 // src/core/crashExporter.ts
@@ -1521,8 +1534,7 @@ server.registerTool(
       outputDir: z2.string().optional().describe("Destination directory for crash logs"),
       versions: z2.string().optional().describe("Comma-separated version filter"),
       recursive: z2.boolean().optional().describe("Search subdirectories recursively"),
-      startDate: z2.string().optional().describe("ISO date string to filter crashes from (e.g. 2026-03-01)"),
-      endDate: z2.string().optional().describe("ISO date string to filter crashes until (e.g. 2026-03-20)"),
+      numDays: z2.number().optional().describe("Number of days to process (1\u2013180). End date = today minus CRASH_DATE_OFFSET (default 4 from config), start date = end date minus numDays + 1. Overrides CRASH_NUM_DAYS in config. Default: 1."),
       dryRun: z2.boolean().optional().describe("When true, shows what would be exported without writing any files"),
       includeProcessedCrashes: z2.boolean().optional().describe("When true, re-processes crashes that were already exported. Default is false (skip already-processed crashes).")
     }),
@@ -1552,21 +1564,10 @@ server.registerTool(
     const recursive = input.recursive ?? false;
     const dryRun = input.dryRun ?? false;
     const manifest = dryRun || input.includeProcessedCrashes ? void 0 : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "export");
-    if (input.startDate !== void 0) {
-      try {
-        validateDateInput(input.startDate, "startDate");
-      } catch (err) {
-        return { content: [{ type: "text", text: err.message }] };
-      }
-    }
-    if (input.endDate !== void 0) {
-      try {
-        validateDateInput(input.endDate, "endDate");
-      } catch (err) {
-        return { content: [{ type: "text", text: err.message }] };
-      }
-    }
-    const result = exportCrashLogs(inputDir, outputDir, versions, recursive, dryRun, input.startDate, input.endDate, manifest);
+    const offset = parseInt(config.CRASH_DATE_OFFSET ?? "4", 10);
+    const numDays = input.numDays ?? parseInt(config.CRASH_NUM_DAYS ?? "1", 10);
+    const { startDateISO, endDateISO } = computeDateRange(numDays, offset);
+    const result = exportCrashLogs(inputDir, outputDir, versions, recursive, dryRun, startDateISO, endDateISO, manifest);
     return {
       content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       structuredContent: result
@@ -1994,8 +1995,7 @@ server.registerTool(
     description: "Run the basic crash analysis pipeline: export \u2192 symbolicate \u2192 analyze. All paths (dSYM, app, directories) are auto-configured from environment variables \u2014 no path input is required.",
     inputSchema: z2.object({
       versions: z2.string().optional().describe("Comma-separated version filter for export"),
-      startDate: z2.string().optional().describe("ISO date string to filter crashes from (e.g. 2026-03-01)"),
-      endDate: z2.string().optional().describe("ISO date string to filter crashes until (e.g. 2026-03-20)"),
+      numDays: z2.number().optional().describe("Number of days to process (1\u2013180). End date = today minus CRASH_DATE_OFFSET (default 4 from config), start date = end date minus numDays + 1. Overrides CRASH_NUM_DAYS in config. Default: 1."),
       includeProcessedCrashes: z2.boolean().optional().describe("When true, re-processes crashes that were already exported/symbolicated/analyzed. Default is false (skip already-processed crashes).")
     }),
     outputSchema: z2.object({
@@ -2012,113 +2012,42 @@ server.registerTool(
     const dsymPath = config.DSYM_PATH;
     const versions = input.versions?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
     const includeProcessed = input.includeProcessedCrashes === true;
-    if (input.startDate !== void 0) {
-      try {
-        validateDateInput(input.startDate, "startDate");
-      } catch (err) {
-        return { content: [{ type: "text", text: err.message }] };
+    const offset = parseInt(config.CRASH_DATE_OFFSET ?? "4", 10);
+    const numDays = input.numDays ?? parseInt(config.CRASH_NUM_DAYS ?? "1", 10);
+    const { startDateISO, endDateISO } = computeDateRange(numDays, offset);
+    const rangeKey = `${startDateISO}..${endDateISO}`;
+    if (!includeProcessed) {
+      const fastPathManifest = new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "export");
+      if (fastPathManifest.isRangeCovered(startDateISO, endDateISO)) {
+        const skippedResult = {
+          export_result: { skipped: true, reason: `Range ${rangeKey} already fully processed` },
+          symbolication_result: { skipped: true, reason: `Range ${rangeKey} already fully processed` },
+          analysis_report: { skipped: true, reason: `Range ${rangeKey} already fully processed` }
+        };
+        return {
+          content: [{ type: "text", text: JSON.stringify(skippedResult, null, 2) }],
+          structuredContent: skippedResult
+        };
       }
-    }
-    if (input.endDate !== void 0) {
-      try {
-        validateDateInput(input.endDate, "endDate");
-      } catch (err) {
-        return { content: [{ type: "text", text: err.message }] };
-      }
-    }
-    const hasDateRange = input.startDate !== void 0 && input.endDate !== void 0;
-    if (hasDateRange) {
-      const rangeKey = `${input.startDate}..${input.endDate}`;
-      if (!includeProcessed) {
-        const fastPathManifest = new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "export");
-        if (fastPathManifest.isRangeCovered(input.startDate, input.endDate)) {
-          const skippedResult = {
-            export_result: { skipped: true, reason: `Range ${rangeKey} already fully processed` },
-            symbolication_result: { skipped: true, reason: `Range ${rangeKey} already fully processed` },
-            analysis_report: { skipped: true, reason: `Range ${rangeKey} already fully processed` }
-          };
-          return {
-            content: [{ type: "text", text: JSON.stringify(skippedResult, null, 2) }],
-            structuredContent: skippedResult
-          };
-        }
-      }
-      const exportManifest2 = includeProcessed ? void 0 : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "export");
-      const exportResult2 = exportCrashLogs(inputDir, basicDir, versions, false, false, input.startDate, input.endDate, exportManifest2);
-      const exportedPaths = exportResult2.files.filter((f) => !f.skipped).map((f) => f.destination);
-      let symbolicationResult2 = { skipped: true, reason: "DSYM_PATH not configured" };
-      let symbolicatedPaths = [];
-      if (dsymPath) {
-        if (exportedPaths.length === 0) {
-          symbolicationResult2 = { skipped: true, reason: "No new files were exported for this date range" };
-        } else {
-          const symbolicateManifest2 = includeProcessed ? void 0 : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "symbolicate");
-          const batchRes = await symbolicateFiles(exportedPaths, dsymPath, symbolicatedDir, symbolicateManifest2);
-          symbolicationResult2 = batchRes;
-          symbolicatedPaths = batchRes.results.filter((r) => r.success).map((r) => path11.join(symbolicatedDir, r.file));
-        }
-      }
-      const fixStatuses2 = loadFixStatuses(config.CRASH_ANALYSIS_PARENT);
-      const analyzeManifest2 = includeProcessed ? void 0 : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "analyze");
-      const analysisReport2 = analyzeFiles(symbolicatedPaths, fixStatuses2, analyzeManifest2);
-      const reportsDir2 = getAnalyzedReportsDir(config);
-      const ts2 = Date.now();
-      const reportFile2 = path11.join(reportsDir2, `jsonReport_${ts2}.json`);
-      const csvFile2 = path11.join(reportsDir2, `sheetReport_${ts2}.csv`);
-      try {
-        fs9.mkdirSync(reportsDir2, { recursive: true });
-        fs9.writeFileSync(reportFile2, JSON.stringify(analysisReport2, null, 2), "utf-8");
-        exportReportToCsv(analysisReport2, csvFile2);
-        const latestJsonPath = path11.join(reportsDir2, "latest.json");
-        const latestCsvPath = path11.join(reportsDir2, "latest.csv");
-        fs9.copyFileSync(reportFile2, latestJsonPath);
-        fs9.copyFileSync(csvFile2, latestCsvPath);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error(`Warning: failed to save report to ${reportFile2}: ${msg}`);
-      }
-      const pipelineManifest = new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "export");
-      const resolvedCrashIds = exportedPaths.map((p) => extractIncidentId(p) ?? path11.basename(p));
-      pipelineManifest.recordPipelineRun(rangeKey, {
-        startDate: input.startDate,
-        endDate: input.endDate,
-        completedAt: (/* @__PURE__ */ new Date()).toISOString(),
-        crashIds: resolvedCrashIds,
-        exportedCount: exportedPaths.length,
-        symbolicatedCount: symbolicatedPaths.length,
-        analyzedCount: analysisReport2.total_crashes,
-        reportPath: reportFile2
-      });
-      const result2 = {
-        export_result: exportResult2,
-        symbolication_result: symbolicationResult2,
-        analysis_report: analysisReport2
-      };
-      return {
-        content: [{ type: "text", text: JSON.stringify(result2, null, 2) }],
-        structuredContent: result2
-      };
     }
     const exportManifest = includeProcessed ? void 0 : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "export");
-    const symbolicateManifest = includeProcessed ? void 0 : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "symbolicate");
-    const analyzeManifest = includeProcessed ? void 0 : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "analyze");
-    const exportResult = exportCrashLogs(inputDir, basicDir, versions, false, false, void 0, void 0, exportManifest);
+    const exportResult = exportCrashLogs(inputDir, basicDir, versions, false, false, startDateISO, endDateISO, exportManifest);
+    const exportedPaths = exportResult.files.filter((f) => !f.skipped).map((f) => f.destination);
     let symbolicationResult = { skipped: true, reason: "DSYM_PATH not configured" };
+    let symbolicatedPaths = [];
     if (dsymPath) {
-      const appticsDir = getAppticsCrashesDir(config);
-      const otherDir = getOtherCrashesDir(config);
-      const anyFiles = hasCrashFiles(basicDir) || hasCrashFiles(appticsDir) || hasCrashFiles(otherDir);
-      if (!anyFiles) {
-        symbolicationResult = {
-          skipped: true,
-          reason: "No .crash or .ips files found in any crash logs folder"
-        };
+      if (exportedPaths.length === 0) {
+        symbolicationResult = { skipped: true, reason: "No new files were exported for this date range" };
       } else {
-        symbolicationResult = await runBatchAll(dsymPath, symbolicateManifest);
+        const symbolicateManifest = includeProcessed ? void 0 : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "symbolicate");
+        const batchRes = await symbolicateFiles(exportedPaths, dsymPath, symbolicatedDir, symbolicateManifest);
+        symbolicationResult = batchRes;
+        symbolicatedPaths = batchRes.results.filter((r) => r.success).map((r) => path11.join(symbolicatedDir, r.file));
       }
     }
     const fixStatuses = loadFixStatuses(config.CRASH_ANALYSIS_PARENT);
-    const analysisReport = analyzeDirectory(symbolicatedDir, fixStatuses, analyzeManifest);
+    const analyzeManifest = includeProcessed ? void 0 : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "analyze");
+    const analysisReport = analyzeFiles(symbolicatedPaths, fixStatuses, analyzeManifest);
     const reportsDir = getAnalyzedReportsDir(config);
     const ts = Date.now();
     const reportFile = path11.join(reportsDir, `jsonReport_${ts}.json`);
@@ -2135,6 +2064,18 @@ server.registerTool(
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`Warning: failed to save report to ${reportFile}: ${msg}`);
     }
+    const pipelineManifest = new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "export");
+    const resolvedCrashIds = exportedPaths.map((p) => extractIncidentId(p) ?? path11.basename(p));
+    pipelineManifest.recordPipelineRun(rangeKey, {
+      startDate: startDateISO,
+      endDate: endDateISO,
+      completedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      crashIds: resolvedCrashIds,
+      exportedCount: exportedPaths.length,
+      symbolicatedCount: symbolicatedPaths.length,
+      analyzedCount: analysisReport.total_crashes,
+      reportPath: reportFile
+    });
     const result = {
       export_result: exportResult,
       symbolication_result: symbolicationResult,

@@ -61,6 +61,8 @@ var envSchema = z.object({
   APP_NAME: z.string().optional().describe("App binary name e.g. MyApp"),
   CRASH_INPUT_DIR: z.string().optional().describe("Override .xccrashpoint search dir"),
   CRASH_VERSIONS: z.string().optional().describe("Comma-separated version filter"),
+  CRASH_NUM_DAYS: z.string().optional().describe("Number of days to process (1\u2013180, default: 1)"),
+  CRASH_DATE_OFFSET: z.string().optional().describe("Days offset from today for end date (default: 4)"),
   MASTER_BRANCH_PATH: z.string().optional().describe("Path to current master/live branch checkout"),
   DEV_BRANCH_PATH: z.string().optional().describe("Path to current development branch checkout")
 });
@@ -232,6 +234,17 @@ function validateDateInput(dateString, paramName) {
     );
   }
   return parsed;
+}
+function computeDateRange(numDays, dateOffset) {
+  const n = Math.max(1, Math.min(numDays, 180));
+  const endDate = /* @__PURE__ */ new Date();
+  endDate.setDate(endDate.getDate() - dateOffset);
+  const startDate = new Date(endDate);
+  startDate.setDate(startDate.getDate() - n + 1);
+  return {
+    startDateISO: startDate.toISOString().slice(0, 10),
+    endDateISO: endDate.toISOString().slice(0, 10)
+  };
 }
 
 // src/core/crashExporter.ts
@@ -465,28 +478,14 @@ async function cmdExport(flags) {
   const inputDir = config.CRASH_INPUT_DIR ?? config.CRASH_ANALYSIS_PARENT;
   const outputDir = getXcodeCrashesDir(config);
   const versions = config.CRASH_VERSIONS?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
-  const startDate = flags["start-date"];
-  const endDate = flags["end-date"];
-  if (startDate !== void 0) {
-    try {
-      validateDateInput(startDate, "--start-date");
-    } catch (err) {
-      console.error(`Error: ${err.message}`);
-      process.exit(1);
-    }
-  }
-  if (endDate !== void 0) {
-    try {
-      validateDateInput(endDate, "--end-date");
-    } catch (err) {
-      console.error(`Error: ${err.message}`);
-      process.exit(1);
-    }
-  }
+  const numDaysRaw = flags["num-days"];
+  const offset = parseInt(config.CRASH_DATE_OFFSET ?? "4", 10);
+  const numDays = numDaysRaw ? parseInt(numDaysRaw, 10) : parseInt(config.CRASH_NUM_DAYS ?? "1", 10);
+  const { startDateISO, endDateISO } = computeDateRange(numDays, offset);
   const dryRun = flags["dry-run"] === true;
   const includeProcessed = flags["include-processed"] === true;
   const manifest = dryRun || includeProcessed ? void 0 : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "export");
-  const result = exportCrashLogs(inputDir, outputDir, versions, false, dryRun, startDate, endDate, manifest);
+  const result = exportCrashLogs(inputDir, outputDir, versions, false, dryRun, startDateISO, endDateISO, manifest);
   console.log(JSON.stringify(result, null, 2));
 }
 
@@ -579,25 +578,6 @@ async function symbolicateFiles(files, dsymPath, outputDir, manifest) {
     }
   }
   return { succeeded, failed, total: files.length, results };
-}
-async function runBatchAll(dsymPath, manifest) {
-  const config = getConfig();
-  const xcodeCrashDir = getXcodeCrashesDir(config);
-  const appticsDir = getAppticsCrashesDir(config);
-  const otherDir = getOtherCrashesDir(config);
-  const outputDir = getSymbolicatedDir(config);
-  let succeeded = 0;
-  let failed = 0;
-  let total = 0;
-  const results = [];
-  for (const dir of [xcodeCrashDir, appticsDir, otherDir]) {
-    const r = await runBatch(dir, dsymPath, outputDir, manifest);
-    succeeded += r.succeeded;
-    failed += r.failed;
-    total += r.total;
-    results.push(...r.results);
-  }
-  return { succeeded, failed, total, results };
 }
 
 // src/pathSafety.ts
@@ -1616,115 +1596,44 @@ async function cmdPipeline(flags) {
   const dsymPath = config.DSYM_PATH;
   const includeProcessed = flags["include-processed"] === true;
   const versions = flags["versions"] ? flags["versions"].split(",").map((v) => v.trim()).filter(Boolean) : config.CRASH_VERSIONS?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
-  const startDate = flags["start-date"];
-  const endDate = flags["end-date"];
-  if (startDate !== void 0) {
-    try {
-      validateDateInput(startDate, "--start-date");
-    } catch (err) {
-      console.error(`Error: ${err.message}`);
-      process.exit(1);
-    }
-  }
-  if (endDate !== void 0) {
-    try {
-      validateDateInput(endDate, "--end-date");
-    } catch (err) {
-      console.error(`Error: ${err.message}`);
-      process.exit(1);
-    }
-  }
-  const hasDateRange = startDate !== void 0 && endDate !== void 0;
-  if (hasDateRange) {
-    const rangeKey = `${startDate}..${endDate}`;
-    if (!includeProcessed) {
-      const fastPathManifest = new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "export");
-      if (fastPathManifest.isRangeCovered(startDate, endDate)) {
-        console.log(`
+  const numDaysRaw = flags["num-days"];
+  const offset = parseInt(config.CRASH_DATE_OFFSET ?? "4", 10);
+  const numDays = numDaysRaw ? parseInt(numDaysRaw, 10) : parseInt(config.CRASH_NUM_DAYS ?? "1", 10);
+  const { startDateISO: startDate, endDateISO: endDate } = computeDateRange(numDays, offset);
+  const rangeKey = `${startDate}..${endDate}`;
+  if (!includeProcessed) {
+    const fastPathManifest = new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "export");
+    if (fastPathManifest.isRangeCovered(startDate, endDate)) {
+      console.log(`
 Pipeline skipped: Range ${rangeKey} already fully processed.`);
-        return;
-      }
+      return;
     }
-    const exportManifest2 = includeProcessed ? void 0 : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "export");
-    const exportResult2 = exportCrashLogs(inputDir, basicDir, versions, false, false, startDate, endDate, exportManifest2);
-    console.log("\n\u2500\u2500 Export \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500");
-    console.log(JSON.stringify(exportResult2, null, 2));
-    const exportedPaths = exportResult2.files.filter((f) => !f.skipped).map((f) => f.destination);
-    let symbolicationResult2 = null;
-    let symbolicatedPaths = [];
-    console.log("\n\u2500\u2500 Symbolication \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500");
-    if (dsymPath) {
-      if (exportedPaths.length === 0) {
-        symbolicationResult2 = { skipped: true, reason: "No new files were exported for this date range" };
-      } else {
-        const symbolicateManifest2 = includeProcessed ? void 0 : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "symbolicate");
-        const batchRes = await symbolicateFiles(exportedPaths, dsymPath, symbolicatedDir, symbolicateManifest2);
-        symbolicationResult2 = batchRes;
-        symbolicatedPaths = batchRes.results.filter((r) => r.success).map((r) => path13.join(symbolicatedDir, r.file));
-      }
-      console.log(JSON.stringify(symbolicationResult2, null, 2));
-    } else {
-      symbolicationResult2 = { skipped: true, reason: "DSYM_PATH not set" };
-      console.log(JSON.stringify(symbolicationResult2, null, 2));
-    }
-    const fixStatuses2 = loadFixStatuses(config.CRASH_ANALYSIS_PARENT);
-    const analyzeManifest2 = includeProcessed ? void 0 : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "analyze");
-    const report2 = analyzeFiles(symbolicatedPaths, fixStatuses2, analyzeManifest2);
-    const reportsDir2 = getAnalyzedReportsDir(config);
-    fs10.mkdirSync(reportsDir2, { recursive: true });
-    const ts2 = Date.now();
-    const reportFile2 = path13.join(reportsDir2, `jsonReport_${ts2}.json`);
-    const csvFile2 = path13.join(reportsDir2, `sheetReport_${ts2}.csv`);
-    fs10.writeFileSync(reportFile2, JSON.stringify(report2, null, 2), "utf-8");
-    exportReportToCsv(report2, csvFile2);
-    const latestJsonPath = path13.join(reportsDir2, "latest.json");
-    const latestCsvPath = path13.join(reportsDir2, "latest.csv");
-    fs10.copyFileSync(reportFile2, latestJsonPath);
-    fs10.copyFileSync(csvFile2, latestCsvPath);
-    console.log("\n\u2500\u2500 Analysis \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500");
-    console.log(JSON.stringify(report2, null, 2));
-    console.log(`JSON report saved to: ${reportFile2}`);
-    console.log(`CSV report saved to: ${csvFile2}`);
-    const pipelineManifest = new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "export");
-    const resolvedCrashIds = exportedPaths.map((p) => extractIncidentId(p) ?? path13.basename(p));
-    pipelineManifest.recordPipelineRun(rangeKey, {
-      startDate,
-      endDate,
-      completedAt: (/* @__PURE__ */ new Date()).toISOString(),
-      crashIds: resolvedCrashIds,
-      exportedCount: exportedPaths.length,
-      symbolicatedCount: symbolicatedPaths.length,
-      analyzedCount: report2.total_crashes,
-      reportPath: reportFile2
-    });
-    return;
   }
   const exportManifest = includeProcessed ? void 0 : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "export");
-  const symbolicateManifest = includeProcessed ? void 0 : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "symbolicate");
-  const analyzeManifest = includeProcessed ? void 0 : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "analyze");
-  const exportResult = exportCrashLogs(inputDir, basicDir, versions, false, false, void 0, void 0, exportManifest);
+  const exportResult = exportCrashLogs(inputDir, basicDir, versions, false, false, startDate, endDate, exportManifest);
   console.log("\n\u2500\u2500 Export \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500");
   console.log(JSON.stringify(exportResult, null, 2));
+  const exportedPaths = exportResult.files.filter((f) => !f.skipped).map((f) => f.destination);
   let symbolicationResult = null;
+  let symbolicatedPaths = [];
+  console.log("\n\u2500\u2500 Symbolication \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500");
   if (dsymPath) {
-    const appticsDir = getAppticsCrashesDir(config);
-    const otherDir = getOtherCrashesDir(config);
-    if (!hasCrashFiles(basicDir) && !hasCrashFiles(appticsDir) && !hasCrashFiles(otherDir)) {
-      symbolicationResult = {
-        skipped: true,
-        reason: "No .crash or .ips files found in MainCrashLogsFolder/XCodeCrashLogs, MainCrashLogsFolder/AppticsCrashLogs, or MainCrashLogsFolder/OtherCrashLogs"
-      };
+    if (exportedPaths.length === 0) {
+      symbolicationResult = { skipped: true, reason: "No new files were exported for this date range" };
     } else {
-      symbolicationResult = await runBatchAll(dsymPath, symbolicateManifest);
+      const symbolicateManifest = includeProcessed ? void 0 : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "symbolicate");
+      const batchRes = await symbolicateFiles(exportedPaths, dsymPath, symbolicatedDir, symbolicateManifest);
+      symbolicationResult = batchRes;
+      symbolicatedPaths = batchRes.results.filter((r) => r.success).map((r) => path13.join(symbolicatedDir, r.file));
     }
-    console.log("\n\u2500\u2500 Symbolication \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500");
     console.log(JSON.stringify(symbolicationResult, null, 2));
   } else {
-    console.log("\n\u2500\u2500 Symbolication \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500");
-    console.log(JSON.stringify({ skipped: true, reason: "DSYM_PATH not set" }, null, 2));
+    symbolicationResult = { skipped: true, reason: "DSYM_PATH not set" };
+    console.log(JSON.stringify(symbolicationResult, null, 2));
   }
   const fixStatuses = loadFixStatuses(config.CRASH_ANALYSIS_PARENT);
-  const report = analyzeDirectory(symbolicatedDir, fixStatuses, analyzeManifest);
+  const analyzeManifest = includeProcessed ? void 0 : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "analyze");
+  const report = analyzeFiles(symbolicatedPaths, fixStatuses, analyzeManifest);
   const reportsDir = getAnalyzedReportsDir(config);
   fs10.mkdirSync(reportsDir, { recursive: true });
   const ts = Date.now();
@@ -1732,10 +1641,26 @@ Pipeline skipped: Range ${rangeKey} already fully processed.`);
   const csvFile = path13.join(reportsDir, `sheetReport_${ts}.csv`);
   fs10.writeFileSync(reportFile, JSON.stringify(report, null, 2), "utf-8");
   exportReportToCsv(report, csvFile);
+  const latestJsonPath = path13.join(reportsDir, "latest.json");
+  const latestCsvPath = path13.join(reportsDir, "latest.csv");
+  fs10.copyFileSync(reportFile, latestJsonPath);
+  fs10.copyFileSync(csvFile, latestCsvPath);
   console.log("\n\u2500\u2500 Analysis \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500");
   console.log(JSON.stringify(report, null, 2));
   console.log(`JSON report saved to: ${reportFile}`);
   console.log(`CSV report saved to: ${csvFile}`);
+  const pipelineManifest = new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "export");
+  const resolvedCrashIds = exportedPaths.map((p) => extractIncidentId(p) ?? path13.basename(p));
+  pipelineManifest.recordPipelineRun(rangeKey, {
+    startDate,
+    endDate,
+    completedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    crashIds: resolvedCrashIds,
+    exportedCount: exportedPaths.length,
+    symbolicatedCount: symbolicatedPaths.length,
+    analyzedCount: report.total_crashes,
+    reportPath: reportFile
+  });
 }
 
 // src/cli/cmdClean.ts
@@ -1945,8 +1870,7 @@ CrashPoint iOS CLI \u2014 node dist/cli.js <command> [options]
 Commands:
   export                Export .crash files from .xccrashpoint packages into MainCrashLogsFolder/XCodeCrashLogs
     --dry-run           Preview what would be exported without writing files
-    --start-date <date> ISO date string to filter crashes from (e.g. 2026-03-01)
-    --end-date <date>   ISO date string to filter crashes until (e.g. 2026-03-20)
+    --num-days <n>      Number of days to process (1\u2013180, default: CRASH_NUM_DAYS from config or 1)
   batch                 Symbolicate all crash files in MainCrashLogsFolder (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs)
                         using Xcode's symbolicatecrash tool
     --file <path>       Symbolicate only this single .crash file instead of batch processing all directories
@@ -1961,8 +1885,7 @@ Commands:
     --recursive         Search recursively
   pipeline              Full export \u2192 symbolicate \u2192 analyze
     --versions v1,v2    Comma-separated version filter
-    --start-date <date> ISO date string to filter crashes from (e.g. 2026-03-01)
-    --end-date <date>   ISO date string to filter crashes until (e.g. 2026-03-20)
+    --num-days <n>      Number of days to process (1\u2013180, default: CRASH_NUM_DAYS from config or 1)
   clean                 Delete crash files older than a given date
     --before-date <date> ISO date \u2014 files with crash dates before this are deleted (required)
     --dry-run           Preview what would be deleted without deleting
