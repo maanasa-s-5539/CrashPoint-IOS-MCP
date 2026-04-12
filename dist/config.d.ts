@@ -7,6 +7,8 @@ declare const envSchema: z.ZodObject<{
     APP_NAME: z.ZodOptional<z.ZodString>;
     CRASH_INPUT_DIR: z.ZodOptional<z.ZodString>;
     CRASH_VERSIONS: z.ZodOptional<z.ZodString>;
+    CRASH_NUM_DAYS: z.ZodOptional<z.ZodString>;
+    CRASH_DATE_OFFSET: z.ZodOptional<z.ZodString>;
     MASTER_BRANCH_PATH: z.ZodOptional<z.ZodString>;
     DEV_BRANCH_PATH: z.ZodOptional<z.ZodString>;
 }, z.core.$strip>;

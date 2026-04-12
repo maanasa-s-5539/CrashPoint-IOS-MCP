@@ -32,6 +32,8 @@ var envSchema = z.object({
   APP_NAME: z.string().optional().describe("App binary name e.g. MyApp"),
   CRASH_INPUT_DIR: z.string().optional().describe("Override .xccrashpoint search dir"),
   CRASH_VERSIONS: z.string().optional().describe("Comma-separated version filter"),
+  CRASH_NUM_DAYS: z.string().optional().describe("Number of days to process (1\u2013180, default: 1)"),
+  CRASH_DATE_OFFSET: z.string().optional().describe("Days offset from today for end date (default: 4)"),
   MASTER_BRANCH_PATH: z.string().optional().describe("Path to current master/live branch checkout"),
   DEV_BRANCH_PATH: z.string().optional().describe("Path to current development branch checkout")
 });

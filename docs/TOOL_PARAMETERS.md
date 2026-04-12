@@ -8,8 +8,7 @@
 | `outputDir` | Destination directory (default: `MainCrashLogsFolder/XCodeCrashLogs`) |
 | `versions` | Comma-separated version filter |
 | `recursive` | Search subdirectories recursively |
-| `startDate` | ISO date string to filter crashes from (e.g. `2026-03-01`) |
-| `endDate` | ISO date string to filter crashes until |
+| `numDays` | Number of days to process (1–180). End date = today minus `CRASH_DATE_OFFSET` (default 4), start date = end date minus numDays + 1. Overrides `CRASH_NUM_DAYS` in config. Default: 1. |
 | `dryRun` | When `true`, shows what would be exported without writing any files |
 
 ### `symbolicate_batch` Parameters
