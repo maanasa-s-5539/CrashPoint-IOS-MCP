@@ -15,9 +15,7 @@ export interface FullCrashPointConfig {
     CRASH_DATE_OFFSET?: string;
     APP_DISPLAY_NAME?: string;
     APPTICS_MCP_NAME?: string;
-    PROJECTS_MCP_NAME?: string;
     ZOHO_CLIQ_WEBHOOK_URL?: string;
-    ZOHO_PROJECTS_MCP_URL?: string;
     ZOHO_PROJECTS_PORTAL_ID?: string;
     ZOHO_PROJECTS_PROJECT_ID?: string;
     ZOHO_BUG_STATUS_OPEN?: string;

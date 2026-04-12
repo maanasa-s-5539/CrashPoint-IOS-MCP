@@ -72,10 +72,8 @@ When both the JSON config file and environment variables provide the same key, *
 
   "APP_DISPLAY_NAME": "MyApp",
   "APPTICS_MCP_NAME": "apptics-mcp",
-  "PROJECTS_MCP_NAME": "zoho-projects-mcp",
 
   "ZOHO_CLIQ_WEBHOOK_URL": "https://cliq.zoho.in/...",
-  "ZOHO_PROJECTS_MCP_URL": "http://localhost:3000",
   "ZOHO_PROJECTS_PORTAL_ID": "12345",
   "ZOHO_PROJECTS_PROJECT_ID": "67890",
   "ZOHO_BUG_STATUS_OPEN": "status-id",
@@ -101,10 +99,8 @@ When both the JSON config file and environment variables provide the same key, *
 | `CRASH_NUM_DAYS` | Number of days to process in the crash window (1–180, default: `"1"`) |
 | `SCHEDULED_RUN_TIME` | Time of day for the scheduled launchd pipeline run in HH:MM 24-hour format, where HH is 0–23 and MM is 0–59 (default: `"11:00"`) |
 | `APP_DISPLAY_NAME` | App name shown in pipeline prompts and Cliq notifications |
-| `APPTICS_MCP_NAME` | Name of your Apptics MCP server (`claude mcp list`) |
-| `PROJECTS_MCP_NAME` | Name of your Zoho Projects MCP server (`claude mcp list`) |
+| `APPTICS_MCP_NAME` | Name of your Apptics MCP server (`claude mcp list`) — also provides Zoho Projects tools (`list_bugs`, `create_bug`, `update_bug`) |
 | `ZOHO_CLIQ_WEBHOOK_URL` | Webhook URL for Zoho Cliq crash notifications |
-| `ZOHO_PROJECTS_MCP_URL` | Base URL of your Zoho Projects MCP server |
 | `ZOHO_PROJECTS_PORTAL_ID` | Zoho Projects portal ID |
 | `ZOHO_PROJECTS_PROJECT_ID` | Zoho Projects project ID |
 | `ZOHO_BUG_STATUS_OPEN` | Status ID for "Open" bugs in Zoho Projects |

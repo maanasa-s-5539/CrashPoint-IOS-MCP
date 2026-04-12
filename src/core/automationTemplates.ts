@@ -19,9 +19,7 @@ export interface FullCrashPointConfig {
   CRASH_DATE_OFFSET?: string;
   APP_DISPLAY_NAME?: string;
   APPTICS_MCP_NAME?: string;
-  PROJECTS_MCP_NAME?: string;
   ZOHO_CLIQ_WEBHOOK_URL?: string;
-  ZOHO_PROJECTS_MCP_URL?: string;
   ZOHO_PROJECTS_PORTAL_ID?: string;
   ZOHO_PROJECTS_PROJECT_ID?: string;
   ZOHO_BUG_STATUS_OPEN?: string;
@@ -52,7 +50,6 @@ export function generateMcpJson(config: FullCrashPointConfig): string {
         env: {
           CRASH_ANALYSIS_PARENT: getConfigValue("CRASH_ANALYSIS_PARENT"),
           ZOHO_CLIQ_WEBHOOK_URL: getConfigValue("ZOHO_CLIQ_WEBHOOK_URL"),
-          ZOHO_PROJECTS_MCP_URL: getConfigValue("ZOHO_PROJECTS_MCP_URL"),
           ZOHO_PROJECTS_PORTAL_ID: getConfigValue("ZOHO_PROJECTS_PORTAL_ID"),
           ZOHO_PROJECTS_PROJECT_ID: getConfigValue("ZOHO_PROJECTS_PROJECT_ID"),
           ZOHO_BUG_STATUS_OPEN: getConfigValue("ZOHO_BUG_STATUS_OPEN"),
@@ -140,7 +137,6 @@ fi
 # Read automation variables FROM config file
 APP_DISPLAY_NAME=$(node -e "console.log(require(process.argv[1]).APP_DISPLAY_NAME || '')" "$CONFIG_JSON")
 APPTICS_MCP_NAME=$(node -e "console.log(require(process.argv[1]).APPTICS_MCP_NAME || '')" "$CONFIG_JSON")
-PROJECTS_MCP_NAME=$(node -e "console.log(require(process.argv[1]).PROJECTS_MCP_NAME || '')" "$CONFIG_JSON")
 CRASH_VERSIONS=$(node -e "console.log(require(process.argv[1]).CRASH_VERSIONS || '')" "$CONFIG_JSON")
 SCHEDULED_RUN_TIME=$(node -e "console.log(require(process.argv[1]).SCHEDULED_RUN_TIME || '11:00')" "$CONFIG_JSON")
 IFS=':' read -r SCHED_HOUR SCHED_MINUTE <<< "$SCHEDULED_RUN_TIME"
@@ -187,7 +183,6 @@ if [ ! -f "$MCP_JSON_FILE" ]; then
   _MASTER_BRANCH=$(node -e "console.log(require(process.argv[1]).MASTER_BRANCH_PATH || '')" "$CONFIG_JSON")
   _DEV_BRANCH=$(node -e "console.log(require(process.argv[1]).DEV_BRANCH_PATH || '')" "$CONFIG_JSON")
   _CLIQ_URL=$(node -e "console.log(require(process.argv[1]).ZOHO_CLIQ_WEBHOOK_URL || '')" "$CONFIG_JSON")
-  _MCP_URL=$(node -e "console.log(require(process.argv[1]).ZOHO_PROJECTS_MCP_URL || '')" "$CONFIG_JSON")
   _PORTAL_ID=$(node -e "console.log(require(process.argv[1]).ZOHO_PROJECTS_PORTAL_ID || '')" "$CONFIG_JSON")
   _PROJECT_ID=$(node -e "console.log(require(process.argv[1]).ZOHO_PROJECTS_PROJECT_ID || '')" "$CONFIG_JSON")
   _STATUS_ID=$(node -e "console.log(require(process.argv[1]).ZOHO_BUG_STATUS_OPEN || '')" "$CONFIG_JSON")
@@ -214,7 +209,6 @@ if [ ! -f "$MCP_JSON_FILE" ]; then
       "env": {
         "CRASH_ANALYSIS_PARENT": "$PARENT_HOLDER_FOLDER",
         "ZOHO_CLIQ_WEBHOOK_URL": "$_CLIQ_URL",
-        "ZOHO_PROJECTS_MCP_URL": "$_MCP_URL",
         "ZOHO_PROJECTS_PORTAL_ID": "$_PORTAL_ID",
         "ZOHO_PROJECTS_PROJECT_ID": "$_PROJECT_ID",
         "ZOHO_BUG_STATUS_OPEN": "$_STATUS_ID",
@@ -296,13 +290,12 @@ TARGET_DATE=$(date -v-\${CRASH_DATE_OFFSET}d +"%Y-%m-%d")
 PROMPT=$(sed \\
   -e "s|{{APP_DISPLAY_NAME}}|\${APP_DISPLAY_NAME}|g" \\
   -e "s|{{APPTICS_MCP_NAME}}|\${APPTICS_MCP_NAME}|g" \\
-  -e "s|{{PROJECTS_MCP_NAME}}|\${PROJECTS_MCP_NAME}|g" \\
   -e "s|{{CRASH_VERSIONS}}|\${CRASH_VERSIONS}|g" \\
   -e "s|{{TARGET_DATE}}|\${TARGET_DATE}|g" \\
   "$PROMPT_FILE")
 
 # ─── BUILD --allowedTools DYNAMICALLY FROM config file MCP NAMES ─────────────
-ALLOWED_TOOLS="mcp__crashpoint-ios__*,mcp__crashpoint-integrations__*,mcp__claude_ai_\${APPTICS_MCP_NAME}__*,mcp__claude_ai_\${PROJECTS_MCP_NAME}__*"
+ALLOWED_TOOLS="mcp__crashpoint-ios__*,mcp__crashpoint-integrations__*,mcp__\${APPTICS_MCP_NAME}__*"
 
 # ─── TIMESTAMP & LOG FILE ─────────────────────────────────────────────────────
 TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
@@ -314,7 +307,6 @@ LOG_FILE="$LOG_DIR/pipeline_\${TIMESTAMP}.log"
   echo "Version:       \${CRASH_VERSIONS}"
   echo "Target Date:   \${TARGET_DATE} (offset: \${CRASH_DATE_OFFSET} days)"
   echo "Apptics MCP:   \${APPTICS_MCP_NAME}"
-  echo "Projects MCP:  \${PROJECTS_MCP_NAME}"
   echo "Allowed Tools: \${ALLOWED_TOOLS}"
   echo "---"
 } | tee "$LOG_FILE"
@@ -350,7 +342,7 @@ Use CrashPoint-IOS-MCP to run the full pipeline with startDate={{TARGET_DATE}} a
 Use the Crashpoint-integrations-mcp. Using the analyzed latest.json inside ParentHolderFolder -> AnalyzedReportsFolder , notify_cliq about all the crashes from the latest report.
 
 ## Step 4: Create/Update Bugs in Zoho Projects
-Use the Crashpoint-integrations-mcp and {{PROJECTS_MCP_NAME}} MCPs and the latest report. Use the portal id, project id and field id values from the config file. Use these tools from {{PROJECTS_MCP_NAME}} MCP : getProjectsIssues, createProjectIssue, updateIssue.
+Use the Crashpoint-integrations-mcp and {{APPTICS_MCP_NAME}} MCPs and the latest report. Use the portal id, project id and field id values from the config file. Use these tools from {{APPTICS_MCP_NAME}} MCP : list_bugs, create_bug, update_bug.
 If an issue with the same crash signature and app version number does not exist already, create a new issue, setting the App Version and Number of Occurrences field values.
 If an issue with the same crash signature exists already, update the existing crash's number of occurrences. Take the existing value in the number of occurrences field, add the new number of occurrences to it and update the field.
 
