@@ -312,20 +312,6 @@ function _findCrashFiles(dir, results) {
   } catch {
   }
 }
-function listAvailableVersions(inputDir, recursive = false) {
-  const xccrashpoints = _findXccrashpoints(inputDir, recursive);
-  const versions = /* @__PURE__ */ new Set();
-  for (const xcp of xccrashpoints) {
-    const crashes = findCrashLogs(xcp);
-    for (const crash of crashes) {
-      const version = extractVersion(crash);
-      if (version) {
-        versions.add(version);
-      }
-    }
-  }
-  return Array.from(versions).sort();
-}
 function _findXccrashpoints(dir, recursive) {
   const results = [];
   try {
@@ -1616,15 +1602,6 @@ function cmdSetup(flags) {
   console.log(JSON.stringify(result, null, 2));
 }
 
-// src/cli/cmdListVersions.ts
-function cmdListVersions(flags) {
-  const config = getConfig();
-  const inputDir = flags["input-dir"] ?? config.CRASH_INPUT_DIR ?? config.CRASH_ANALYSIS_PARENT;
-  const recursive = flags["recursive"] === true;
-  const versions = listAvailableVersions(inputDir, recursive);
-  console.log(JSON.stringify(versions, null, 2));
-}
-
 // src/cli/cmdPipeline.ts
 import fs10 from "fs";
 import path13 from "path";
@@ -1920,9 +1897,6 @@ Commands:
     --dev-branch        Path to development branch checkout
     --dsym              Path to .dSYM bundle
     --app               Path to .app bundle
-  list-versions         List versions found in .xccrashpoint files
-    --input-dir <dir>   Directory to search (default: CRASH_INPUT_DIR or CRASH_ANALYSIS_PARENT)
-    --recursive         Search recursively
   pipeline              Full export \u2192 symbolicate \u2192 analyze
     --versions v1,v2    Comma-separated version filter
     --num-days <n>      Number of days to process (1\u2013180, default: CRASH_NUM_DAYS from config or 1)
@@ -1962,9 +1936,6 @@ Environment variables: see .env.example
       case "setup":
         await cmdSetup(flags);
         break;
-      case "list-versions":
-        cmdListVersions(flags);
-        break;
       case "pipeline":
         await cmdPipeline(flags);
         break;
@@ -1997,7 +1968,6 @@ export {
   cmdClean,
   cmdExport,
   cmdFixStatus,
-  cmdListVersions,
   cmdPipeline,
   cmdSetup,
   cmdVerifyDsym,

@@ -10,7 +10,6 @@ import { promisify } from "util";
 
 import { getConfig, getXcodeCrashesDir, getMainCrashLogsDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir, getAnalyzedReportsDir, hasCrashFiles } from "./config.js";
 import {
-  listAvailableVersions,
   exportCrashLogs,
 } from "./core/crashExporter.js";
 import {
@@ -68,34 +67,7 @@ server.registerTool(
   }
 );
 
-// ── Tool 2: list_versions ────────────────────────────────────────────────────
-server.registerTool(
-  "list_versions",
-  {
-    description:
-      "List all app versions found in .xccrashpoint files in the configured input directory.",
-    inputSchema: z.object({
-      inputDir: z.string().optional().describe("Directory to search for .xccrashpoint files"),
-      recursive: z.boolean().optional().describe("Search subdirectories recursively"),
-    }),
-    outputSchema: z.object({
-      versions: z.array(z.string()),
-    }),
-  },
-  async (input) => {
-    const config = getConfig();
-    const inputDir = input.inputDir ?? config.CRASH_INPUT_DIR ?? config.CRASH_ANALYSIS_PARENT;
-    const recursive = input.recursive ?? false;
-    const versions = listAvailableVersions(inputDir, recursive);
-    const result = { versions };
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-      structuredContent: result as unknown as Record<string, unknown>,
-    };
-  }
-);
-
-// ── Tool 3: export_crashes ───────────────────────────────────────────────────
+// ── Tool 2: export_crashes ───────────────────────────────────────────────────
 server.registerTool(
   "export_crashes",
   {

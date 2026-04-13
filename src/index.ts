@@ -5,7 +5,7 @@ export { getConfig, getMainCrashLogsDir, getXcodeCrashesDir, getAppticsCrashesDi
 export type { CrashGroup, CrashReport, CrashMetadata, CrashedThread, CleanFileEntry, CleanResult } from "./core/crashAnalyzer.js";
 export { analyzeDirectory, cleanOldCrashes, filterUnfixedGroups, parseCrashMetadata, buildSignature, analyzeCrashFile, detectSource } from "./core/crashAnalyzer.js";
 
-export { exportCrashLogs, listAvailableVersions } from "./core/crashExporter.js";
+export { exportCrashLogs } from "./core/crashExporter.js";
 
 export type { BatchResult } from "./core/symbolicator.js";
 export { symbolicateOne, runBatch, runBatchAll } from "./core/symbolicator.js";

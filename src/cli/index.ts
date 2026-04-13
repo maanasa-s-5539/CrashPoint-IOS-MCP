@@ -5,7 +5,6 @@ export { cmdExport } from "./cmdExport.js";
 export { cmdBatch } from "./cmdBatch.js";
 export { cmdAnalyze } from "./cmdAnalyze.js";
 export { cmdSetup } from "./cmdSetup.js";
-export { cmdListVersions } from "./cmdListVersions.js";
 export { cmdPipeline } from "./cmdPipeline.js";
 export { cmdClean } from "./cmdClean.js";
 export { cmdVerifyDsym } from "./cmdVerifyDsym.js";
@@ -16,7 +15,6 @@ import { cmdExport } from "./cmdExport.js";
 import { cmdBatch } from "./cmdBatch.js";
 import { cmdAnalyze } from "./cmdAnalyze.js";
 import { cmdSetup } from "./cmdSetup.js";
-import { cmdListVersions } from "./cmdListVersions.js";
 import { cmdPipeline } from "./cmdPipeline.js";
 import { cmdClean } from "./cmdClean.js";
 import { cmdVerifyDsym } from "./cmdVerifyDsym.js";
@@ -41,9 +39,6 @@ Commands:
     --dev-branch        Path to development branch checkout
     --dsym              Path to .dSYM bundle
     --app               Path to .app bundle
-  list-versions         List versions found in .xccrashpoint files
-    --input-dir <dir>   Directory to search (default: CRASH_INPUT_DIR or CRASH_ANALYSIS_PARENT)
-    --recursive         Search recursively
   pipeline              Full export → symbolicate → analyze
     --versions v1,v2    Comma-separated version filter
     --num-days <n>      Number of days to process (1–180, default: CRASH_NUM_DAYS from config or 1)
@@ -84,9 +79,6 @@ Environment variables: see .env.example
         break;
       case "setup":
         await cmdSetup(flags);
-        break;
-      case "list-versions":
-        cmdListVersions(flags);
         break;
       case "pipeline":
         await cmdPipeline(flags);

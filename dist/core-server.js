@@ -293,20 +293,6 @@ function _findCrashFiles(dir, results) {
   } catch {
   }
 }
-function listAvailableVersions(inputDir, recursive = false) {
-  const xccrashpoints = _findXccrashpoints(inputDir, recursive);
-  const versions = /* @__PURE__ */ new Set();
-  for (const xcp of xccrashpoints) {
-    const crashes = findCrashLogs(xcp);
-    for (const crash of crashes) {
-      const version = extractVersion(crash);
-      if (version) {
-        versions.add(version);
-      }
-    }
-  }
-  return Array.from(versions).sort();
-}
 function _findXccrashpoints(dir, recursive) {
   const results = [];
   try {
@@ -1535,30 +1521,6 @@ server.registerTool(
       dsymPath: input.dsymPath,
       appPath: input.appPath
     });
-    return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      structuredContent: result
-    };
-  }
-);
-server.registerTool(
-  "list_versions",
-  {
-    description: "List all app versions found in .xccrashpoint files in the configured input directory.",
-    inputSchema: z2.object({
-      inputDir: z2.string().optional().describe("Directory to search for .xccrashpoint files"),
-      recursive: z2.boolean().optional().describe("Search subdirectories recursively")
-    }),
-    outputSchema: z2.object({
-      versions: z2.array(z2.string())
-    })
-  },
-  async (input) => {
-    const config = getConfig();
-    const inputDir = input.inputDir ?? config.CRASH_INPUT_DIR ?? config.CRASH_ANALYSIS_PARENT;
-    const recursive = input.recursive ?? false;
-    const versions = listAvailableVersions(inputDir, recursive);
-    const result = { versions };
     return {
       content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       structuredContent: result

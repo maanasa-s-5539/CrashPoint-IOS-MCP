@@ -112,23 +112,6 @@ function _findCrashFiles(dir: string, results: string[]): void {
   }
 }
 
-export function listAvailableVersions(inputDir: string, recursive = false): string[] {
-  const xccrashpoints = _findXccrashpoints(inputDir, recursive);
-  const versions = new Set<string>();
-
-  for (const xcp of xccrashpoints) {
-    const crashes = findCrashLogs(xcp);
-    for (const crash of crashes) {
-      const version = extractVersion(crash);
-      if (version) {
-        versions.add(version);
-      }
-    }
-  }
-
-  return Array.from(versions).sort();
-}
-
 function _findXccrashpoints(dir: string, recursive: boolean): string[] {
   const results: string[] = [];
   try {
