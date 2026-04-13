@@ -1,8 +1,3 @@
-export interface AutomationTemplate {
-    filename: string;
-    content: string;
-    executable: boolean;
-}
 export interface FullCrashPointConfig {
     CRASH_ANALYSIS_PARENT: string;
     CLAUDE_CLI_PATH?: string;
@@ -25,5 +20,4 @@ export interface FullCrashPointConfig {
 }
 export declare function generateMcpJson(config: FullCrashPointConfig): string;
 export declare function generatePlist(config: FullCrashPointConfig): string;
-export declare function getAutomationTemplates(parentDir: string): AutomationTemplate[];
 //# sourceMappingURL=automationTemplates.d.ts.map
