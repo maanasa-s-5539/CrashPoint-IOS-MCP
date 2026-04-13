@@ -7,6 +7,7 @@ export { cmdAnalyze } from "./cmdAnalyze.js";
 export { cmdSetup } from "./cmdSetup.js";
 export { cmdPipeline } from "./cmdPipeline.js";
 export { cmdClean } from "./cmdClean.js";
+export { cmdCleanReports } from "./cmdCleanReports.js";
 export { cmdVerifyDsym } from "./cmdVerifyDsym.js";
 export { cmdFixStatus } from "./cmdFixStatus.js";
 
@@ -17,6 +18,7 @@ import { cmdAnalyze } from "./cmdAnalyze.js";
 import { cmdSetup } from "./cmdSetup.js";
 import { cmdPipeline } from "./cmdPipeline.js";
 import { cmdClean } from "./cmdClean.js";
+import { cmdCleanReports } from "./cmdCleanReports.js";
 import { cmdVerifyDsym } from "./cmdVerifyDsym.js";
 import { cmdFixStatus } from "./cmdFixStatus.js";
 
@@ -44,6 +46,9 @@ Commands:
     --num-days <n>      Number of days to process (1–180, default: CRASH_NUM_DAYS from config or 1)
   clean                 Delete crash files older than a given date
     --before-date <date> ISO date — files with crash dates before this are deleted (required)
+    --dry-run           Preview what would be deleted without deleting
+  cleanup-reports       Delete analyzed report files (.json/.csv) in AnalyzedReportsFolder older than a given date
+    --before-date <date> ISO date — report files older than this date are deleted (required)
     --dry-run           Preview what would be deleted without deleting
   verify-dsym           Validate a .dSYM bundle and check UUID matches against crash files in MainCrashLogsFolder
                         (the post-export location where XCode crash logs and other crashes live).
@@ -85,6 +90,9 @@ Environment variables: see .env.example
         break;
       case "clean":
         cmdClean(flags);
+        break;
+      case "cleanup-reports":
+        cmdCleanReports(flags);
         break;
       case "verify-dsym":
         await cmdVerifyDsym(flags);

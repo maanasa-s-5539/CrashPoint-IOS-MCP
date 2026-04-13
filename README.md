@@ -200,6 +200,7 @@ The `StateMaintenance/` folder holds `processed_manifest.json` (tracks which cra
 | 6 | `fix_status` | Unified fix tracking: `action='set'` to mark fixed/unfixed, `action='unset'` to clear, `action='list'` to view all |
 | 7 | `run_basic_pipeline` | Run the basic pipeline: export → symbolicate → analyze |
 | 8 | `clean_old_crashes` | Delete `.crash`/`.ips` files older than a given date across all crash directories |
+| 9 | `cleanup_reports` | Delete analyzed report files (`.json`/`.csv`) in `AnalyzedReportsFolder` that are older than a given date |
 
 For detailed parameter documentation, see [Tool Parameters](docs/TOOL_PARAMETERS.md).
 
@@ -213,6 +214,10 @@ The CLI lets you run the crash analysis pipeline without an MCP client (useful f
 # Delete crash files older than a given date (dry-run first)
 node dist/cli.js clean --before-date 2026-03-01 --dry-run
 node dist/cli.js clean --before-date 2026-03-01
+
+# Delete analyzed report files in AnalyzedReportsFolder older than a given date (dry-run first)
+node dist/cli.js cleanup-reports --before-date 2026-03-01 --dry-run
+node dist/cli.js cleanup-reports --before-date 2026-03-01
 
 # Create folder structure with symlinks
 node dist/cli.js setup --master-branch /path/to/master --dev-branch /path/to/dev --dsym /path/to/MyApp.dSYM --app /path/to/MyApp.app

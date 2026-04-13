@@ -793,11 +793,11 @@ function analyzeDirectory(crashDir, fixStatuses, manifest) {
     manifest?.markProcessed(manifestKey);
   }
   const sortedGroups = Array.from(groups.values()).sort((a, b) => b.count - a.count).map((g, idx) => {
-    const fs12 = fixStatuses?.[g.signature];
+    const fs13 = fixStatuses?.[g.signature];
     return {
       ...g,
       rank: idx + 1,
-      fix_status: fs12 ? { fixed: fs12.fixed, note: fs12.note } : void 0
+      fix_status: fs13 ? { fixed: fs13.fixed, note: fs13.note } : void 0
     };
   });
   return {
@@ -1711,9 +1711,87 @@ function cmdClean(flags) {
   }
 }
 
-// src/cli/cmdVerifyDsym.ts
+// src/core/reportCleaner.ts
 import fs11 from "fs";
 import path14 from "path";
+function getReportDate(filename, filepath) {
+  const match = /^(?:jsonReport|sheetReport)_(\d+)\.(json|csv)$/.exec(filename);
+  if (match) {
+    const ms = parseInt(match[1], 10);
+    if (!isNaN(ms)) return new Date(ms);
+  }
+  return fs11.statSync(filepath).mtime;
+}
+function cleanOldReports(beforeDate, reportsDir, dryRun = false) {
+  const before = validateDateInput(beforeDate, "--before-date");
+  const files = [];
+  let deleted = 0;
+  let skipped = 0;
+  let totalScanned = 0;
+  if (!fs11.existsSync(reportsDir)) {
+    return { deleted, skipped, totalScanned, files };
+  }
+  const allFiles = fs11.readdirSync(reportsDir).filter((f) => {
+    if (f === "latest.json" || f === "latest.csv") return false;
+    return f.endsWith(".json") || f.endsWith(".csv");
+  });
+  for (const filename of allFiles) {
+    const filepath = path14.join(reportsDir, filename);
+    totalScanned++;
+    const reportDate = getReportDate(filename, filepath);
+    const shouldDelete = reportDate < before;
+    const entry = {
+      file: filepath,
+      reportDate: reportDate.toISOString(),
+      deleted: false
+    };
+    if (shouldDelete) {
+      if (!dryRun) {
+        try {
+          fs11.unlinkSync(filepath);
+          entry.deleted = true;
+        } catch {
+        }
+      } else {
+        entry.deleted = true;
+      }
+      deleted++;
+    } else {
+      skipped++;
+    }
+    files.push(entry);
+  }
+  return { deleted, skipped, totalScanned, files };
+}
+
+// src/cli/cmdCleanReports.ts
+function cmdCleanReports(flags) {
+  const beforeDate = flags["before-date"];
+  if (!beforeDate) {
+    console.error("Error: --before-date <ISO date> is required for cleanup-reports command.");
+    process.exit(1);
+  }
+  try {
+    validateDateInput(beforeDate, "--before-date");
+  } catch (err) {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  }
+  const dryRun = flags["dry-run"] === true;
+  const config = getConfig();
+  const reportsDir = getAnalyzedReportsDir(config);
+  const result = cleanOldReports(beforeDate, reportsDir, dryRun);
+  console.log(JSON.stringify(result, null, 2));
+  if (dryRun) {
+    console.log(`Dry-run: ${result.deleted} report file(s) would be deleted, ${result.skipped} skipped.`);
+  } else {
+    console.log(`Deleted ${result.deleted} report file(s), skipped ${result.skipped}.`);
+  }
+}
+
+// src/cli/cmdVerifyDsym.ts
+import fs12 from "fs";
+import path15 from "path";
 import { execFile as execFile2 } from "child_process";
 import { promisify as promisify2 } from "util";
 var execFileAsync2 = promisify2(execFile2);
@@ -1738,22 +1816,22 @@ async function cmdVerifyDsym(flags) {
   } else if (config.DSYM_PATH) {
     dsymPath = config.DSYM_PATH;
   } else {
-    const symlinkPath = path14.join(config.CRASH_ANALYSIS_PARENT, "dSYM_File");
+    const symlinkPath = path15.join(config.CRASH_ANALYSIS_PARENT, "dSYM_File");
     try {
-      dsymPath = fs11.realpathSync(symlinkPath);
+      dsymPath = fs12.realpathSync(symlinkPath);
     } catch {
       console.error("Error: No dSYM path available. Provide --dsym, set DSYM_PATH env var, or run setup to create the dSYM_File symlink in CRASH_ANALYSIS_PARENT.");
       process.exit(1);
     }
   }
   assertNoTraversal(dsymPath);
-  if (!fs11.existsSync(dsymPath)) {
+  if (!fs12.existsSync(dsymPath)) {
     console.error(`Error: dSYM not found at: ${dsymPath}`);
     process.exit(1);
   }
   let resolvedDsymPath;
   try {
-    resolvedDsymPath = fs11.realpathSync(dsymPath);
+    resolvedDsymPath = fs12.realpathSync(dsymPath);
   } catch {
     resolvedDsymPath = dsymPath;
   }
@@ -1781,8 +1859,8 @@ async function cmdVerifyDsym(flags) {
     }
     if (crashDir) {
       assertPathUnderBase(crashDir, getMainCrashLogsDir(config));
-      if (fs11.existsSync(crashDir)) {
-        fs11.readdirSync(crashDir).filter((f) => f.endsWith(".crash") || f.endsWith(".ips")).forEach((f) => crashFiles.push(path14.join(crashDir, f)));
+      if (fs12.existsSync(crashDir)) {
+        fs12.readdirSync(crashDir).filter((f) => f.endsWith(".crash") || f.endsWith(".ips")).forEach((f) => crashFiles.push(path15.join(crashDir, f)));
       }
     }
   } else {
@@ -1792,8 +1870,8 @@ async function cmdVerifyDsym(flags) {
       getOtherCrashesDir(config)
     ];
     for (const dir of dirs) {
-      if (fs11.existsSync(dir)) {
-        fs11.readdirSync(dir).filter((f) => f.endsWith(".crash") || f.endsWith(".ips")).forEach((f) => crashFiles.push(path14.join(dir, f)));
+      if (fs12.existsSync(dir)) {
+        fs12.readdirSync(dir).filter((f) => f.endsWith(".crash") || f.endsWith(".ips")).forEach((f) => crashFiles.push(path15.join(dir, f)));
       }
     }
   }
@@ -1807,7 +1885,7 @@ async function cmdVerifyDsym(flags) {
   for (const cf of crashFiles) {
     let content = "";
     try {
-      content = fs11.readFileSync(cf, "utf-8");
+      content = fs12.readFileSync(cf, "utf-8");
     } catch {
       continue;
     }
@@ -1824,7 +1902,7 @@ async function cmdVerifyDsym(flags) {
       const uuid = `${raw.slice(0, 8)}-${raw.slice(8, 12)}-${raw.slice(12, 16)}-${raw.slice(16, 20)}-${raw.slice(20)}`;
       if (!seen.has(uuid)) {
         seen.add(uuid);
-        crashFileUuids.push({ file: path14.basename(cf), uuid });
+        crashFileUuids.push({ file: path15.basename(cf), uuid });
       }
     }
   }
@@ -1903,6 +1981,9 @@ Commands:
   clean                 Delete crash files older than a given date
     --before-date <date> ISO date \u2014 files with crash dates before this are deleted (required)
     --dry-run           Preview what would be deleted without deleting
+  cleanup-reports       Delete analyzed report files (.json/.csv) in AnalyzedReportsFolder older than a given date
+    --before-date <date> ISO date \u2014 report files older than this date are deleted (required)
+    --dry-run           Preview what would be deleted without deleting
   verify-dsym           Validate a .dSYM bundle and check UUID matches against crash files in MainCrashLogsFolder
                         (the post-export location where XCode crash logs and other crashes live).
                         With no flags: dSYM is resolved from the dSYM_File symlink in CRASH_ANALYSIS_PARENT,
@@ -1942,6 +2023,9 @@ Environment variables: see .env.example
       case "clean":
         cmdClean(flags);
         break;
+      case "cleanup-reports":
+        cmdCleanReports(flags);
+        break;
       case "verify-dsym":
         await cmdVerifyDsym(flags);
         break;
@@ -1966,6 +2050,7 @@ export {
   cmdAnalyze,
   cmdBatch,
   cmdClean,
+  cmdCleanReports,
   cmdExport,
   cmdFixStatus,
   cmdPipeline,
