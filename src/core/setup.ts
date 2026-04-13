@@ -3,7 +3,7 @@ import os from "os";
 import path from "path";
 import { getConfig, getMainCrashLogsDir, getXcodeCrashesDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir, getAnalyzedReportsDir, getStateMaintenanceDir, getAutomationDir } from "../config.js";
 import { assertNoTraversal, assertSafeSymlinkTarget } from "../pathSafety.js";
-import { getAutomationTemplates, generateMcpJson, generatePlist, FullCrashPointConfig } from "./automationTemplates.js";
+import { generateMcpJson, generatePlist, FullCrashPointConfig } from "./automationTemplates.js";
 
 export interface SetupOptions {
   masterBranchPath?: string;
@@ -44,23 +44,8 @@ export function setupWorkspace(options: SetupOptions = {}): SetupResult {
     }
   }
 
-  // ─── Scaffold automation templates ────────────────────────────────────────
-  const automationDir = getAutomationDir(config);
-  const scaffoldedFiles: string[] = [];
-  const templates = getAutomationTemplates(parentDir);
-
-  for (const { filename, content, executable } of templates) {
-    const destPath = path.join(automationDir, filename);
-    if (!fs.existsSync(destPath)) {
-      fs.writeFileSync(destPath, content, "utf-8");
-      if (executable) {
-        fs.chmodSync(destPath, 0o755);
-      }
-      scaffoldedFiles.push(destPath);
-    }
-  }
-
   // ─── Build full config from raw JSON + typed config ───────────────────────
+  const scaffoldedFiles: string[] = [];
   const configJsonPath = path.join(parentDir, "crashpoint.config.json");
   let rawConfig: Record<string, unknown> = {};
   if (fs.existsSync(configJsonPath)) {
