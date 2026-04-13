@@ -44,6 +44,13 @@
 | `beforeDate` | ISO date string — files with crash dates before this date will be deleted (e.g. `2026-03-01`) |
 | `dryRun` | When `true`, reports what would be deleted without actually deleting (default: `false`) |
 
+### `cleanup_reports` Parameters
+
+| Parameter | Description |
+|---|---|
+| `beforeDate` | ISO date string — analyzed report files with a report date before this date will be deleted (e.g. `2026-03-01`). Report date is extracted from the filename timestamp for `jsonReport_<timestamp>.json` and `sheetReport_<timestamp>.csv`; falls back to file modification time. Stable pointer files (`latest.json`, `latest.csv`) are never deleted. |
+| `dryRun` | When `true`, reports what would be deleted without actually deleting (default: `false`) |
+
 ### `verify_dsym` Parameters
 
 | Parameter | Description |

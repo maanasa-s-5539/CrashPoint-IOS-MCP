@@ -5,8 +5,8 @@ import { fileURLToPath as _fUTP } from 'url'; import { dirname as _dn } from 'pa
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z as z2 } from "zod";
-import fs9 from "fs";
-import path11 from "path";
+import fs10 from "fs";
+import path12 from "path";
 import { execFile as execFile2 } from "child_process";
 import { promisify as promisify2 } from "util";
 
@@ -695,11 +695,11 @@ function analyzeDirectory(crashDir, fixStatuses, manifest) {
     manifest?.markProcessed(manifestKey);
   }
   const sortedGroups = Array.from(groups.values()).sort((a, b) => b.count - a.count).map((g, idx) => {
-    const fs10 = fixStatuses?.[g.signature];
+    const fs11 = fixStatuses?.[g.signature];
     return {
       ...g,
       rank: idx + 1,
-      fix_status: fs10 ? { fixed: fs10.fixed, note: fs10.note } : void 0
+      fix_status: fs11 ? { fixed: fs11.fixed, note: fs11.note } : void 0
     };
   });
   return {
@@ -825,17 +825,70 @@ function cleanOldCrashes(beforeDate, dirs, dryRun = false, parentDir, manifest) 
   return { deleted, skipped, totalScanned, files };
 }
 
-// src/state/fixTracker.ts
+// src/core/reportCleaner.ts
 import fs6 from "fs";
 import path6 from "path";
+function getReportDate(filename, filepath) {
+  const match = /^(?:jsonReport|sheetReport)_(\d+)\.(json|csv)$/.exec(filename);
+  if (match) {
+    const ms = parseInt(match[1], 10);
+    if (!isNaN(ms)) return new Date(ms);
+  }
+  return fs6.statSync(filepath).mtime;
+}
+function cleanOldReports(beforeDate, reportsDir, dryRun = false) {
+  const before = validateDateInput(beforeDate, "--before-date");
+  const files = [];
+  let deleted = 0;
+  let skipped = 0;
+  let totalScanned = 0;
+  if (!fs6.existsSync(reportsDir)) {
+    return { deleted, skipped, totalScanned, files };
+  }
+  const allFiles = fs6.readdirSync(reportsDir).filter((f) => {
+    if (f === "latest.json" || f === "latest.csv") return false;
+    return f.endsWith(".json") || f.endsWith(".csv");
+  });
+  for (const filename of allFiles) {
+    const filepath = path6.join(reportsDir, filename);
+    totalScanned++;
+    const reportDate = getReportDate(filename, filepath);
+    const shouldDelete = reportDate < before;
+    const entry = {
+      file: filepath,
+      reportDate: reportDate.toISOString(),
+      deleted: false
+    };
+    if (shouldDelete) {
+      if (!dryRun) {
+        try {
+          fs6.unlinkSync(filepath);
+          entry.deleted = true;
+        } catch {
+        }
+      } else {
+        entry.deleted = true;
+      }
+      deleted++;
+    } else {
+      skipped++;
+    }
+    files.push(entry);
+  }
+  return { deleted, skipped, totalScanned, files };
+}
+
+// src/state/fixTracker.ts
+import fs7 from "fs";
+import path7 from "path";
 var FixTracker = class {
   constructor(parentDir) {
-    this.filePath = path6.join(parentDir, "StateMaintenance", "fix_status.json");
+    this.filePath = path7.join(parentDir, "StateMaintenance", "fix_status.json");
   }
   load() {
     try {
-      if (fs6.existsSync(this.filePath)) {
-        const raw = fs6.readFileSync(this.filePath, "utf-8");
+      if (fs7.existsSync(this.filePath)) {
+        const raw = fs7.readFileSync(this.filePath, "utf-8");
         return JSON.parse(raw);
       }
     } catch {
@@ -843,8 +896,8 @@ var FixTracker = class {
     return {};
   }
   save(store) {
-    fs6.mkdirSync(path6.dirname(this.filePath), { recursive: true });
-    fs6.writeFileSync(this.filePath, JSON.stringify(store, null, 2), "utf-8");
+    fs7.mkdirSync(path7.dirname(this.filePath), { recursive: true });
+    fs7.writeFileSync(this.filePath, JSON.stringify(store, null, 2), "utf-8");
   }
   setFixed(signature, fixed, note) {
     const store = this.load();
@@ -887,11 +940,11 @@ function loadFixStatuses(parentDir) {
 }
 
 // src/pathSafety.ts
-import path7 from "path";
+import path8 from "path";
 function assertPathUnderBase(userPath, base) {
-  const resolved = path7.resolve(userPath);
-  const resolvedBase = path7.resolve(base);
-  if (!resolved.startsWith(resolvedBase + path7.sep) && resolved !== resolvedBase) {
+  const resolved = path8.resolve(userPath);
+  const resolvedBase = path8.resolve(base);
+  if (!resolved.startsWith(resolvedBase + path8.sep) && resolved !== resolvedBase) {
     throw new Error(`Path "${userPath}" is outside the allowed directory "${base}"`);
   }
   return resolved;
@@ -900,11 +953,11 @@ function assertNoTraversal(userPath) {
   if (userPath.includes("..")) {
     throw new Error(`Path "${userPath}" contains directory traversal`);
   }
-  return path7.resolve(userPath);
+  return path8.resolve(userPath);
 }
 var BLOCKED_PREFIXES = ["/etc", "/var/run", "/usr/bin", "/usr/sbin", "/System", "/Library/LaunchDaemons"];
 function assertSafeSymlinkTarget(target) {
-  const resolved = path7.resolve(target);
+  const resolved = path8.resolve(target);
   for (const prefix of BLOCKED_PREFIXES) {
     if (resolved.startsWith(prefix + "/") || resolved === prefix) {
       throw new Error(`Symlink target "${target}" points to a restricted system directory`);
@@ -913,8 +966,8 @@ function assertSafeSymlinkTarget(target) {
 }
 
 // src/core/csvExporter.ts
-import fs7 from "fs";
-import path8 from "path";
+import fs8 from "fs";
+import path9 from "path";
 function escapeCsvValue(value) {
   const escaped = value.replace(/"/g, '""');
   return `"${escaped}"`;
@@ -959,11 +1012,11 @@ function reportToCsvString(report) {
 function exportReportToCsv(report, outputPath) {
   try {
     const csv = reportToCsvString(report);
-    const dir = path8.dirname(outputPath);
+    const dir = path9.dirname(outputPath);
     if (dir && dir !== ".") {
-      fs7.mkdirSync(dir, { recursive: true });
+      fs8.mkdirSync(dir, { recursive: true });
     }
-    fs7.writeFileSync(outputPath, csv, "utf-8");
+    fs8.writeFileSync(outputPath, csv, "utf-8");
     return {
       success: true,
       message: `CSV exported successfully with ${report.crash_groups.length} row(s).`,
@@ -982,13 +1035,13 @@ function exportReportToCsv(report, outputPath) {
 }
 
 // src/core/setup.ts
-import fs8 from "fs";
+import fs9 from "fs";
 import os2 from "os";
-import path10 from "path";
+import path11 from "path";
 
 // src/core/automationTemplates.ts
 import os from "os";
-import path9 from "path";
+import path10 from "path";
 function generateMcpJson(config) {
   const getConfigValue = (k) => config[k] ?? "";
   const json = {
@@ -1024,7 +1077,7 @@ function generateMcpJson(config) {
   return JSON.stringify(json, null, 2);
 }
 function generatePlist(config) {
-  const scriptPath = path9.join(config.CRASH_ANALYSIS_PARENT, "Automation", "run_crash_pipeline.sh");
+  const scriptPath = path10.join(config.CRASH_ANALYSIS_PARENT, "Automation", "run_crash_pipeline.sh");
   const homeDir = os.homedir();
   const scheduledRunTime = config.SCHEDULED_RUN_TIME ?? "11:00";
   const timeParts = scheduledRunTime.split(":");
@@ -1388,11 +1441,11 @@ function setupWorkspace(options = {}) {
     getAnalyzedReportsDir(config),
     getStateMaintenanceDir(config),
     getAutomationDir(config),
-    path10.join(getAutomationDir(config), "FixPlans")
+    path11.join(getAutomationDir(config), "FixPlans")
   ];
   for (const dir of dirsToCreate) {
-    if (!fs8.existsSync(dir)) {
-      fs8.mkdirSync(dir, { recursive: true });
+    if (!fs9.existsSync(dir)) {
+      fs9.mkdirSync(dir, { recursive: true });
       created.push(dir);
     }
   }
@@ -1400,20 +1453,20 @@ function setupWorkspace(options = {}) {
   const scaffoldedFiles = [];
   const templates = getAutomationTemplates(parentDir);
   for (const { filename, content, executable } of templates) {
-    const destPath = path10.join(automationDir, filename);
-    if (!fs8.existsSync(destPath)) {
-      fs8.writeFileSync(destPath, content, "utf-8");
+    const destPath = path11.join(automationDir, filename);
+    if (!fs9.existsSync(destPath)) {
+      fs9.writeFileSync(destPath, content, "utf-8");
       if (executable) {
-        fs8.chmodSync(destPath, 493);
+        fs9.chmodSync(destPath, 493);
       }
       scaffoldedFiles.push(destPath);
     }
   }
-  const configJsonPath = path10.join(parentDir, "crashpoint.config.json");
+  const configJsonPath = path11.join(parentDir, "crashpoint.config.json");
   let rawConfig = {};
-  if (fs8.existsSync(configJsonPath)) {
+  if (fs9.existsSync(configJsonPath)) {
     try {
-      rawConfig = JSON.parse(fs8.readFileSync(configJsonPath, "utf-8"));
+      rawConfig = JSON.parse(fs9.readFileSync(configJsonPath, "utf-8"));
     } catch {
     }
   }
@@ -1427,19 +1480,19 @@ function setupWorkspace(options = {}) {
     DEV_BRANCH_PATH: config.DEV_BRANCH_PATH,
     CRASH_VERSIONS: config.CRASH_VERSIONS
   };
-  const mcpJsonPath = path10.join(parentDir, ".mcp.json");
-  if (!fs8.existsSync(mcpJsonPath)) {
-    fs8.writeFileSync(mcpJsonPath, generateMcpJson(fullConfig), "utf-8");
+  const mcpJsonPath = path11.join(parentDir, ".mcp.json");
+  if (!fs9.existsSync(mcpJsonPath)) {
+    fs9.writeFileSync(mcpJsonPath, generateMcpJson(fullConfig), "utf-8");
     scaffoldedFiles.push(mcpJsonPath);
   }
-  const launchAgentsDir = path10.join(os2.homedir(), "Library", "LaunchAgents");
-  const plistPath = path10.join(launchAgentsDir, "com.crashpipeline.daily_mcp.plist");
-  if (!fs8.existsSync(plistPath)) {
+  const launchAgentsDir = path11.join(os2.homedir(), "Library", "LaunchAgents");
+  const plistPath = path11.join(launchAgentsDir, "com.crashpipeline.daily_mcp.plist");
+  if (!fs9.existsSync(plistPath)) {
     try {
-      if (!fs8.existsSync(launchAgentsDir)) {
-        fs8.mkdirSync(launchAgentsDir, { recursive: true });
+      if (!fs9.existsSync(launchAgentsDir)) {
+        fs9.mkdirSync(launchAgentsDir, { recursive: true });
       }
-      fs8.writeFileSync(plistPath, generatePlist(fullConfig), "utf-8");
+      fs9.writeFileSync(plistPath, generatePlist(fullConfig), "utf-8");
       scaffoldedFiles.push(plistPath);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -1457,28 +1510,28 @@ function setupWorkspace(options = {}) {
     if (!target) continue;
     assertNoTraversal(target);
     assertSafeSymlinkTarget(target);
-    const resolvedTarget = path10.resolve(target);
-    const linkPath = path10.join(parentDir, name);
+    const resolvedTarget = path11.resolve(target);
+    const linkPath = path11.join(parentDir, name);
     let status;
-    if (!fs8.existsSync(resolvedTarget)) {
+    if (!fs9.existsSync(resolvedTarget)) {
       warnings.push(`Target for ${name} does not exist: ${resolvedTarget}`);
     }
     try {
-      fs8.lstatSync(linkPath);
-      fs8.rmSync(linkPath, { force: true });
+      fs9.lstatSync(linkPath);
+      fs9.rmSync(linkPath, { force: true });
     } catch {
     }
     let symlinkType = "file";
-    if (fs8.existsSync(resolvedTarget)) {
-      symlinkType = fs8.statSync(resolvedTarget).isDirectory() ? "dir" : "file";
+    if (fs9.existsSync(resolvedTarget)) {
+      symlinkType = fs9.statSync(resolvedTarget).isDirectory() ? "dir" : "file";
     } else {
       const lowerTarget = resolvedTarget.toLowerCase();
-      if (lowerTarget.endsWith(".dsym") || lowerTarget.endsWith(".app") || lowerTarget.endsWith(".framework") || !path10.extname(resolvedTarget)) {
+      if (lowerTarget.endsWith(".dsym") || lowerTarget.endsWith(".app") || lowerTarget.endsWith(".framework") || !path11.extname(resolvedTarget)) {
         symlinkType = "dir";
       }
     }
     try {
-      fs8.symlinkSync(resolvedTarget, linkPath, symlinkType);
+      fs9.symlinkSync(resolvedTarget, linkPath, symlinkType);
       status = "created";
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -1613,13 +1666,13 @@ server.registerTool(
     }
     if (input.file) {
       assertNoTraversal(input.file);
-      const outputPath = path11.join(outputDir, path11.basename(input.file));
+      const outputPath = path12.join(outputDir, path12.basename(input.file));
       const res = await symbolicateOne(input.file, dsymPath, outputPath);
       const result2 = {
         succeeded: res.success ? 1 : 0,
         failed: res.success ? 0 : 1,
         total: 1,
-        results: [{ file: path11.basename(input.file), success: res.success }]
+        results: [{ file: path12.basename(input.file), success: res.success }]
       };
       return {
         content: [{ type: "text", text: JSON.stringify(result2, null, 2) }],
@@ -1705,9 +1758,9 @@ server.registerTool(
     } else if (config.DSYM_PATH) {
       dsymPath = config.DSYM_PATH;
     } else {
-      const symlinkPath = path11.join(config.CRASH_ANALYSIS_PARENT, "dSYM_File");
+      const symlinkPath = path12.join(config.CRASH_ANALYSIS_PARENT, "dSYM_File");
       try {
-        dsymPath = fs9.realpathSync(symlinkPath);
+        dsymPath = fs10.realpathSync(symlinkPath);
       } catch {
         const result2 = {
           valid: false,
@@ -1722,7 +1775,7 @@ server.registerTool(
       }
     }
     assertNoTraversal(dsymPath);
-    if (!fs9.existsSync(dsymPath)) {
+    if (!fs10.existsSync(dsymPath)) {
       const result2 = {
         valid: false,
         dsymPath,
@@ -1736,7 +1789,7 @@ server.registerTool(
     }
     let resolvedDsymPath;
     try {
-      resolvedDsymPath = fs9.realpathSync(dsymPath);
+      resolvedDsymPath = fs10.realpathSync(dsymPath);
     } catch {
       resolvedDsymPath = dsymPath;
     }
@@ -1784,8 +1837,8 @@ server.registerTool(
       }
       if (input.crashDir) {
         assertPathUnderBase(input.crashDir, getMainCrashLogsDir(config));
-        if (fs9.existsSync(input.crashDir)) {
-          fs9.readdirSync(input.crashDir).filter((f) => f.endsWith(".crash") || f.endsWith(".ips")).forEach((f) => crashFiles.push(path11.join(input.crashDir, f)));
+        if (fs10.existsSync(input.crashDir)) {
+          fs10.readdirSync(input.crashDir).filter((f) => f.endsWith(".crash") || f.endsWith(".ips")).forEach((f) => crashFiles.push(path12.join(input.crashDir, f)));
         }
       }
     } else {
@@ -1795,8 +1848,8 @@ server.registerTool(
         getOtherCrashesDir(config)
       ];
       for (const dir of dirs) {
-        if (fs9.existsSync(dir)) {
-          fs9.readdirSync(dir).filter((f) => f.endsWith(".crash") || f.endsWith(".ips")).forEach((f) => crashFiles.push(path11.join(dir, f)));
+        if (fs10.existsSync(dir)) {
+          fs10.readdirSync(dir).filter((f) => f.endsWith(".crash") || f.endsWith(".ips")).forEach((f) => crashFiles.push(path12.join(dir, f)));
         }
       }
     }
@@ -1818,7 +1871,7 @@ server.registerTool(
     for (const crashFile of crashFiles) {
       let content = "";
       try {
-        content = fs9.readFileSync(crashFile, "utf-8");
+        content = fs10.readFileSync(crashFile, "utf-8");
       } catch {
         continue;
       }
@@ -1835,7 +1888,7 @@ server.registerTool(
         const uuid = `${raw.slice(0, 8)}-${raw.slice(8, 12)}-${raw.slice(12, 16)}-${raw.slice(16, 20)}-${raw.slice(20)}`;
         if (!seen.has(uuid)) {
           seen.add(uuid);
-          crashFileUuids.push({ file: path11.basename(crashFile), uuid });
+          crashFileUuids.push({ file: path12.basename(crashFile), uuid });
         }
       }
     }
@@ -1897,16 +1950,16 @@ server.registerTool(
     const manifest = input.includeProcessedCrashes ? void 0 : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "analyze");
     const report = analyzeDirectory(crashDir, fixStatuses, manifest);
     const reportsDir = getAnalyzedReportsDir(config);
-    fs9.mkdirSync(reportsDir, { recursive: true });
+    fs10.mkdirSync(reportsDir, { recursive: true });
     const ts = Date.now();
-    const jsonReportPath = path11.join(reportsDir, `jsonReport_${ts}.json`);
-    const csvReportPath = path11.join(reportsDir, `sheetReport_${ts}.csv`);
-    fs9.writeFileSync(jsonReportPath, JSON.stringify(report, null, 2), "utf-8");
+    const jsonReportPath = path12.join(reportsDir, `jsonReport_${ts}.json`);
+    const csvReportPath = path12.join(reportsDir, `sheetReport_${ts}.csv`);
+    fs10.writeFileSync(jsonReportPath, JSON.stringify(report, null, 2), "utf-8");
     const csvExport = exportReportToCsv(report, csvReportPath);
-    const latestJsonPath = path11.join(reportsDir, "latest.json");
-    const latestCsvPath = path11.join(reportsDir, "latest.csv");
-    fs9.copyFileSync(jsonReportPath, latestJsonPath);
-    fs9.copyFileSync(csvReportPath, latestCsvPath);
+    const latestJsonPath = path12.join(reportsDir, "latest.json");
+    const latestCsvPath = path12.join(reportsDir, "latest.csv");
+    fs10.copyFileSync(jsonReportPath, latestJsonPath);
+    fs10.copyFileSync(csvReportPath, latestCsvPath);
     const result = {
       ...report,
       json_report_path: jsonReportPath,
@@ -2044,7 +2097,7 @@ server.registerTool(
         const symbolicateManifest = includeProcessed ? void 0 : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "symbolicate");
         const batchRes = await symbolicateFiles(exportedPaths, dsymPath, symbolicatedDir, symbolicateManifest);
         symbolicationResult = batchRes;
-        symbolicatedPaths = batchRes.results.filter((r) => r.success).map((r) => path11.join(symbolicatedDir, r.file));
+        symbolicatedPaths = batchRes.results.filter((r) => r.success).map((r) => path12.join(symbolicatedDir, r.file));
       }
     }
     const fixStatuses = loadFixStatuses(config.CRASH_ANALYSIS_PARENT);
@@ -2052,22 +2105,22 @@ server.registerTool(
     const analysisReport = analyzeFiles(symbolicatedPaths, fixStatuses, analyzeManifest);
     const reportsDir = getAnalyzedReportsDir(config);
     const ts = Date.now();
-    const reportFile = path11.join(reportsDir, `jsonReport_${ts}.json`);
-    const csvFile = path11.join(reportsDir, `sheetReport_${ts}.csv`);
+    const reportFile = path12.join(reportsDir, `jsonReport_${ts}.json`);
+    const csvFile = path12.join(reportsDir, `sheetReport_${ts}.csv`);
     try {
-      fs9.mkdirSync(reportsDir, { recursive: true });
-      fs9.writeFileSync(reportFile, JSON.stringify(analysisReport, null, 2), "utf-8");
+      fs10.mkdirSync(reportsDir, { recursive: true });
+      fs10.writeFileSync(reportFile, JSON.stringify(analysisReport, null, 2), "utf-8");
       exportReportToCsv(analysisReport, csvFile);
-      const latestJsonPath = path11.join(reportsDir, "latest.json");
-      const latestCsvPath = path11.join(reportsDir, "latest.csv");
-      fs9.copyFileSync(reportFile, latestJsonPath);
-      fs9.copyFileSync(csvFile, latestCsvPath);
+      const latestJsonPath = path12.join(reportsDir, "latest.json");
+      const latestCsvPath = path12.join(reportsDir, "latest.csv");
+      fs10.copyFileSync(reportFile, latestJsonPath);
+      fs10.copyFileSync(csvFile, latestCsvPath);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`Warning: failed to save report to ${reportFile}: ${msg}`);
     }
     const pipelineManifest = new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "export");
-    const resolvedCrashIds = exportedPaths.map((p) => extractIncidentId(p) ?? path11.basename(p));
+    const resolvedCrashIds = exportedPaths.map((p) => extractIncidentId(p) ?? path12.basename(p));
     pipelineManifest.recordPipelineRun(rangeKey, {
       startDate: startDateISO,
       endDate: endDateISO,
@@ -2125,6 +2178,43 @@ server.registerTool(
       getSymbolicatedDir(config)
     ];
     const result = cleanOldCrashes(input.beforeDate, dirs, dryRun, config.CRASH_ANALYSIS_PARENT, dryRun ? void 0 : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "export"));
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      structuredContent: result
+    };
+  }
+);
+server.registerTool(
+  "cleanup_reports",
+  {
+    description: "Delete analyzed report files (.json and .csv) in AnalyzedReportsFolder that are older than a given date. Targets timestamped report files generated by the analysis pipeline (jsonReport_<timestamp>.json, sheetReport_<timestamp>.csv). Stable pointer files (latest.json, latest.csv) are never deleted. Use dryRun to preview what would be deleted.",
+    inputSchema: z2.object({
+      beforeDate: z2.string().describe("ISO date string \u2014 analyzed report files with a report date before this date will be deleted (e.g. 2026-03-01)"),
+      dryRun: z2.boolean().optional().describe("When true, reports what would be deleted without actually deleting (default: false)")
+    }),
+    outputSchema: z2.object({
+      deleted: z2.number(),
+      skipped: z2.number(),
+      totalScanned: z2.number(),
+      files: z2.array(
+        z2.object({
+          file: z2.string(),
+          reportDate: z2.string(),
+          deleted: z2.boolean()
+        })
+      )
+    })
+  },
+  async (input) => {
+    const config = getConfig();
+    const dryRun = input.dryRun ?? false;
+    try {
+      validateDateInput(input.beforeDate, "beforeDate");
+    } catch (err) {
+      return { content: [{ type: "text", text: err.message }] };
+    }
+    const reportsDir = getAnalyzedReportsDir(config);
+    const result = cleanOldReports(input.beforeDate, reportsDir, dryRun);
     return {
       content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       structuredContent: result
