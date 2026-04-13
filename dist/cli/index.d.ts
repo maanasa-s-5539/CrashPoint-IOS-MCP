@@ -4,7 +4,6 @@ export { cmdExport } from "./cmdExport.js";
 export { cmdBatch } from "./cmdBatch.js";
 export { cmdAnalyze } from "./cmdAnalyze.js";
 export { cmdSetup } from "./cmdSetup.js";
-export { cmdListVersions } from "./cmdListVersions.js";
 export { cmdPipeline } from "./cmdPipeline.js";
 export { cmdClean } from "./cmdClean.js";
 export { cmdVerifyDsym } from "./cmdVerifyDsym.js";

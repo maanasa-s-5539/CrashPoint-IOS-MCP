@@ -519,20 +519,6 @@ function _findCrashFiles(dir, results) {
   } catch {
   }
 }
-function listAvailableVersions(inputDir, recursive = false) {
-  const xccrashpoints = _findXccrashpoints(inputDir, recursive);
-  const versions = /* @__PURE__ */ new Set();
-  for (const xcp of xccrashpoints) {
-    const crashes = findCrashLogs(xcp);
-    for (const crash of crashes) {
-      const version = extractVersion(crash);
-      if (version) {
-        versions.add(version);
-      }
-    }
-  }
-  return Array.from(versions).sort();
-}
 function _findXccrashpoints(dir, recursive) {
   const results = [];
   try {
@@ -1463,7 +1449,6 @@ export {
   getSymbolicatedDir,
   getXcodeCrashesDir,
   hasCrashFiles,
-  listAvailableVersions,
   loadFixStatuses,
   parseCrashMetadata,
   reportToCsvString,
