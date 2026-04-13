@@ -981,7 +981,6 @@ fi
 # Read automation variables FROM config file
 APP_DISPLAY_NAME=$(node -e "console.log(require(process.argv[1]).APP_DISPLAY_NAME || '')" "$CONFIG_JSON")
 APPTICS_MCP_NAME=$(node -e "console.log(require(process.argv[1]).APPTICS_MCP_NAME || '')" "$CONFIG_JSON")
-CRASH_VERSIONS=$(node -e "console.log(require(process.argv[1]).CRASH_VERSIONS || '')" "$CONFIG_JSON")
 SCHEDULED_RUN_TIME=$(node -e "console.log(require(process.argv[1]).SCHEDULED_RUN_TIME || '11:00')" "$CONFIG_JSON")
 IFS=':' read -r SCHED_HOUR SCHED_MINUTE <<< "$SCHEDULED_RUN_TIME"
 SCHED_HOUR=$((10#\${SCHED_HOUR:-11}))
@@ -990,6 +989,10 @@ if [ "$SCHED_HOUR" -lt 0 ] || [ "$SCHED_HOUR" -gt 23 ] || [ "$SCHED_MINUTE" -lt 
   echo "WARNING: SCHEDULED_RUN_TIME '$SCHEDULED_RUN_TIME' is invalid, defaulting to 11:00"
   SCHED_HOUR=11
   SCHED_MINUTE=0
+fi
+
+if [ -z "$APP_DISPLAY_NAME" ]; then
+  echo "ERROR: APP_DISPLAY_NAME not set in $CONFIG_JSON"; exit 1
 fi
 
 # \u2500\u2500\u2500 CLAUDE CLI PATH \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -1032,6 +1035,7 @@ if [ ! -f "$MCP_JSON_FILE" ]; then
   _STATUS_ID=$(node -e "console.log(require(process.argv[1]).ZOHO_BUG_STATUS_OPEN || '')" "$CONFIG_JSON")
   _APP_VER_FIELD=$(node -e "console.log(require(process.argv[1]).ZOHO_BUG_APP_VERSION || '')" "$CONFIG_JSON")
   _OCC_FIELD=$(node -e "console.log(require(process.argv[1]).ZOHO_BUG_NUM_OF_OCCURRENCES || '')" "$CONFIG_JSON")
+  _CRASH_VERSIONS=$(node -e "console.log(require(process.argv[1]).CRASH_VERSIONS || '')" "$CONFIG_JSON")
   cat > "$MCP_JSON_FILE" << MCP_JSON_EOF
 {
   "mcpServers": {
@@ -1058,7 +1062,7 @@ if [ ! -f "$MCP_JSON_FILE" ]; then
         "ZOHO_BUG_STATUS_OPEN": "$_STATUS_ID",
         "ZOHO_BUG_APP_VERSION": "$_APP_VER_FIELD",
         "ZOHO_BUG_NUM_OF_OCCURRENCES": "$_OCC_FIELD",
-        "CRASH_VERSIONS": "$CRASH_VERSIONS"
+        "CRASH_VERSIONS": "$_CRASH_VERSIONS"
       }
     }
   }
@@ -1126,20 +1130,22 @@ if [ ! -x "$CLAUDE_PATH" ]; then
   exit 1
 fi
 
-# \u2500\u2500\u2500 COMPUTE TARGET DATE (N days ago, macOS date syntax) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-CRASH_DATE_OFFSET=$(node -e "console.log(require(process.argv[1]).CRASH_DATE_OFFSET || '3')" "$CONFIG_JSON")
-TARGET_DATE=$(date -v-\${CRASH_DATE_OFFSET}d +"%Y-%m-%d")
-
 # \u2500\u2500\u2500 SUBSTITUTE PLACEHOLDERS FROM config file \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-PROMPT=$(sed \\
-  -e "s|{{APP_DISPLAY_NAME}}|\${APP_DISPLAY_NAME}|g" \\
-  -e "s|{{APPTICS_MCP_NAME}}|\${APPTICS_MCP_NAME}|g" \\
-  -e "s|{{CRASH_VERSIONS}}|\${CRASH_VERSIONS}|g" \\
-  -e "s|{{TARGET_DATE}}|\${TARGET_DATE}|g" \\
-  "$PROMPT_FILE")
+if [ -n "\${APPTICS_MCP_NAME}" ]; then
+  PROMPT=$(sed \\
+    -e "s|{{APPTICS_MCP_NAME}}|\${APPTICS_MCP_NAME}|g" \\
+    "$PROMPT_FILE")
+else
+  PROMPT=$(sed \\
+    -e '/{{APPTICS_MCP_NAME}}/d' \\
+    "$PROMPT_FILE")
+fi
 
 # \u2500\u2500\u2500 BUILD --allowedTools DYNAMICALLY FROM config file MCP NAMES \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-ALLOWED_TOOLS="mcp__crashpoint-ios__*,mcp__crashpoint-integrations__*,mcp__\${APPTICS_MCP_NAME}__*"
+ALLOWED_TOOLS="mcp__crashpoint-ios__*,mcp__crashpoint-integrations__*"
+if [ -n "\${APPTICS_MCP_NAME}" ]; then
+  ALLOWED_TOOLS="\${ALLOWED_TOOLS},mcp__\${APPTICS_MCP_NAME}__*"
+fi
 
 # \u2500\u2500\u2500 TIMESTAMP & LOG FILE \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
@@ -1148,9 +1154,9 @@ LOG_FILE="$LOG_DIR/pipeline_\${TIMESTAMP}.log"
 {
   echo "=== Crash Pipeline Run: $TIMESTAMP ==="
   echo "App:           \${APP_DISPLAY_NAME}"
-  echo "Version:       \${CRASH_VERSIONS}"
-  echo "Target Date:   \${TARGET_DATE} (offset: \${CRASH_DATE_OFFSET} days)"
-  echo "Apptics MCP:   \${APPTICS_MCP_NAME}"
+  if [ -n "\${APPTICS_MCP_NAME}" ]; then
+    echo "Apptics MCP:   \${APPTICS_MCP_NAME} (used for Zoho Projects bug tools)"
+  fi
   echo "Allowed Tools: \${ALLOWED_TOOLS}"
   echo "---"
 } | tee "$LOG_FILE"
@@ -1161,7 +1167,7 @@ cd "$PARENT_HOLDER_FOLDER"
 # \u2500\u2500\u2500 RUN PIPELINE \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 "$CLAUDE_PATH" -p "$PROMPT" \\
   --allowedTools "$ALLOWED_TOOLS" \\
-  --max-turns 30 \\
+  --max-turns 70 \\
   2>&1 | tee -a "$LOG_FILE"
 
 EXIT_CODE=\${PIPESTATUS[0]}
@@ -1175,19 +1181,58 @@ exit "$EXIT_CODE"
 `;
 var DAILY_CRASH_PIPELINE_PROMPT_MD = `You are running an automated daily crash analysis pipeline. Execute these steps in order, stopping if any step fails:
 
-## Step 1: Download Crashes from Apptics
-Use the {{APPTICS_MCP_NAME}} MCP server. Fetch all crashes and crash details for {{APP_DISPLAY_NAME}} iOS app, for the version number {{CRASH_VERSIONS}} from {{TARGET_DATE}} only (a single day). Save the crash details to 'AppticsCrash_<number>.crash' text files in 'AppticsCrashLogs/' directory.
+## Step 1: Run Full Pipeline (Download + Export + Symbolicate + Analyze)
+Use the crashpoint-integrations MCP server. Call run_full_pipeline with notifyCliq=true and reportToProjects=true. This will download crashes from Apptics, export, symbolicate, and analyze them. The download uses the configured Apptics API credentials. Dates are computed automatically from CRASH_DATE_OFFSET.
 
-## Step 2: Export Crash Logs
-Use CrashPoint-IOS-MCP to run the full pipeline with startDate={{TARGET_DATE}} and endDate={{TARGET_DATE}} so only crashes from that single day are exported.
+## Step 2: Notify Cliq
+If the pipeline result shows crash groups were found (check analyze.crashGroups > 0), use the crashpoint-integrations MCP server to call notify_cliq with the report path from the pipeline result.
 
-## Step 3: Notify Cliq
-Use the Crashpoint-integrations-mcp. Using the analyzed latest.json inside ParentHolderFolder -> AnalyzedReportsFolder , notify_cliq about all the crashes from the latest report.
-
-## Step 4: Create/Update Bugs in Zoho Projects
-Use the Crashpoint-integrations-mcp and {{APPTICS_MCP_NAME}} MCPs and the latest report. Use the portal id, project id and field id values from the config file. Use these tools from {{APPTICS_MCP_NAME}} MCP : list_bugs, create_bug, update_bug.
+## Step 3: Create/Update Bugs in Zoho Projects
+If the pipeline result has nextSteps.reportToProjects=true, use the crashpoint-integrations MCP server to call prepare_project_bugs to get structured bug data. Then use the {{APPTICS_MCP_NAME}} MCP server's Zoho Projects tools (list_bugs, create_bug, update_bug) with the portal_id, project_id, and field values from the prepare_project_bugs output.
 If an issue with the same crash signature and app version number does not exist already, create a new issue, setting the App Version and Number of Occurrences field values.
-If an issue with the same crash signature exists already, update the existing crash's number of occurrences. Take the existing value in the number of occurrences field, add the new number of occurrences to it and update the field.
+If an issue with the same crash signature exists already, update the existing crash's number of occurrences. Take the existing value in the number of occurrences field, add the new number of occurrences from the report, and set the updated total.
+
+## Step 4: Analyze Fix Status and Create Fix Plan
+
+If the pipeline result shows crash groups were found (crashGroups > 0):
+
+1. Read the crash analysis report from the reportPath in the pipeline result. For each crash group, extract the **exception type**, **signature**, and **top frames** (these are symbolicated with file and function names).
+
+2. For each crash group, examine the source file(s) referenced in the top frames:
+   - Read the relevant source files from the **Master/Live branch** path (configured as MASTER_BRANCH_PATH in crashpoint.config.json) to understand the crash-causing code.
+   - Read the same source files from the **Development branch** path (configured as DEV_BRANCH_PATH in crashpoint.config.json) to check whether the crash site has been modified or fixed.
+
+3. Check if a 'LatestFixPlan.md' exists in the Automation/FixPlans/ folder.
+
+4. If this exists, verify if the existing crash signature has already been analyzed, if yes, increase the crash occurrence count only.
+
+5. If the file doesn't exist, create a plan 'LatestFixPlan.md' in the Automation/FixPlans/ folder.
+
+6. For each crash, determine:
+   - **Possible Cause**: Based on the exception type, stack trace, and the source code at that location in the Master branch, describe the likely root cause.
+   - **Fix Status**: Compare the Master and Dev branch versions of the file. If the code at or around the crash site has been changed in Dev, describe what was changed and whether it appears to address the crash. If unchanged, mark it as "Not yet fixed in Development".
+   - **Suggested Fix**: If no fix exists in Dev, suggest a concrete fix approach.
+
+7. Write the results to \`Automation/FixPlans/LatestFixPlan.md\` inside the ParentHolderFolder with the following structure:
+
+# Crash Fix Plan \u2014 {date}
+
+## Summary
+- Total crash groups analyzed: {count}
+- Fixed in Development: {count}
+- Not yet fixed: {count}
+
+## Crash Groups
+
+### 1. {Exception Type} \u2014 {Signature snippet}
+- **Occurrences:** {count}
+- **Top Frames:** {list the top symbolicated frames}
+- **Possible Cause:** {analysis of why this crash occurs}
+- **Status in Development Branch:** Fixed / Not Fixed
+- **Changes in Dev:** {description of relevant changes, or "No changes detected"}
+- **Suggested Fix:** {if not fixed, describe the recommended approach}
+
+### 2. ...
 
 After completing all steps, output a summary of what was processed.
 `;
