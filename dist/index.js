@@ -904,39 +904,13 @@ function assertSafeSymlinkTarget(target) {
 import os from "os";
 import path8 from "path";
 function generateMcpJson(config) {
-  const getConfigValue = (k) => config[k] ?? "";
   const json = {
     mcpServers: {
       "crashpoint-ios": {
         command: "npx",
         args: ["-p", "github:maanasa-s-5539/CrashPoint-IOS-MCP", "crashpoint-ios-core"],
         env: {
-          CRASH_ANALYSIS_PARENT: getConfigValue("CRASH_ANALYSIS_PARENT"),
-          DSYM_PATH: getConfigValue("DSYM_PATH"),
-          APP_PATH: getConfigValue("APP_PATH"),
-          APP_NAME: getConfigValue("APP_NAME"),
-          MASTER_BRANCH_PATH: getConfigValue("MASTER_BRANCH_PATH"),
-          DEV_BRANCH_PATH: getConfigValue("DEV_BRANCH_PATH"),
-          CRASH_VERSIONS: getConfigValue("CRASH_VERSIONS"),
-          CRASH_NUM_DAYS: getConfigValue("CRASH_NUM_DAYS"),
-          CRASH_DATE_OFFSET: getConfigValue("CRASH_DATE_OFFSET"),
-          APP_DISPLAY_NAME: getConfigValue("APP_DISPLAY_NAME"),
-          APPTICS_MCP_NAME: getConfigValue("APPTICS_MCP_NAME"),
-          APPTICS_PORTAL_ID: getConfigValue("APPTICS_PORTAL_ID"),
-          APPTICS_PROJECT_ID: getConfigValue("APPTICS_PROJECT_ID"),
-          APPTICS_APP_NAME: getConfigValue("APPTICS_APP_NAME"),
-          ZOHO_CLIQ_WEBHOOK_URL: getConfigValue("ZOHO_CLIQ_WEBHOOK_URL"),
-          ZOHO_PROJECTS_PORTAL_ID: getConfigValue("ZOHO_PROJECTS_PORTAL_ID"),
-          ZOHO_PROJECTS_PROJECT_ID: getConfigValue("ZOHO_PROJECTS_PROJECT_ID"),
-          ZOHO_BUG_STATUS_OPEN: getConfigValue("ZOHO_BUG_STATUS_OPEN"),
-          ZOHO_BUG_STATUS_FIXED: getConfigValue("ZOHO_BUG_STATUS_FIXED"),
-          ZOHO_BUG_SEVERITY_SHOWSTOPPER: getConfigValue("ZOHO_BUG_SEVERITY_SHOWSTOPPER"),
-          ZOHO_BUG_SEVERITY_CRITICAL: getConfigValue("ZOHO_BUG_SEVERITY_CRITICAL"),
-          ZOHO_BUG_SEVERITY_MAJOR: getConfigValue("ZOHO_BUG_SEVERITY_MAJOR"),
-          ZOHO_BUG_SEVERITY_MINOR: getConfigValue("ZOHO_BUG_SEVERITY_MINOR"),
-          ZOHO_BUG_SEVERITY_NONE: getConfigValue("ZOHO_BUG_SEVERITY_NONE"),
-          ZOHO_BUG_APP_VERSION: getConfigValue("ZOHO_BUG_APP_VERSION"),
-          ZOHO_BUG_NUM_OF_OCCURRENCES: getConfigValue("ZOHO_BUG_NUM_OF_OCCURRENCES")
+          CRASH_ANALYSIS_PARENT: config.CRASH_ANALYSIS_PARENT
         }
       }
     }
@@ -1074,13 +1048,7 @@ function setupWorkspace(options = {}) {
   }
   const fullConfig = {
     ...rawConfig,
-    CRASH_ANALYSIS_PARENT: config.CRASH_ANALYSIS_PARENT,
-    DSYM_PATH: config.DSYM_PATH,
-    APP_PATH: config.APP_PATH,
-    APP_NAME: config.APP_NAME,
-    MASTER_BRANCH_PATH: config.MASTER_BRANCH_PATH,
-    DEV_BRANCH_PATH: config.DEV_BRANCH_PATH,
-    CRASH_VERSIONS: config.CRASH_VERSIONS
+    CRASH_ANALYSIS_PARENT: config.CRASH_ANALYSIS_PARENT
   };
   const mcpJsonPath = path10.join(parentDir, ".mcp.json");
   if (!fs8.existsSync(mcpJsonPath)) {

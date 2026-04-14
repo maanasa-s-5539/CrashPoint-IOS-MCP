@@ -60,12 +60,6 @@ export function setupWorkspace(options: SetupOptions = {}): SetupResult {
   const fullConfig: FullCrashPointConfig = {
     ...rawConfig,
     CRASH_ANALYSIS_PARENT: config.CRASH_ANALYSIS_PARENT,
-    DSYM_PATH: config.DSYM_PATH,
-    APP_PATH: config.APP_PATH,
-    APP_NAME: config.APP_NAME,
-    MASTER_BRANCH_PATH: config.MASTER_BRANCH_PATH,
-    DEV_BRANCH_PATH: config.DEV_BRANCH_PATH,
-    CRASH_VERSIONS: config.CRASH_VERSIONS,
   };
 
   // ─── Generate .mcp.json if not already present ───────────────────────────

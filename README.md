@@ -157,18 +157,13 @@ All other values (paths, app name, etc.) are read automatically from `crashpoint
 
 ## Environment Variables
 
-Environment variables override corresponding keys in `crashpoint.config.json` (env always wins). You can still pass them via MCP client `env` blocks for per-client overrides.
+Only `CRASH_ANALYSIS_PARENT` is required as an environment variable — it tells the server where to find `crashpoint.config.json`. All other settings live in that config file.
 
 | Variable | Required | Description |
 |---|---|---|
-| `CRASH_ANALYSIS_PARENT` | **Yes** | Path to your ParentHolderFolder |
-| `DSYM_PATH` | Recommended | Path to `MyApp.dSYM` bundle — required for symbolication |
-| `APP_PATH` | Recommended | Path to `MyApp.app` bundle |
-| `APP_NAME` | Optional | App binary name (e.g. `MyApp`) — used to filter frames in reports |
-| `CRASH_INPUT_DIR` | Optional | Override directory searched for `.xccrashpoint` files |
-| `CRASH_VERSIONS` | Optional | Comma-separated version filter for exports |
-| `MASTER_BRANCH_PATH` | Optional | Path to master/live branch checkout (creates `CurrentMasterLiveBranch` symlink) |
-| `DEV_BRANCH_PATH` | Optional | Path to dev branch checkout (creates `CurrentDevelopmentBranch` symlink) |
+| `CRASH_ANALYSIS_PARENT` | **Yes** | Path to your ParentHolderFolder (where `crashpoint.config.json` lives) |
+
+Environment variables can still override any key from `crashpoint.config.json` (env always wins) if you need per-client overrides via MCP client `env` blocks.
 
 ---
 
@@ -199,7 +194,7 @@ ParentHolderFolder/                   ← CRASH_ANALYSIS_PARENT
 └── app_File -> ...                   ← Symlink to .app bundle (optional)
 ```
 
-Run `setup_folders` (MCP tool) or `node dist/cli.js setup` to create this structure. `setup_folders` also auto-generates `.mcp.json` (with all env vars for the unified `crashpoint-ios` server), the launchd plist at `~/Library/LaunchAgents/com.crashpipeline.daily_mcp.plist`, and the automation pipeline scripts (`run_crash_pipeline.sh`, `daily_crash_pipeline_prompt_phase1.md`, `daily_crash_pipeline_prompt_phase2.md`) — all only if they don't already exist, so your customizations are never overwritten. Pass `force=true` to update automation files to the latest version.
+Run `setup_folders` (MCP tool) or `node dist/cli.js setup` to create this structure. `setup_folders` also auto-generates `.mcp.json` (with only the mandatory `CRASH_ANALYSIS_PARENT` env var — all other config is read from `crashpoint.config.json`), the launchd plist at `~/Library/LaunchAgents/com.crashpipeline.daily_mcp.plist`, and the automation pipeline scripts (`run_crash_pipeline.sh`, `daily_crash_pipeline_prompt_phase1.md`, `daily_crash_pipeline_prompt_phase2.md`) — all only if they don't already exist, so your customizations are never overwritten. Pass `force=true` to update automation files to the latest version.
 
 > **Note:** macOS must be awake for the scheduled launchd job to run. If the Mac is asleep at the scheduled time, the job will run once the next time the Mac wakes up. To guarantee the job runs at the configured time, schedule a system wake event a few minutes before the run using:
 > ```bash
