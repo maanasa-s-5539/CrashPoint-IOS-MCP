@@ -9,4 +9,5 @@ export { cmdClean } from "./cmdClean.js";
 export { cmdCleanReports } from "./cmdCleanReports.js";
 export { cmdVerifyDsym } from "./cmdVerifyDsym.js";
 export { cmdFixStatus } from "./cmdFixStatus.js";
+export { cmdCleanupAll } from "./cmdCleanupAll.js";
 //# sourceMappingURL=index.d.ts.map

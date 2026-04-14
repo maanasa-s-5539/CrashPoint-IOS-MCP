@@ -4,12 +4,14 @@ import path from "path";
 import { getConfig, getMainCrashLogsDir, getXcodeCrashesDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir, getAnalyzedReportsDir, getStateMaintenanceDir, getAutomationDir } from "../config.js";
 import { assertNoTraversal, assertSafeSymlinkTarget } from "../pathSafety.js";
 import { generateMcpJson, generatePlist, FullCrashPointConfig } from "./automationTemplates.js";
+import { setupAutomationFiles } from "./setupAutomation.js";
 
 export interface SetupOptions {
   masterBranchPath?: string;
   devBranchPath?: string;
   dsymPath?: string;
   appPath?: string;
+  force?: boolean;
 }
 
 export interface SetupResult {
@@ -87,6 +89,23 @@ export function setupWorkspace(options: SetupOptions = {}): SetupResult {
       const msg = err instanceof Error ? err.message : String(err);
       warnings.push(`Could not write launchd plist to ${plistPath}: ${msg}`);
     }
+  }
+
+  // ─── Scaffold automation files ─────────────────────────────────────────────
+  try {
+    // Resolve the package root (two levels up from dist/core/ at runtime)
+    const packageRoot = path.resolve(__dirname, '..', '..');
+    const automationResult = setupAutomationFiles({
+      force: options.force ?? false,
+      packageRoot,
+      parentDir,
+    });
+    for (const f of automationResult.scaffolded) {
+      scaffoldedFiles.push(path.join(automationResult.automationDir, f));
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    warnings.push(`Could not scaffold automation files: ${msg}`);
   }
 
   const symlinkDefs: Array<{ name: string; target: string | undefined }> = [

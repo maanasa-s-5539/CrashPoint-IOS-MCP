@@ -70,7 +70,8 @@
     }
   },
   "files": [
-    "dist/"
+    "dist/",
+    "automation/"
   ],
   "bin": {
     "crashpoint-ios-core": "dist/core-server.js",

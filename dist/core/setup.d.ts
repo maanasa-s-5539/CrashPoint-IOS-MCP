@@ -3,6 +3,7 @@ export interface SetupOptions {
     devBranchPath?: string;
     dsymPath?: string;
     appPath?: string;
+    force?: boolean;
 }
 export interface SetupResult {
     parentDir: string;

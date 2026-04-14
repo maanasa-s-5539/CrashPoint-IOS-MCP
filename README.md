@@ -11,9 +11,13 @@ Also includes a standalone **CLI** (`crashpoint-ios-cli`) for scheduled runs wit
 CrashPoint iOS MCP gives your AI assistant the ability to:
 
 1. **Export** `.crash` files from Xcode Organizer `.xccrashpoint` bundles
-2. **Symbolicate** crashes using Xcode's `symbolicatecrash` tool and your `.dSYM` bundle
-3. **Analyze & group** symbolicated crashes by unique signature, device, iOS version, and app version
-4. **Track fixes** locally so your team can mark crash types as resolved
+2. **Save** Apptics crash data as `.crash` files for unified processing
+3. **Symbolicate** crashes using Xcode's `symbolicatecrash` tool and your `.dSYM` bundle
+4. **Analyze & group** symbolicated crashes by unique signature, device, iOS version, and app version
+5. **Track fixes** locally so your team can mark crash types as resolved
+6. **Notify Zoho Cliq** with crash report summaries via webhook
+7. **Report to Zoho Projects** — prepare structured bug data for creation/updates
+8. **Run the full pipeline** end-to-end with Apptics, Cliq, and Zoho Projects integration
 
 ---
 
@@ -66,17 +70,26 @@ When both the JSON config file and environment variables provide the same key, *
 
   "CRASH_INPUT_DIR": "",
   "CRASH_VERSIONS": "1.0.0",
-  "CRASH_DATE_OFFSET": "3",
+  "CRASH_DATE_OFFSET": "4",
   "CRASH_NUM_DAYS": "1",
   "SCHEDULED_RUN_TIME": "11:00",
 
   "APP_DISPLAY_NAME": "MyApp",
   "APPTICS_MCP_NAME": "apptics-mcp",
+  "APPTICS_PORTAL_ID": "12345",
+  "APPTICS_PROJECT_ID": "67890",
+  "APPTICS_APP_NAME": "MyApp",
 
   "ZOHO_CLIQ_WEBHOOK_URL": "https://cliq.zoho.in/...",
   "ZOHO_PROJECTS_PORTAL_ID": "12345",
   "ZOHO_PROJECTS_PROJECT_ID": "67890",
-  "ZOHO_BUG_STATUS_OPEN": "status-id",
+  "ZOHO_BUG_STATUS_OPEN": "status-id-open",
+  "ZOHO_BUG_STATUS_FIXED": "status-id-fixed",
+  "ZOHO_BUG_SEVERITY_SHOWSTOPPER": "severity-id-showstopper",
+  "ZOHO_BUG_SEVERITY_CRITICAL": "severity-id-critical",
+  "ZOHO_BUG_SEVERITY_MAJOR": "severity-id-major",
+  "ZOHO_BUG_SEVERITY_MINOR": "severity-id-minor",
+  "ZOHO_BUG_SEVERITY_NONE": "severity-id-none",
   "ZOHO_BUG_APP_VERSION": "field-name",
   "ZOHO_BUG_NUM_OF_OCCURRENCES": "field-name"
 }
@@ -103,7 +116,16 @@ When both the JSON config file and environment variables provide the same key, *
 | `ZOHO_CLIQ_WEBHOOK_URL` | Webhook URL for Zoho Cliq crash notifications |
 | `ZOHO_PROJECTS_PORTAL_ID` | Zoho Projects portal ID |
 | `ZOHO_PROJECTS_PROJECT_ID` | Zoho Projects project ID |
+| `APPTICS_PORTAL_ID` | Apptics portal ID (`zsoid`) |
+| `APPTICS_PROJECT_ID` | Apptics project ID |
+| `APPTICS_APP_NAME` | App name as it appears in Apptics |
 | `ZOHO_BUG_STATUS_OPEN` | Status ID for "Open" bugs in Zoho Projects |
+| `ZOHO_BUG_STATUS_FIXED` | Status ID for "Fixed" bugs in Zoho Projects |
+| `ZOHO_BUG_SEVERITY_SHOWSTOPPER` | Severity ID for Showstopper (≥50 occurrences) |
+| `ZOHO_BUG_SEVERITY_CRITICAL` | Severity ID for Critical (≥20 occurrences) |
+| `ZOHO_BUG_SEVERITY_MAJOR` | Severity ID for Major (≥5 occurrences) |
+| `ZOHO_BUG_SEVERITY_MINOR` | Severity ID for Minor (≥2 occurrences) |
+| `ZOHO_BUG_SEVERITY_NONE` | Severity ID for None (<2 occurrences) |
 | `ZOHO_BUG_APP_VERSION` | Custom field name for app version on bug items |
 | `ZOHO_BUG_NUM_OF_OCCURRENCES` | Custom field name for occurrence count on bug items |
 
@@ -167,7 +189,8 @@ ParentHolderFolder/                   ← CRASH_ANALYSIS_PARENT
 ├── StateMaintenance/                 ← Internal state (processed manifest, fix tracking)
 ├── Automation/
 │   ├── run_crash_pipeline.sh         ← Auto-generated shell script for scheduled runs
-│   ├── daily_crash_pipeline_prompt.md ← Prompt template for Claude CLI
+│   ├── daily_crash_pipeline_prompt_phase1.md ← Phase 1 prompt (Sonnet)
+│   ├── daily_crash_pipeline_prompt_phase2.md ← Phase 2 prompt (Opus)
 │   ├── ScheduledRunLogs/             ← Per-run log files
 │   └── FixPlans/                     ← Fix plan documents
 ├── CurrentMasterLiveBranch -> ...    ← Symlink to master branch (optional)
@@ -176,7 +199,7 @@ ParentHolderFolder/                   ← CRASH_ANALYSIS_PARENT
 └── app_File -> ...                   ← Symlink to .app bundle (optional)
 ```
 
-Run `setup_folders` (MCP tool) or `node dist/cli.js setup` to create this structure. `setup_folders` also auto-generates `.mcp.json` in your ParentHolderFolder and the launchd plist at `~/Library/LaunchAgents/com.crashpipeline.daily_mcp.plist` — both only if they don't already exist, so your customizations are never overwritten.
+Run `setup_folders` (MCP tool) or `node dist/cli.js setup` to create this structure. `setup_folders` also auto-generates `.mcp.json` (with all env vars for the unified `crashpoint-ios` server), the launchd plist at `~/Library/LaunchAgents/com.crashpipeline.daily_mcp.plist`, and the automation pipeline scripts (`run_crash_pipeline.sh`, `daily_crash_pipeline_prompt_phase1.md`, `daily_crash_pipeline_prompt_phase2.md`) — all only if they don't already exist, so your customizations are never overwritten. Pass `force=true` to update automation files to the latest version.
 
 > **Note:** macOS must be awake for the scheduled launchd job to run. If the Mac is asleep at the scheduled time, the job will run once the next time the Mac wakes up. To guarantee the job runs at the configured time, schedule a system wake event a few minutes before the run using:
 > ```bash
@@ -192,15 +215,21 @@ The `StateMaintenance/` folder holds `processed_manifest.json` (tracks which cra
 
 | # | Tool | Description |
 |---|---|---|
-| 1 | `setup_folders` | Create folder structure + symlinks (uses shared `setupWorkspace` core function) |
+| 1 | `setup_folders` | Create the complete folder structure, generate `.mcp.json` + launchd plist, scaffold automation scripts (phase1 + phase2 prompts + shell script), and create symlinks — all in one command |
 | 2 | `export_crashes` | Export `.crash` files from `.xccrashpoint` packages to `MainCrashLogsFolder/XCodeCrashLogs`. Add `dryRun: true` to preview without writing |
-| 3 | `symbolicate_batch` | Symbolicate crash files. Pass optional `file` param for a single file, or batch-process all of `MainCrashLogsFolder` (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs) |
-| 4 | `verify_dsym` | Validate a `.dSYM` bundle and check if its UUIDs match those in crash files from `MainCrashLogsFolder` (the post-export location where XCode crash logs and other crashes live) |
-| 5 | `analyze_crashes` | Group & deduplicate crashes by signature; includes fix status. Always auto-generates JSON + CSV reports in `AnalyzedReportsFolder` |
-| 6 | `fix_status` | Unified fix tracking: `action='set'` to mark fixed/unfixed, `action='unset'` to clear, `action='list'` to view all |
-| 7 | `run_basic_pipeline` | Run the basic pipeline: export → symbolicate → analyze |
-| 8 | `clean_old_crashes` | Delete `.crash`/`.ips` files older than a given date across all crash directories |
-| 9 | `cleanup_reports` | Delete analyzed report files (`.json`/`.csv`) in `AnalyzedReportsFolder` that are older than a given date |
+| 3 | `save_apptics_crashes` | Save crash data fetched from the Apptics Zoho MCP as `.crash` files in `AppticsCrashLogs/`. Uses `UniqueMessageID` in filenames for idempotency |
+| 4 | `symbolicate_batch` | Symbolicate crash files. Pass optional `file` param for a single file, or batch-process all of `MainCrashLogsFolder` (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs) |
+| 5 | `verify_dsym` | Validate a `.dSYM` bundle and check if its UUIDs match those in crash files from `MainCrashLogsFolder` |
+| 6 | `analyze_crashes` | Group & deduplicate crashes by signature; includes fix status. Always auto-generates JSON + CSV reports in `AnalyzedReportsFolder` |
+| 7 | `fix_status` | Unified fix tracking: `action='set'` to mark fixed/unfixed, `action='unset'` to clear, `action='list'` to view all |
+| 8 | `run_basic_pipeline` | Run the basic pipeline: export → symbolicate → analyze |
+| 9 | `run_full_pipeline` | Run the full pipeline with Zoho integration: export → symbolicate → analyze. Returns `nextSteps` flags (`notifyCliq`, `reportToProjects`) for follow-up actions |
+| 10 | `notify_cliq` | Send crash report summary to a Zoho Cliq channel via incoming webhook |
+| 11 | `prepare_project_bugs` | Prepare structured bug data from crash reports for Zoho Projects submission (titles, descriptions, severity, custom fields) |
+| 12 | `setup_automation_files` | Scaffold automation scripts into `Automation/` folder. Use `force=true` to update to the latest version |
+| 13 | `clean_old_crashes` | Delete `.crash`/`.ips` files older than a given date across all crash directories |
+| 14 | `cleanup_reports` | Delete analyzed report files (`.json`/`.csv`) in `AnalyzedReportsFolder` that are older than a given date |
+| 15 | `cleanup_all` | Remove all crash files and reports in one go. Supports `dryRun`, `keepReports`, and `keepManifests` flags |
 
 For detailed parameter documentation, see [Tool Parameters](docs/TOOL_PARAMETERS.md).
 
@@ -251,6 +280,12 @@ node dist/cli.js fix-status --action list
 
 # Run basic pipeline (export → symbolicate → analyze)
 node dist/cli.js pipeline
+
+# Remove all crash files and reports in one go
+node dist/cli.js cleanup --dry-run       # preview what would be deleted
+node dist/cli.js cleanup                  # delete everything
+node dist/cli.js cleanup --keep-reports   # only delete crash files, preserve reports
+node dist/cli.js cleanup --keep-manifests # preserve processed manifests
 ```
 
 ---
