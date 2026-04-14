@@ -110,6 +110,17 @@ function getSeverityId(config, count) {
   if (count >= 2) return config.ZOHO_BUG_SEVERITY_MINOR;
   return config.ZOHO_BUG_SEVERITY_NONE;
 }
+function cleanFilesFromDir(dir, extensions, dryRun) {
+  if (!fs.existsSync(dir)) return [];
+  const deleted = [];
+  const files = fs.readdirSync(dir).filter((f) => extensions.some((ext) => f.endsWith(ext)));
+  for (const f of files) {
+    const fullPath = path.join(dir, f);
+    deleted.push(fullPath);
+    if (!dryRun) fs.unlinkSync(fullPath);
+  }
+  return deleted;
+}
 
 // src/core/crashAnalyzer.ts
 import fs3 from "fs";
@@ -1259,6 +1270,7 @@ export {
   assertSafeSymlinkTarget,
   assertWritePathUnderBase,
   buildSignature,
+  cleanFilesFromDir,
   cleanOldCrashes,
   detectSource,
   exportCrashLogs,

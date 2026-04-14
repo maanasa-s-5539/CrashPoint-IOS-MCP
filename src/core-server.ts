@@ -8,7 +8,7 @@ import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 
-import { getConfig, getXcodeCrashesDir, getMainCrashLogsDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir, getAnalyzedReportsDir, getStateMaintenanceDir, hasCrashFiles, getSeverityId } from "./config.js";
+import { getConfig, getXcodeCrashesDir, getMainCrashLogsDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir, getAnalyzedReportsDir, getStateMaintenanceDir, hasCrashFiles, getSeverityId, cleanFilesFromDir } from "./config.js";
 import type { CrashReport, CrashGroup } from "./core/crashAnalyzer.js";
 import { filterUnfixedGroups } from "./core/crashAnalyzer.js";
 import { formatCrashFile } from "./core/appticsFormatter.js";
@@ -899,7 +899,7 @@ function computeIntegrationDateRange(
 ): { startDateISO: string; endDateISO: string; startDateDDMMYYYY: string; endDateDDMMYYYY: string; offset: number; resolvedNumDays: number } {
   const offset = parseInt(crashDateOffset ?? "4", 10);
   let n = numDays ?? parseInt(configNumDays ?? "1", 10);
-  n = Math.max(1, Math.min(n, 180));
+  n = Math.max(1, Math.min(n, 180)); // Limit to 180 days to prevent excessive processing time
   const endDate = new Date();
   endDate.setDate(endDate.getDate() - offset);
   const startDate = new Date(endDate);
@@ -1430,46 +1430,22 @@ server.registerTool(
     };
     const deletedFiles: string[] = [];
 
-    function cleanDir(dir: string, extensions: string[], countKey: keyof typeof counts): void {
-      if (!fs.existsSync(dir)) return;
-      const files = fs.readdirSync(dir).filter((f) => extensions.some((ext) => f.endsWith(ext)));
-      for (const f of files) {
-        const fullPath = path.join(dir, f);
-        deletedFiles.push(fullPath);
-        counts[countKey]++;
-        if (!dryRun) fs.unlinkSync(fullPath);
-      }
+    function accumulate(files: string[], countKey: keyof typeof counts): void {
+      deletedFiles.push(...files);
+      counts[countKey] += files.length;
     }
 
-    cleanDir(getXcodeCrashesDir(config), [".crash", ".ips"], "xcodeCrashLogs");
-    cleanDir(getAppticsCrashesDir(config), [".crash", ".ips"], "appticsCrashLogs");
-    cleanDir(getOtherCrashesDir(config), [".crash", ".ips"], "otherCrashLogs");
-    cleanDir(getSymbolicatedDir(config), [".crash", ".ips"], "symbolicatedCrashLogs");
+    accumulate(cleanFilesFromDir(getXcodeCrashesDir(config), [".crash", ".ips"], dryRun), "xcodeCrashLogs");
+    accumulate(cleanFilesFromDir(getAppticsCrashesDir(config), [".crash", ".ips"], dryRun), "appticsCrashLogs");
+    accumulate(cleanFilesFromDir(getOtherCrashesDir(config), [".crash", ".ips"], dryRun), "otherCrashLogs");
+    accumulate(cleanFilesFromDir(getSymbolicatedDir(config), [".crash", ".ips"], dryRun), "symbolicatedCrashLogs");
 
     if (!keepReports) {
-      const reportsDir = getAnalyzedReportsDir(config);
-      if (fs.existsSync(reportsDir)) {
-        const files = fs.readdirSync(reportsDir).filter((f) => f.endsWith(".json") || f.endsWith(".csv"));
-        for (const f of files) {
-          const fullPath = path.join(reportsDir, f);
-          deletedFiles.push(fullPath);
-          counts.analyzedReports++;
-          if (!dryRun) fs.unlinkSync(fullPath);
-        }
-      }
+      accumulate(cleanFilesFromDir(getAnalyzedReportsDir(config), [".json", ".csv"], dryRun), "analyzedReports");
     }
 
     if (!keepManifests) {
-      const stateDir = getStateMaintenanceDir(config);
-      if (fs.existsSync(stateDir)) {
-        const files = fs.readdirSync(stateDir).filter((f) => f.endsWith(".json"));
-        for (const f of files) {
-          const fullPath = path.join(stateDir, f);
-          deletedFiles.push(fullPath);
-          counts.stateManifests++;
-          if (!dryRun) fs.unlinkSync(fullPath);
-        }
-      }
+      accumulate(cleanFilesFromDir(getStateMaintenanceDir(config), [".json"], dryRun), "stateManifests");
     }
 
     const totalDeleted = Object.values(counts).reduce((s, n) => s + n, 0);

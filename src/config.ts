@@ -137,3 +137,16 @@ export function getSeverityId(config: CrashPointConfig, count: number): string |
   if (count >= 2) return config.ZOHO_BUG_SEVERITY_MINOR;
   return config.ZOHO_BUG_SEVERITY_NONE;
 }
+
+/** Clean files with given extensions from a directory. Returns deleted file paths. */
+export function cleanFilesFromDir(dir: string, extensions: string[], dryRun: boolean): string[] {
+  if (!fs.existsSync(dir)) return [];
+  const deleted: string[] = [];
+  const files = fs.readdirSync(dir).filter((f) => extensions.some((ext) => f.endsWith(ext)));
+  for (const f of files) {
+    const fullPath = path.join(dir, f);
+    deleted.push(fullPath);
+    if (!dryRun) fs.unlinkSync(fullPath);
+  }
+  return deleted;
+}

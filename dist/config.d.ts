@@ -43,5 +43,7 @@ export declare function getLatestJsonReportPath(config: CrashPointConfig): strin
 export declare function getLatestCsvReportPath(config: CrashPointConfig): string;
 export declare function hasCrashFiles(dir: string): boolean;
 export declare function getSeverityId(config: CrashPointConfig, count: number): string | undefined;
+/** Clean files with given extensions from a directory. Returns deleted file paths. */
+export declare function cleanFilesFromDir(dir: string, extensions: string[], dryRun: boolean): string[];
 export {};
 //# sourceMappingURL=config.d.ts.map

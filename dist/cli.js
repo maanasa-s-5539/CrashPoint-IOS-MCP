@@ -126,6 +126,17 @@ function getAutomationDir(config) {
 function hasCrashFiles(dir) {
   return fs.existsSync(dir) && fs.readdirSync(dir).some((f) => f.endsWith(".crash") || f.endsWith(".ips"));
 }
+function cleanFilesFromDir(dir, extensions, dryRun) {
+  if (!fs.existsSync(dir)) return [];
+  const deleted = [];
+  const files = fs.readdirSync(dir).filter((f) => extensions.some((ext) => f.endsWith(ext)));
+  for (const f of files) {
+    const fullPath = path.join(dir, f);
+    deleted.push(fullPath);
+    if (!dryRun) fs.unlinkSync(fullPath);
+  }
+  return deleted;
+}
 
 // src/core/crashExporter.ts
 import fs3 from "fs";
@@ -818,11 +829,11 @@ function analyzeDirectory(crashDir, fixStatuses, manifest) {
     manifest?.markProcessed(manifestKey);
   }
   const sortedGroups = Array.from(groups.values()).sort((a, b) => b.count - a.count).map((g, idx) => {
-    const fs15 = fixStatuses?.[g.signature];
+    const fs14 = fixStatuses?.[g.signature];
     return {
       ...g,
       rank: idx + 1,
-      fix_status: fs15 ? { fixed: fs15.fixed, note: fs15.note } : void 0
+      fix_status: fs14 ? { fixed: fs14.fixed, note: fs14.note } : void 0
     };
   });
   return {
@@ -1738,8 +1749,6 @@ function cmdFixStatus(flags) {
 }
 
 // src/cli/cmdCleanupAll.ts
-import fs14 from "fs";
-import path17 from "path";
 function cmdCleanupAll(flags) {
   const dryRun = Boolean(flags["dry-run"]);
   const keepReports = Boolean(flags["keep-reports"]);
@@ -1754,43 +1763,19 @@ function cmdCleanupAll(flags) {
     stateManifests: 0
   };
   const deletedFiles = [];
-  function cleanDir(dir, extensions, countKey) {
-    if (!fs14.existsSync(dir)) return;
-    const files = fs14.readdirSync(dir).filter((f) => extensions.some((ext) => f.endsWith(ext)));
-    for (const f of files) {
-      const fullPath = path17.join(dir, f);
-      deletedFiles.push(fullPath);
-      counts[countKey]++;
-      if (!dryRun) fs14.unlinkSync(fullPath);
-    }
+  function accumulate(files, countKey) {
+    deletedFiles.push(...files);
+    counts[countKey] += files.length;
   }
-  cleanDir(getXcodeCrashesDir(config), [".crash", ".ips"], "xcodeCrashLogs");
-  cleanDir(getAppticsCrashesDir(config), [".crash", ".ips"], "appticsCrashLogs");
-  cleanDir(getOtherCrashesDir(config), [".crash", ".ips"], "otherCrashLogs");
-  cleanDir(getSymbolicatedDir(config), [".crash", ".ips"], "symbolicatedCrashLogs");
+  accumulate(cleanFilesFromDir(getXcodeCrashesDir(config), [".crash", ".ips"], dryRun), "xcodeCrashLogs");
+  accumulate(cleanFilesFromDir(getAppticsCrashesDir(config), [".crash", ".ips"], dryRun), "appticsCrashLogs");
+  accumulate(cleanFilesFromDir(getOtherCrashesDir(config), [".crash", ".ips"], dryRun), "otherCrashLogs");
+  accumulate(cleanFilesFromDir(getSymbolicatedDir(config), [".crash", ".ips"], dryRun), "symbolicatedCrashLogs");
   if (!keepReports) {
-    const reportsDir = getAnalyzedReportsDir(config);
-    if (fs14.existsSync(reportsDir)) {
-      const files = fs14.readdirSync(reportsDir).filter((f) => f.endsWith(".json") || f.endsWith(".csv"));
-      for (const f of files) {
-        const fullPath = path17.join(reportsDir, f);
-        deletedFiles.push(fullPath);
-        counts.analyzedReports++;
-        if (!dryRun) fs14.unlinkSync(fullPath);
-      }
-    }
+    accumulate(cleanFilesFromDir(getAnalyzedReportsDir(config), [".json", ".csv"], dryRun), "analyzedReports");
   }
   if (!keepManifests) {
-    const stateDir = getStateMaintenanceDir(config);
-    if (fs14.existsSync(stateDir)) {
-      const files = fs14.readdirSync(stateDir).filter((f) => f.endsWith(".json"));
-      for (const f of files) {
-        const fullPath = path17.join(stateDir, f);
-        deletedFiles.push(fullPath);
-        counts.stateManifests++;
-        if (!dryRun) fs14.unlinkSync(fullPath);
-      }
-    }
+    accumulate(cleanFilesFromDir(getStateMaintenanceDir(config), [".json"], dryRun), "stateManifests");
   }
   const totalDeleted = Object.values(counts).reduce((s, n) => s + n, 0);
   const result = { dryRun, deleted: counts, totalDeleted, files: deletedFiles };

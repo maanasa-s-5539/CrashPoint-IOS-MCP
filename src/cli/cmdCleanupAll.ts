@@ -1,5 +1,3 @@
-import fs from "fs";
-import path from "path";
 import {
   getConfig,
   getXcodeCrashesDir,
@@ -8,6 +6,7 @@ import {
   getSymbolicatedDir,
   getAnalyzedReportsDir,
   getStateMaintenanceDir,
+  cleanFilesFromDir,
 } from "../config.js";
 
 export function cmdCleanupAll(flags: Record<string, string | boolean>): void {
@@ -27,46 +26,22 @@ export function cmdCleanupAll(flags: Record<string, string | boolean>): void {
   };
   const deletedFiles: string[] = [];
 
-  function cleanDir(dir: string, extensions: string[], countKey: keyof typeof counts): void {
-    if (!fs.existsSync(dir)) return;
-    const files = fs.readdirSync(dir).filter((f) => extensions.some((ext) => f.endsWith(ext)));
-    for (const f of files) {
-      const fullPath = path.join(dir, f);
-      deletedFiles.push(fullPath);
-      counts[countKey]++;
-      if (!dryRun) fs.unlinkSync(fullPath);
-    }
+  function accumulate(files: string[], countKey: keyof typeof counts): void {
+    deletedFiles.push(...files);
+    counts[countKey] += files.length;
   }
 
-  cleanDir(getXcodeCrashesDir(config), [".crash", ".ips"], "xcodeCrashLogs");
-  cleanDir(getAppticsCrashesDir(config), [".crash", ".ips"], "appticsCrashLogs");
-  cleanDir(getOtherCrashesDir(config), [".crash", ".ips"], "otherCrashLogs");
-  cleanDir(getSymbolicatedDir(config), [".crash", ".ips"], "symbolicatedCrashLogs");
+  accumulate(cleanFilesFromDir(getXcodeCrashesDir(config), [".crash", ".ips"], dryRun), "xcodeCrashLogs");
+  accumulate(cleanFilesFromDir(getAppticsCrashesDir(config), [".crash", ".ips"], dryRun), "appticsCrashLogs");
+  accumulate(cleanFilesFromDir(getOtherCrashesDir(config), [".crash", ".ips"], dryRun), "otherCrashLogs");
+  accumulate(cleanFilesFromDir(getSymbolicatedDir(config), [".crash", ".ips"], dryRun), "symbolicatedCrashLogs");
 
   if (!keepReports) {
-    const reportsDir = getAnalyzedReportsDir(config);
-    if (fs.existsSync(reportsDir)) {
-      const files = fs.readdirSync(reportsDir).filter((f) => f.endsWith(".json") || f.endsWith(".csv"));
-      for (const f of files) {
-        const fullPath = path.join(reportsDir, f);
-        deletedFiles.push(fullPath);
-        counts.analyzedReports++;
-        if (!dryRun) fs.unlinkSync(fullPath);
-      }
-    }
+    accumulate(cleanFilesFromDir(getAnalyzedReportsDir(config), [".json", ".csv"], dryRun), "analyzedReports");
   }
 
   if (!keepManifests) {
-    const stateDir = getStateMaintenanceDir(config);
-    if (fs.existsSync(stateDir)) {
-      const files = fs.readdirSync(stateDir).filter((f) => f.endsWith(".json"));
-      for (const f of files) {
-        const fullPath = path.join(stateDir, f);
-        deletedFiles.push(fullPath);
-        counts.stateManifests++;
-        if (!dryRun) fs.unlinkSync(fullPath);
-      }
-    }
+    accumulate(cleanFilesFromDir(getStateMaintenanceDir(config), [".json"], dryRun), "stateManifests");
   }
 
   const totalDeleted = Object.values(counts).reduce((s, n) => s + n, 0);
