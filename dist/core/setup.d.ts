@@ -4,6 +4,7 @@ export interface SetupOptions {
     dsymPath?: string;
     appPath?: string;
     force?: boolean;
+    packageRoot?: string;
 }
 export interface SetupResult {
     parentDir: string;

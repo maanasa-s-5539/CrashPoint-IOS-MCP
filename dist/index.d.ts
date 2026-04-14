@@ -9,6 +9,8 @@ export type { CsvExportResult } from "./core/csvExporter.js";
 export { exportReportToCsv, reportToCsvString } from "./core/csvExporter.js";
 export type { SetupOptions, SetupResult } from "./core/setup.js";
 export { setupWorkspace } from "./core/setup.js";
+export type { CleanupAllResult } from "./core/cleanup.js";
+export { cleanupAll } from "./core/cleanup.js";
 export type { SetupAutomationOptions, SetupAutomationResult } from "./core/setupAutomation.js";
 export { setupAutomationFiles } from "./core/setupAutomation.js";
 export type { AppticsCrashEntry, AppticsCrashDetail } from "./core/appticsFormatter.js";

@@ -1,68 +1,5 @@
 #!/usr/bin/env node
 import { fileURLToPath as _fUTP } from 'url'; import { dirname as _dn } from 'path'; const __dirname = _dn(_fUTP(import.meta.url)); const __filename = _fUTP(import.meta.url);
-var __defProp = Object.defineProperty;
-var __getOwnPropNames = Object.getOwnPropertyNames;
-var __esm = (fn, res) => function __init() {
-  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
-};
-var __export = (target, all) => {
-  for (var name in all)
-    __defProp(target, name, { get: all[name], enumerable: true });
-};
-
-// src/core/setupAutomation.ts
-var setupAutomation_exports = {};
-__export(setupAutomation_exports, {
-  setupAutomationFiles: () => setupAutomationFiles
-});
-import fs9 from "fs";
-import path11 from "path";
-function setupAutomationFiles({
-  force = false,
-  packageRoot,
-  parentDir
-}) {
-  const automationDir = path11.join(parentDir, "Automation");
-  const logsDir = path11.join(automationDir, "ScheduledRunLogs");
-  fs9.mkdirSync(automationDir, { recursive: true });
-  fs9.mkdirSync(logsDir, { recursive: true });
-  const templateDir = path11.join(packageRoot, "automation");
-  const scaffolded = [];
-  const skipped = [];
-  const shTemplatePath = path11.join(templateDir, "run_crash_pipeline.sh");
-  const shDestPath = path11.join(automationDir, "run_crash_pipeline.sh");
-  if (force || !fs9.existsSync(shDestPath)) {
-    let shContent = fs9.readFileSync(shTemplatePath, "utf-8");
-    shContent = shContent.replace(/<REPLACE_WITH_PATH_TO_PARENT_HOLDER_FOLDER>/g, parentDir);
-    fs9.writeFileSync(shDestPath, shContent, "utf-8");
-    fs9.chmodSync(shDestPath, 493);
-    scaffolded.push("run_crash_pipeline.sh");
-  } else {
-    skipped.push("run_crash_pipeline.sh (already exists, use force=true to overwrite)");
-  }
-  const promptPhase1TemplatePath = path11.join(templateDir, "daily_crash_pipeline_prompt_phase1.md");
-  const promptPhase1DestPath = path11.join(automationDir, "daily_crash_pipeline_prompt_phase1.md");
-  if (force || !fs9.existsSync(promptPhase1DestPath)) {
-    fs9.copyFileSync(promptPhase1TemplatePath, promptPhase1DestPath);
-    scaffolded.push("daily_crash_pipeline_prompt_phase1.md");
-  } else {
-    skipped.push("daily_crash_pipeline_prompt_phase1.md (already exists, use force=true to overwrite)");
-  }
-  const promptPhase2TemplatePath = path11.join(templateDir, "daily_crash_pipeline_prompt_phase2.md");
-  const promptPhase2DestPath = path11.join(automationDir, "daily_crash_pipeline_prompt_phase2.md");
-  if (force || !fs9.existsSync(promptPhase2DestPath)) {
-    fs9.copyFileSync(promptPhase2TemplatePath, promptPhase2DestPath);
-    scaffolded.push("daily_crash_pipeline_prompt_phase2.md");
-  } else {
-    skipped.push("daily_crash_pipeline_prompt_phase2.md (already exists, use force=true to overwrite)");
-  }
-  return { automationDir, scaffolded, skipped, force };
-}
-var init_setupAutomation = __esm({
-  "src/core/setupAutomation.ts"() {
-    "use strict";
-  }
-});
 
 // src/core-server.ts
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -1262,8 +1199,52 @@ function generatePlist(config) {
 </plist>`;
 }
 
+// src/core/setupAutomation.ts
+import fs9 from "fs";
+import path11 from "path";
+function setupAutomationFiles({
+  force = false,
+  packageRoot,
+  parentDir
+}) {
+  const automationDir = path11.join(parentDir, "Automation");
+  const logsDir = path11.join(automationDir, "ScheduledRunLogs");
+  fs9.mkdirSync(automationDir, { recursive: true });
+  fs9.mkdirSync(logsDir, { recursive: true });
+  const templateDir = path11.join(packageRoot, "automation");
+  const scaffolded = [];
+  const skipped = [];
+  const shTemplatePath = path11.join(templateDir, "run_crash_pipeline.sh");
+  const shDestPath = path11.join(automationDir, "run_crash_pipeline.sh");
+  if (force || !fs9.existsSync(shDestPath)) {
+    let shContent = fs9.readFileSync(shTemplatePath, "utf-8");
+    shContent = shContent.replace(/<REPLACE_WITH_PATH_TO_PARENT_HOLDER_FOLDER>/g, parentDir);
+    fs9.writeFileSync(shDestPath, shContent, "utf-8");
+    fs9.chmodSync(shDestPath, 493);
+    scaffolded.push("run_crash_pipeline.sh");
+  } else {
+    skipped.push("run_crash_pipeline.sh (already exists, use force=true to overwrite)");
+  }
+  const promptPhase1TemplatePath = path11.join(templateDir, "daily_crash_pipeline_prompt_phase1.md");
+  const promptPhase1DestPath = path11.join(automationDir, "daily_crash_pipeline_prompt_phase1.md");
+  if (force || !fs9.existsSync(promptPhase1DestPath)) {
+    fs9.copyFileSync(promptPhase1TemplatePath, promptPhase1DestPath);
+    scaffolded.push("daily_crash_pipeline_prompt_phase1.md");
+  } else {
+    skipped.push("daily_crash_pipeline_prompt_phase1.md (already exists, use force=true to overwrite)");
+  }
+  const promptPhase2TemplatePath = path11.join(templateDir, "daily_crash_pipeline_prompt_phase2.md");
+  const promptPhase2DestPath = path11.join(automationDir, "daily_crash_pipeline_prompt_phase2.md");
+  if (force || !fs9.existsSync(promptPhase2DestPath)) {
+    fs9.copyFileSync(promptPhase2TemplatePath, promptPhase2DestPath);
+    scaffolded.push("daily_crash_pipeline_prompt_phase2.md");
+  } else {
+    skipped.push("daily_crash_pipeline_prompt_phase2.md (already exists, use force=true to overwrite)");
+  }
+  return { automationDir, scaffolded, skipped, force };
+}
+
 // src/core/setup.ts
-init_setupAutomation();
 function setupWorkspace(options = {}) {
   const config = getConfig();
   const parentDir = config.CRASH_ANALYSIS_PARENT;
@@ -1325,7 +1306,7 @@ function setupWorkspace(options = {}) {
     }
   }
   try {
-    const packageRoot = path12.resolve(__dirname, "..", "..");
+    const packageRoot = options.packageRoot ?? path12.resolve(__dirname, "..", "..");
     const automationResult = setupAutomationFiles({
       force: options.force ?? false,
       packageRoot,
@@ -1382,6 +1363,39 @@ function setupWorkspace(options = {}) {
   return { parentDir, created, symlinks, scaffoldedFiles, warnings };
 }
 
+// src/core/cleanup.ts
+function cleanupAll(options = {}) {
+  const dryRun = options.dryRun ?? false;
+  const keepReports = options.keepReports ?? false;
+  const keepManifests = options.keepManifests ?? false;
+  const config = getConfig();
+  const counts = {
+    xcodeCrashLogs: 0,
+    appticsCrashLogs: 0,
+    otherCrashLogs: 0,
+    symbolicatedCrashLogs: 0,
+    analyzedReports: 0,
+    stateManifests: 0
+  };
+  const deletedFiles = [];
+  function accumulate(files, countKey) {
+    deletedFiles.push(...files);
+    counts[countKey] += files.length;
+  }
+  accumulate(cleanFilesFromDir(getXcodeCrashesDir(config), [".crash", ".ips"], dryRun), "xcodeCrashLogs");
+  accumulate(cleanFilesFromDir(getAppticsCrashesDir(config), [".crash", ".ips"], dryRun), "appticsCrashLogs");
+  accumulate(cleanFilesFromDir(getOtherCrashesDir(config), [".crash", ".ips"], dryRun), "otherCrashLogs");
+  accumulate(cleanFilesFromDir(getSymbolicatedDir(config), [".crash", ".ips"], dryRun), "symbolicatedCrashLogs");
+  if (!keepReports) {
+    accumulate(cleanFilesFromDir(getAnalyzedReportsDir(config), [".json", ".csv"], dryRun), "analyzedReports");
+  }
+  if (!keepManifests) {
+    accumulate(cleanFilesFromDir(getStateMaintenanceDir(config), [".json"], dryRun), "stateManifests");
+  }
+  const totalDeleted = Object.values(counts).reduce((s, n) => s + n, 0);
+  return { dryRun, deleted: counts, totalDeleted, files: deletedFiles };
+}
+
 // src/core-server.ts
 var execFileAsync2 = promisify2(execFile2);
 var server = new McpServer({
@@ -1413,7 +1427,10 @@ server.registerTool(
       devBranchPath: input.devBranchPath,
       dsymPath: input.dsymPath,
       appPath: input.appPath,
-      force: input.force
+      force: input.force,
+      // __dirname is injected by esbuild banner (points to dist/ directory)
+      // Package root is one level up from dist/
+      packageRoot: path13.resolve(__dirname, "..")
     });
     return {
       content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
@@ -2528,32 +2545,6 @@ server.registerTool(
   }
 );
 server.registerTool(
-  "setup_automation_files",
-  {
-    description: "Scaffold the automation pipeline scripts (run_crash_pipeline.sh, daily_crash_pipeline_prompt_phase1.md, and daily_crash_pipeline_prompt_phase2.md) into the Automation/ folder of your ParentHolderFolder. Use force=true to update existing files to the latest version.",
-    inputSchema: z2.object({
-      force: z2.boolean().optional().describe("When true, overwrite existing automation files with the latest version. Default false (skip existing files).")
-    }),
-    outputSchema: z2.object({
-      automationDir: z2.string(),
-      scaffolded: z2.array(z2.string()),
-      skipped: z2.array(z2.string()),
-      force: z2.boolean()
-    })
-  },
-  async (input) => {
-    const { setupAutomationFiles: scaffoldFiles } = await Promise.resolve().then(() => (init_setupAutomation(), setupAutomation_exports));
-    const config = getConfig();
-    const parentDir = config.CRASH_ANALYSIS_PARENT;
-    const packageRoot = path13.resolve(__dirname, "..");
-    const result = scaffoldFiles({ force: input.force ?? false, packageRoot, parentDir });
-    return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      structuredContent: result
-    };
-  }
-);
-server.registerTool(
   "cleanup_all",
   {
     description: "Remove all crash files and reports in one go. Cleans .crash and .ips files from XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs, and SymbolicatedCrashLogsFolder. Also cleans .json/.csv report files from AnalyzedReportsFolder and processed manifests from StateMaintenance. Use dryRun to preview, keepReports to preserve report files, keepManifests to preserve processed manifests.",
@@ -2577,35 +2568,11 @@ server.registerTool(
     })
   },
   async (input) => {
-    const config = getConfig();
-    const dryRun = input.dryRun ?? false;
-    const keepReports = input.keepReports ?? false;
-    const keepManifests = input.keepManifests ?? false;
-    const counts = {
-      xcodeCrashLogs: 0,
-      appticsCrashLogs: 0,
-      otherCrashLogs: 0,
-      symbolicatedCrashLogs: 0,
-      analyzedReports: 0,
-      stateManifests: 0
-    };
-    const deletedFiles = [];
-    function accumulate(files, countKey) {
-      deletedFiles.push(...files);
-      counts[countKey] += files.length;
-    }
-    accumulate(cleanFilesFromDir(getXcodeCrashesDir(config), [".crash", ".ips"], dryRun), "xcodeCrashLogs");
-    accumulate(cleanFilesFromDir(getAppticsCrashesDir(config), [".crash", ".ips"], dryRun), "appticsCrashLogs");
-    accumulate(cleanFilesFromDir(getOtherCrashesDir(config), [".crash", ".ips"], dryRun), "otherCrashLogs");
-    accumulate(cleanFilesFromDir(getSymbolicatedDir(config), [".crash", ".ips"], dryRun), "symbolicatedCrashLogs");
-    if (!keepReports) {
-      accumulate(cleanFilesFromDir(getAnalyzedReportsDir(config), [".json", ".csv"], dryRun), "analyzedReports");
-    }
-    if (!keepManifests) {
-      accumulate(cleanFilesFromDir(getStateMaintenanceDir(config), [".json"], dryRun), "stateManifests");
-    }
-    const totalDeleted = Object.values(counts).reduce((s, n) => s + n, 0);
-    const result = { dryRun, deleted: counts, totalDeleted, files: deletedFiles };
+    const result = cleanupAll({
+      dryRun: input.dryRun,
+      keepReports: input.keepReports,
+      keepManifests: input.keepManifests
+    });
     return {
       content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       structuredContent: result

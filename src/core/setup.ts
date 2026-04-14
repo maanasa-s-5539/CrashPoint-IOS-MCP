@@ -12,6 +12,7 @@ export interface SetupOptions {
   dsymPath?: string;
   appPath?: string;
   force?: boolean;
+  packageRoot?: string;
 }
 
 export interface SetupResult {
@@ -87,8 +88,9 @@ export function setupWorkspace(options: SetupOptions = {}): SetupResult {
 
   // ─── Scaffold automation files ─────────────────────────────────────────────
   try {
-    // Resolve the package root (two levels up from dist/core/ at runtime)
-    const packageRoot = path.resolve(__dirname, '..', '..');
+    // Use the packageRoot passed in by the caller (who knows the correct __dirname context).
+    // Fall back to two levels up from __dirname for non-bundled (tsc) invocations.
+    const packageRoot = options.packageRoot ?? path.resolve(__dirname, '..', '..');
     const automationResult = setupAutomationFiles({
       force: options.force ?? false,
       packageRoot,

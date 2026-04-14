@@ -1118,6 +1118,9 @@ async function cmdAnalyze(flags) {
   fs8.copyFileSync(csvFile, latestCsvPath);
 }
 
+// src/cli/cmdSetup.ts
+import path14 from "path";
+
 // src/core/setup.ts
 import fs10 from "fs";
 import os2 from "os";
@@ -1293,7 +1296,7 @@ function setupWorkspace(options = {}) {
     }
   }
   try {
-    const packageRoot = path13.resolve(__dirname, "..", "..");
+    const packageRoot = options.packageRoot ?? path13.resolve(__dirname, "..", "..");
     const automationResult = setupAutomationFiles({
       force: options.force ?? false,
       packageRoot,
@@ -1357,14 +1360,17 @@ function cmdSetup(flags) {
     devBranchPath: flags["dev-branch"],
     dsymPath: flags["dsym"],
     appPath: flags["app"],
-    force: Boolean(flags["force"])
+    force: Boolean(flags["force"]),
+    // __dirname is injected by esbuild banner (points to dist/ directory)
+    // Package root is one level up from dist/
+    packageRoot: path14.resolve(__dirname, "..")
   });
   console.log(JSON.stringify(result, null, 2));
 }
 
 // src/cli/cmdPipeline.ts
 import fs11 from "fs";
-import path14 from "path";
+import path15 from "path";
 async function cmdPipeline(flags) {
   const config = getConfig();
   const inputDir = config.CRASH_INPUT_DIR ?? config.CRASH_ANALYSIS_PARENT;
@@ -1401,7 +1407,7 @@ Pipeline skipped: Range ${rangeKey} already fully processed.`);
       const symbolicateManifest = includeProcessed ? void 0 : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "symbolicate");
       const batchRes = await symbolicateFiles(exportedPaths, dsymPath, symbolicatedDir, symbolicateManifest);
       symbolicationResult = batchRes;
-      symbolicatedPaths = batchRes.results.filter((r) => r.success).map((r) => path14.join(symbolicatedDir, r.file));
+      symbolicatedPaths = batchRes.results.filter((r) => r.success).map((r) => path15.join(symbolicatedDir, r.file));
     }
     console.log(JSON.stringify(symbolicationResult, null, 2));
   } else {
@@ -1414,12 +1420,12 @@ Pipeline skipped: Range ${rangeKey} already fully processed.`);
   const reportsDir = getAnalyzedReportsDir(config);
   fs11.mkdirSync(reportsDir, { recursive: true });
   const ts = Date.now();
-  const reportFile = path14.join(reportsDir, `jsonReport_${ts}.json`);
-  const csvFile = path14.join(reportsDir, `sheetReport_${ts}.csv`);
+  const reportFile = path15.join(reportsDir, `jsonReport_${ts}.json`);
+  const csvFile = path15.join(reportsDir, `sheetReport_${ts}.csv`);
   fs11.writeFileSync(reportFile, JSON.stringify(report, null, 2), "utf-8");
   exportReportToCsv(report, csvFile);
-  const latestJsonPath = path14.join(reportsDir, "latest.json");
-  const latestCsvPath = path14.join(reportsDir, "latest.csv");
+  const latestJsonPath = path15.join(reportsDir, "latest.json");
+  const latestCsvPath = path15.join(reportsDir, "latest.csv");
   fs11.copyFileSync(reportFile, latestJsonPath);
   fs11.copyFileSync(csvFile, latestCsvPath);
   console.log("\n\u2500\u2500 Analysis \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500");
@@ -1427,7 +1433,7 @@ Pipeline skipped: Range ${rangeKey} already fully processed.`);
   console.log(`JSON report saved to: ${reportFile}`);
   console.log(`CSV report saved to: ${csvFile}`);
   const pipelineManifest = new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "export");
-  const resolvedCrashIds = exportedPaths.map((p) => extractIncidentId(p) ?? path14.basename(p));
+  const resolvedCrashIds = exportedPaths.map((p) => extractIncidentId(p) ?? path15.basename(p));
   pipelineManifest.recordPipelineRun(rangeKey, {
     startDate,
     endDate,
@@ -1473,7 +1479,7 @@ function cmdClean(flags) {
 
 // src/core/reportCleaner.ts
 import fs12 from "fs";
-import path15 from "path";
+import path16 from "path";
 function getReportDate(filename, filepath) {
   const match = /^(?:jsonReport|sheetReport)_(\d+)\.(json|csv)$/.exec(filename);
   if (match) {
@@ -1496,7 +1502,7 @@ function cleanOldReports(beforeDate, reportsDir, dryRun = false) {
     return f.endsWith(".json") || f.endsWith(".csv");
   });
   for (const filename of allFiles) {
-    const filepath = path15.join(reportsDir, filename);
+    const filepath = path16.join(reportsDir, filename);
     totalScanned++;
     const reportDate = getReportDate(filename, filepath);
     const shouldDelete = reportDate < before;
@@ -1551,7 +1557,7 @@ function cmdCleanReports(flags) {
 
 // src/cli/cmdVerifyDsym.ts
 import fs13 from "fs";
-import path16 from "path";
+import path17 from "path";
 import { execFile as execFile2 } from "child_process";
 import { promisify as promisify2 } from "util";
 var execFileAsync2 = promisify2(execFile2);
@@ -1576,7 +1582,7 @@ async function cmdVerifyDsym(flags) {
   } else if (config.DSYM_PATH) {
     dsymPath = config.DSYM_PATH;
   } else {
-    const symlinkPath = path16.join(config.CRASH_ANALYSIS_PARENT, "dSYM_File");
+    const symlinkPath = path17.join(config.CRASH_ANALYSIS_PARENT, "dSYM_File");
     try {
       dsymPath = fs13.realpathSync(symlinkPath);
     } catch {
@@ -1620,7 +1626,7 @@ async function cmdVerifyDsym(flags) {
     if (crashDir) {
       assertPathUnderBase(crashDir, getMainCrashLogsDir(config));
       if (fs13.existsSync(crashDir)) {
-        fs13.readdirSync(crashDir).filter((f) => f.endsWith(".crash") || f.endsWith(".ips")).forEach((f) => crashFiles.push(path16.join(crashDir, f)));
+        fs13.readdirSync(crashDir).filter((f) => f.endsWith(".crash") || f.endsWith(".ips")).forEach((f) => crashFiles.push(path17.join(crashDir, f)));
       }
     }
   } else {
@@ -1631,7 +1637,7 @@ async function cmdVerifyDsym(flags) {
     ];
     for (const dir of dirs) {
       if (fs13.existsSync(dir)) {
-        fs13.readdirSync(dir).filter((f) => f.endsWith(".crash") || f.endsWith(".ips")).forEach((f) => crashFiles.push(path16.join(dir, f)));
+        fs13.readdirSync(dir).filter((f) => f.endsWith(".crash") || f.endsWith(".ips")).forEach((f) => crashFiles.push(path17.join(dir, f)));
       }
     }
   }
@@ -1662,7 +1668,7 @@ async function cmdVerifyDsym(flags) {
       const uuid = `${raw.slice(0, 8)}-${raw.slice(8, 12)}-${raw.slice(12, 16)}-${raw.slice(16, 20)}-${raw.slice(20)}`;
       if (!seen.has(uuid)) {
         seen.add(uuid);
-        crashFileUuids.push({ file: path16.basename(cf), uuid });
+        crashFileUuids.push({ file: path17.basename(cf), uuid });
       }
     }
   }
@@ -1716,11 +1722,11 @@ function cmdFixStatus(flags) {
   }
 }
 
-// src/cli/cmdCleanupAll.ts
-function cmdCleanupAll(flags) {
-  const dryRun = Boolean(flags["dry-run"]);
-  const keepReports = Boolean(flags["keep-reports"]);
-  const keepManifests = Boolean(flags["keep-manifests"]);
+// src/core/cleanup.ts
+function cleanupAll(options = {}) {
+  const dryRun = options.dryRun ?? false;
+  const keepReports = options.keepReports ?? false;
+  const keepManifests = options.keepManifests ?? false;
   const config = getConfig();
   const counts = {
     xcodeCrashLogs: 0,
@@ -1746,7 +1752,16 @@ function cmdCleanupAll(flags) {
     accumulate(cleanFilesFromDir(getStateMaintenanceDir(config), [".json"], dryRun), "stateManifests");
   }
   const totalDeleted = Object.values(counts).reduce((s, n) => s + n, 0);
-  const result = { dryRun, deleted: counts, totalDeleted, files: deletedFiles };
+  return { dryRun, deleted: counts, totalDeleted, files: deletedFiles };
+}
+
+// src/cli/cmdCleanupAll.ts
+function cmdCleanupAll(flags) {
+  const result = cleanupAll({
+    dryRun: Boolean(flags["dry-run"]),
+    keepReports: Boolean(flags["keep-reports"]),
+    keepManifests: Boolean(flags["keep-manifests"])
+  });
   console.log(JSON.stringify(result, null, 2));
 }
 
