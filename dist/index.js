@@ -35,7 +35,32 @@ var envSchema = z.object({
   CRASH_NUM_DAYS: z.string().optional().describe("Number of days to process (1\u2013180, default: 1)"),
   CRASH_DATE_OFFSET: z.string().optional().describe("Days offset from today for end date (default: 4)"),
   MASTER_BRANCH_PATH: z.string().optional().describe("Path to current master/live branch checkout"),
-  DEV_BRANCH_PATH: z.string().optional().describe("Path to current development branch checkout")
+  DEV_BRANCH_PATH: z.string().optional().describe("Path to current development branch checkout"),
+  // Zoho Cliq
+  ZOHO_CLIQ_WEBHOOK_URL: z.string().optional().describe("Zoho Cliq channel incoming webhook URL"),
+  // Zoho Projects integration
+  ZOHO_PROJECTS_PORTAL_ID: z.string().optional().describe("Zoho Projects portal ID"),
+  ZOHO_PROJECTS_PROJECT_ID: z.string().optional().describe("Zoho Projects project ID"),
+  // Bug status IDs
+  ZOHO_BUG_STATUS_OPEN: z.string().optional().describe("Zoho bug status ID for Open"),
+  ZOHO_BUG_STATUS_FIXED: z.string().optional().describe("Zoho bug status ID for Fixed"),
+  // Bug severity IDs
+  ZOHO_BUG_SEVERITY_SHOWSTOPPER: z.string().optional().describe("Severity ID: Showstopper"),
+  ZOHO_BUG_SEVERITY_CRITICAL: z.string().optional().describe("Severity ID: Critical"),
+  ZOHO_BUG_SEVERITY_MAJOR: z.string().optional().describe("Severity ID: Major"),
+  ZOHO_BUG_SEVERITY_MINOR: z.string().optional().describe("Severity ID: Minor"),
+  ZOHO_BUG_SEVERITY_NONE: z.string().optional().describe("Severity ID: None"),
+  // Custom fields
+  ZOHO_BUG_APP_VERSION: z.string().optional().describe("Custom field name for app version on Zoho Projects bugs"),
+  ZOHO_BUG_NUM_OF_OCCURRENCES: z.string().optional().describe("Custom field name for number of occurrences on Zoho Projects bugs"),
+  // App display name
+  APP_DISPLAY_NAME: z.string().optional().describe("Display name of the app. Used in pipeline prompts and Cliq notifications."),
+  // MCP server name
+  APPTICS_MCP_NAME: z.string().optional().describe("Name of the Apptics MCP server as it appears in Claude's connector list"),
+  // Apptics project identifiers
+  APPTICS_PORTAL_ID: z.string().optional().describe("Apptics portal ID (zsoid)"),
+  APPTICS_PROJECT_ID: z.string().optional().describe("Apptics project ID"),
+  APPTICS_APP_NAME: z.string().optional().describe("App name as it appears in Apptics")
 });
 var cachedConfig;
 function getConfig() {
@@ -77,6 +102,24 @@ function getLatestCsvReportPath(config) {
 }
 function hasCrashFiles(dir) {
   return fs.existsSync(dir) && fs.readdirSync(dir).some((f) => f.endsWith(".crash") || f.endsWith(".ips"));
+}
+function getSeverityId(config, count) {
+  if (count >= 50) return config.ZOHO_BUG_SEVERITY_SHOWSTOPPER;
+  if (count >= 20) return config.ZOHO_BUG_SEVERITY_CRITICAL;
+  if (count >= 5) return config.ZOHO_BUG_SEVERITY_MAJOR;
+  if (count >= 2) return config.ZOHO_BUG_SEVERITY_MINOR;
+  return config.ZOHO_BUG_SEVERITY_NONE;
+}
+function cleanFilesFromDir(dir, extensions, dryRun) {
+  if (!fs.existsSync(dir)) return [];
+  const deleted = [];
+  const files = fs.readdirSync(dir).filter((f) => extensions.some((ext) => f.endsWith(ext)));
+  for (const f of files) {
+    const fullPath = path.join(dir, f);
+    deleted.push(fullPath);
+    if (!dryRun) fs.unlinkSync(fullPath);
+  }
+  return deleted;
 }
 
 // src/core/crashAnalyzer.ts
@@ -360,11 +403,11 @@ function analyzeDirectory(crashDir, fixStatuses, manifest) {
     manifest?.markProcessed(manifestKey);
   }
   const sortedGroups = Array.from(groups.values()).sort((a, b) => b.count - a.count).map((g, idx) => {
-    const fs9 = fixStatuses?.[g.signature];
+    const fs10 = fixStatuses?.[g.signature];
     return {
       ...g,
       rank: idx + 1,
-      fix_status: fs9 ? { fixed: fs9.fixed, note: fs9.note } : void 0
+      fix_status: fs10 ? { fixed: fs10.fixed, note: fs10.note } : void 0
     };
   });
   return {
@@ -817,9 +860,9 @@ function exportReportToCsv(report, outputPath) {
 }
 
 // src/core/setup.ts
-import fs7 from "fs";
+import fs8 from "fs";
 import os2 from "os";
-import path9 from "path";
+import path10 from "path";
 
 // src/pathSafety.ts
 import path7 from "path";
@@ -861,33 +904,13 @@ function assertSafeSymlinkTarget(target) {
 import os from "os";
 import path8 from "path";
 function generateMcpJson(config) {
-  const getConfigValue = (k) => config[k] ?? "";
   const json = {
     mcpServers: {
       "crashpoint-ios": {
         command: "npx",
         args: ["-p", "github:maanasa-s-5539/CrashPoint-IOS-MCP", "crashpoint-ios-core"],
         env: {
-          CRASH_ANALYSIS_PARENT: getConfigValue("CRASH_ANALYSIS_PARENT"),
-          DSYM_PATH: getConfigValue("DSYM_PATH"),
-          APP_PATH: getConfigValue("APP_PATH"),
-          APP_NAME: getConfigValue("APP_NAME"),
-          MASTER_BRANCH_PATH: getConfigValue("MASTER_BRANCH_PATH"),
-          DEV_BRANCH_PATH: getConfigValue("DEV_BRANCH_PATH")
-        }
-      },
-      "crashpoint-integrations": {
-        command: "npx",
-        args: ["-p", "github:maanasa-s-5539/CrashPoint-Integrations-MCP", "crashpoint-integrations"],
-        env: {
-          CRASH_ANALYSIS_PARENT: getConfigValue("CRASH_ANALYSIS_PARENT"),
-          ZOHO_CLIQ_WEBHOOK_URL: getConfigValue("ZOHO_CLIQ_WEBHOOK_URL"),
-          ZOHO_PROJECTS_PORTAL_ID: getConfigValue("ZOHO_PROJECTS_PORTAL_ID"),
-          ZOHO_PROJECTS_PROJECT_ID: getConfigValue("ZOHO_PROJECTS_PROJECT_ID"),
-          ZOHO_BUG_STATUS_OPEN: getConfigValue("ZOHO_BUG_STATUS_OPEN"),
-          ZOHO_BUG_APP_VERSION: getConfigValue("ZOHO_BUG_APP_VERSION"),
-          ZOHO_BUG_NUM_OF_OCCURRENCES: getConfigValue("ZOHO_BUG_NUM_OF_OCCURRENCES"),
-          CRASH_VERSIONS: getConfigValue("CRASH_VERSIONS")
+          CRASH_ANALYSIS_PARENT: config.CRASH_ANALYSIS_PARENT
         }
       }
     }
@@ -940,6 +963,51 @@ function generatePlist(config) {
 </plist>`;
 }
 
+// src/core/setupAutomation.ts
+import fs7 from "fs";
+import path9 from "path";
+function setupAutomationFiles({
+  force = false,
+  packageRoot,
+  parentDir
+}) {
+  const automationDir = path9.join(parentDir, "Automation");
+  const logsDir = path9.join(automationDir, "ScheduledRunLogs");
+  fs7.mkdirSync(automationDir, { recursive: true });
+  fs7.mkdirSync(logsDir, { recursive: true });
+  const templateDir = path9.join(packageRoot, "automation");
+  const scaffolded = [];
+  const skipped = [];
+  const shTemplatePath = path9.join(templateDir, "run_crash_pipeline.sh");
+  const shDestPath = path9.join(automationDir, "run_crash_pipeline.sh");
+  if (force || !fs7.existsSync(shDestPath)) {
+    let shContent = fs7.readFileSync(shTemplatePath, "utf-8");
+    shContent = shContent.replace(/<REPLACE_WITH_PATH_TO_PARENT_HOLDER_FOLDER>/g, parentDir);
+    fs7.writeFileSync(shDestPath, shContent, "utf-8");
+    fs7.chmodSync(shDestPath, 493);
+    scaffolded.push("run_crash_pipeline.sh");
+  } else {
+    skipped.push("run_crash_pipeline.sh (already exists, use force=true to overwrite)");
+  }
+  const promptPhase1TemplatePath = path9.join(templateDir, "daily_crash_pipeline_prompt_phase1.md");
+  const promptPhase1DestPath = path9.join(automationDir, "daily_crash_pipeline_prompt_phase1.md");
+  if (force || !fs7.existsSync(promptPhase1DestPath)) {
+    fs7.copyFileSync(promptPhase1TemplatePath, promptPhase1DestPath);
+    scaffolded.push("daily_crash_pipeline_prompt_phase1.md");
+  } else {
+    skipped.push("daily_crash_pipeline_prompt_phase1.md (already exists, use force=true to overwrite)");
+  }
+  const promptPhase2TemplatePath = path9.join(templateDir, "daily_crash_pipeline_prompt_phase2.md");
+  const promptPhase2DestPath = path9.join(automationDir, "daily_crash_pipeline_prompt_phase2.md");
+  if (force || !fs7.existsSync(promptPhase2DestPath)) {
+    fs7.copyFileSync(promptPhase2TemplatePath, promptPhase2DestPath);
+    scaffolded.push("daily_crash_pipeline_prompt_phase2.md");
+  } else {
+    skipped.push("daily_crash_pipeline_prompt_phase2.md (already exists, use force=true to overwrite)");
+  }
+  return { automationDir, scaffolded, skipped, force };
+}
+
 // src/core/setup.ts
 function setupWorkspace(options = {}) {
   const config = getConfig();
@@ -961,51 +1029,59 @@ function setupWorkspace(options = {}) {
     getAnalyzedReportsDir(config),
     getStateMaintenanceDir(config),
     getAutomationDir(config),
-    path9.join(getAutomationDir(config), "FixPlans")
+    path10.join(getAutomationDir(config), "FixPlans")
   ];
   for (const dir of dirsToCreate) {
-    if (!fs7.existsSync(dir)) {
-      fs7.mkdirSync(dir, { recursive: true });
+    if (!fs8.existsSync(dir)) {
+      fs8.mkdirSync(dir, { recursive: true });
       created.push(dir);
     }
   }
   const scaffoldedFiles = [];
-  const configJsonPath = path9.join(parentDir, "crashpoint.config.json");
+  const configJsonPath = path10.join(parentDir, "crashpoint.config.json");
   let rawConfig = {};
-  if (fs7.existsSync(configJsonPath)) {
+  if (fs8.existsSync(configJsonPath)) {
     try {
-      rawConfig = JSON.parse(fs7.readFileSync(configJsonPath, "utf-8"));
+      rawConfig = JSON.parse(fs8.readFileSync(configJsonPath, "utf-8"));
     } catch {
     }
   }
   const fullConfig = {
     ...rawConfig,
-    CRASH_ANALYSIS_PARENT: config.CRASH_ANALYSIS_PARENT,
-    DSYM_PATH: config.DSYM_PATH,
-    APP_PATH: config.APP_PATH,
-    APP_NAME: config.APP_NAME,
-    MASTER_BRANCH_PATH: config.MASTER_BRANCH_PATH,
-    DEV_BRANCH_PATH: config.DEV_BRANCH_PATH,
-    CRASH_VERSIONS: config.CRASH_VERSIONS
+    CRASH_ANALYSIS_PARENT: config.CRASH_ANALYSIS_PARENT
   };
-  const mcpJsonPath = path9.join(parentDir, ".mcp.json");
-  if (!fs7.existsSync(mcpJsonPath)) {
-    fs7.writeFileSync(mcpJsonPath, generateMcpJson(fullConfig), "utf-8");
+  const mcpJsonPath = path10.join(parentDir, ".mcp.json");
+  if (!fs8.existsSync(mcpJsonPath)) {
+    fs8.writeFileSync(mcpJsonPath, generateMcpJson(fullConfig), "utf-8");
     scaffoldedFiles.push(mcpJsonPath);
   }
-  const launchAgentsDir = path9.join(os2.homedir(), "Library", "LaunchAgents");
-  const plistPath = path9.join(launchAgentsDir, "com.crashpipeline.daily_mcp.plist");
-  if (!fs7.existsSync(plistPath)) {
+  const launchAgentsDir = path10.join(os2.homedir(), "Library", "LaunchAgents");
+  const plistPath = path10.join(launchAgentsDir, "com.crashpipeline.daily_mcp.plist");
+  if (!fs8.existsSync(plistPath)) {
     try {
-      if (!fs7.existsSync(launchAgentsDir)) {
-        fs7.mkdirSync(launchAgentsDir, { recursive: true });
+      if (!fs8.existsSync(launchAgentsDir)) {
+        fs8.mkdirSync(launchAgentsDir, { recursive: true });
       }
-      fs7.writeFileSync(plistPath, generatePlist(fullConfig), "utf-8");
+      fs8.writeFileSync(plistPath, generatePlist(fullConfig), "utf-8");
       scaffoldedFiles.push(plistPath);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       warnings.push(`Could not write launchd plist to ${plistPath}: ${msg}`);
     }
+  }
+  try {
+    const packageRoot = path10.resolve(__dirname, "..", "..");
+    const automationResult = setupAutomationFiles({
+      force: options.force ?? false,
+      packageRoot,
+      parentDir
+    });
+    for (const f of automationResult.scaffolded) {
+      scaffoldedFiles.push(path10.join(automationResult.automationDir, f));
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    warnings.push(`Could not scaffold automation files: ${msg}`);
   }
   const symlinkDefs = [
     { name: "CurrentMasterLiveBranch", target: options.masterBranchPath ?? config.MASTER_BRANCH_PATH },
@@ -1018,28 +1094,28 @@ function setupWorkspace(options = {}) {
     if (!target) continue;
     assertNoTraversal(target);
     assertSafeSymlinkTarget(target);
-    const resolvedTarget = path9.resolve(target);
-    const linkPath = path9.join(parentDir, name);
+    const resolvedTarget = path10.resolve(target);
+    const linkPath = path10.join(parentDir, name);
     let status;
-    if (!fs7.existsSync(resolvedTarget)) {
+    if (!fs8.existsSync(resolvedTarget)) {
       warnings.push(`Target for ${name} does not exist: ${resolvedTarget}`);
     }
     try {
-      fs7.lstatSync(linkPath);
-      fs7.rmSync(linkPath, { force: true });
+      fs8.lstatSync(linkPath);
+      fs8.rmSync(linkPath, { force: true });
     } catch {
     }
     let symlinkType = "file";
-    if (fs7.existsSync(resolvedTarget)) {
-      symlinkType = fs7.statSync(resolvedTarget).isDirectory() ? "dir" : "file";
+    if (fs8.existsSync(resolvedTarget)) {
+      symlinkType = fs8.statSync(resolvedTarget).isDirectory() ? "dir" : "file";
     } else {
       const lowerTarget = resolvedTarget.toLowerCase();
-      if (lowerTarget.endsWith(".dsym") || lowerTarget.endsWith(".app") || lowerTarget.endsWith(".framework") || !path9.extname(resolvedTarget)) {
+      if (lowerTarget.endsWith(".dsym") || lowerTarget.endsWith(".app") || lowerTarget.endsWith(".framework") || !path10.extname(resolvedTarget)) {
         symlinkType = "dir";
       }
     }
     try {
-      fs7.symlinkSync(resolvedTarget, linkPath, symlinkType);
+      fs8.symlinkSync(resolvedTarget, linkPath, symlinkType);
       status = "created";
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -1051,17 +1127,58 @@ function setupWorkspace(options = {}) {
   return { parentDir, created, symlinks, scaffoldedFiles, warnings };
 }
 
+// src/core/appticsFormatter.ts
+function isoToAppticsDate(isoDate) {
+  const [yyyy, mm, dd] = isoDate.split("-");
+  return `${dd}-${mm}-${yyyy}`;
+}
+function formatCrashFile(detail, entry) {
+  const lines = [];
+  lines.push(`Incident Identifier: ${detail.UniqueMessageID ?? entry.UniqueMessageID}`);
+  lines.push(`CrashReporter Key:   ${detail.DeviceID ?? "unknown"}`);
+  lines.push(`Hardware Model:      ${detail.Model ?? "unknown"}`);
+  lines.push(`Process:             ${entry.Exception ?? detail.IssueName ?? "unknown"}`);
+  lines.push(`Date/Time:           ${detail.date ?? detail.HappenedAt ?? "unknown"}`);
+  lines.push(`OS Version:          ${detail.OS ?? entry.OS ?? "unknown"} ${detail.OSVersion ?? ""}`);
+  lines.push(`App Version:         ${detail.AppVersion ?? entry.AppVersion ?? "unknown"} (${detail.AppReleaseVersion ?? ""})`);
+  lines.push("");
+  lines.push(`Exception Type:  ${entry.Exception ?? detail.IssueName ?? "unknown"}`);
+  if (detail.Message) {
+    lines.push(`Exception Note:  ${detail.Message}`);
+  }
+  lines.push("");
+  const trace = detail.Exception ?? "";
+  if (trace) {
+    lines.push("Thread 0 Crashed:");
+    lines.push(trace);
+    lines.push("");
+  }
+  lines.push("--- Apptics Metadata ---");
+  lines.push(`Source:          Apptics`);
+  lines.push(`UniqueMessageID: ${entry.UniqueMessageID}`);
+  lines.push(`CrashCount:      ${entry.CrashCount}`);
+  lines.push(`DevicesCount:    ${entry.DevicesCount}`);
+  lines.push(`UsersCount:      ${entry.UsersCount}`);
+  if (detail.NetworkStatus) lines.push(`NetworkStatus:   ${detail.NetworkStatus}`);
+  if (detail.BatteryStatus) lines.push(`BatteryStatus:   ${detail.BatteryStatus}`);
+  if (detail.Edge) lines.push(`Edge:            ${detail.Edge}`);
+  if (detail.Screen) lines.push(`Screen:          ${detail.Screen}`);
+  if (detail.CustomProperties) lines.push(`CustomProperties: ${detail.CustomProperties}`);
+  lines.push("");
+  return lines.join("\n");
+}
+
 // src/state/fixTracker.ts
-import fs8 from "fs";
-import path10 from "path";
+import fs9 from "fs";
+import path11 from "path";
 var FixTracker = class {
   constructor(parentDir) {
-    this.filePath = path10.join(parentDir, "StateMaintenance", "fix_status.json");
+    this.filePath = path11.join(parentDir, "StateMaintenance", "fix_status.json");
   }
   load() {
     try {
-      if (fs8.existsSync(this.filePath)) {
-        const raw = fs8.readFileSync(this.filePath, "utf-8");
+      if (fs9.existsSync(this.filePath)) {
+        const raw = fs9.readFileSync(this.filePath, "utf-8");
         return JSON.parse(raw);
       }
     } catch {
@@ -1069,8 +1186,8 @@ var FixTracker = class {
     return {};
   }
   save(store) {
-    fs8.mkdirSync(path10.dirname(this.filePath), { recursive: true });
-    fs8.writeFileSync(this.filePath, JSON.stringify(store, null, 2), "utf-8");
+    fs9.mkdirSync(path11.dirname(this.filePath), { recursive: true });
+    fs9.writeFileSync(this.filePath, JSON.stringify(store, null, 2), "utf-8");
   }
   setFixed(signature, fixed, note) {
     const store = this.load();
@@ -1121,12 +1238,16 @@ export {
   assertSafeSymlinkTarget,
   assertWritePathUnderBase,
   buildSignature,
+  cleanFilesFromDir,
   cleanOldCrashes,
   detectSource,
   exportCrashLogs,
   exportReportToCsv,
   extractIncidentId,
   filterUnfixedGroups,
+  formatCrashFile,
+  generateMcpJson,
+  generatePlist,
   getAnalyzedReportsDir,
   getAppticsCrashesDir,
   getAutomationDir,
@@ -1135,15 +1256,18 @@ export {
   getLatestJsonReportPath,
   getMainCrashLogsDir,
   getOtherCrashesDir,
+  getSeverityId,
   getStateMaintenanceDir,
   getSymbolicatedDir,
   getXcodeCrashesDir,
   hasCrashFiles,
+  isoToAppticsDate,
   loadFixStatuses,
   parseCrashMetadata,
   reportToCsvString,
   runBatch,
   runBatchAll,
+  setupAutomationFiles,
   setupWorkspace,
   symbolicateOne
 };

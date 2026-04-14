@@ -36,6 +36,39 @@ const envSchema = z.object({
   CRASH_DATE_OFFSET: z.string().optional().describe("Days offset from today for end date (default: 4)"),
   MASTER_BRANCH_PATH: z.string().optional().describe("Path to current master/live branch checkout"),
   DEV_BRANCH_PATH: z.string().optional().describe("Path to current development branch checkout"),
+
+  // Zoho Cliq
+  ZOHO_CLIQ_WEBHOOK_URL: z.string().optional().describe("Zoho Cliq channel incoming webhook URL"),
+
+  // Zoho Projects integration
+  ZOHO_PROJECTS_PORTAL_ID: z.string().optional().describe("Zoho Projects portal ID"),
+  ZOHO_PROJECTS_PROJECT_ID: z.string().optional().describe("Zoho Projects project ID"),
+
+  // Bug status IDs
+  ZOHO_BUG_STATUS_OPEN: z.string().optional().describe("Zoho bug status ID for Open"),
+  ZOHO_BUG_STATUS_FIXED: z.string().optional().describe("Zoho bug status ID for Fixed"),
+
+  // Bug severity IDs
+  ZOHO_BUG_SEVERITY_SHOWSTOPPER: z.string().optional().describe("Severity ID: Showstopper"),
+  ZOHO_BUG_SEVERITY_CRITICAL: z.string().optional().describe("Severity ID: Critical"),
+  ZOHO_BUG_SEVERITY_MAJOR: z.string().optional().describe("Severity ID: Major"),
+  ZOHO_BUG_SEVERITY_MINOR: z.string().optional().describe("Severity ID: Minor"),
+  ZOHO_BUG_SEVERITY_NONE: z.string().optional().describe("Severity ID: None"),
+
+  // Custom fields
+  ZOHO_BUG_APP_VERSION: z.string().optional().describe("Custom field name for app version on Zoho Projects bugs"),
+  ZOHO_BUG_NUM_OF_OCCURRENCES: z.string().optional().describe("Custom field name for number of occurrences on Zoho Projects bugs"),
+
+  // App display name
+  APP_DISPLAY_NAME: z.string().optional().describe("Display name of the app. Used in pipeline prompts and Cliq notifications."),
+
+  // MCP server name
+  APPTICS_MCP_NAME: z.string().optional().describe("Name of the Apptics MCP server as it appears in Claude's connector list"),
+
+  // Apptics project identifiers
+  APPTICS_PORTAL_ID: z.string().optional().describe("Apptics portal ID (zsoid)"),
+  APPTICS_PROJECT_ID: z.string().optional().describe("Apptics project ID"),
+  APPTICS_APP_NAME: z.string().optional().describe("App name as it appears in Apptics"),
 });
 
 export type CrashPointConfig = z.infer<typeof envSchema>;
@@ -95,4 +128,25 @@ export function hasCrashFiles(dir: string): boolean {
     fs.existsSync(dir) &&
     fs.readdirSync(dir).some((f) => f.endsWith(".crash") || f.endsWith(".ips"))
   );
+}
+
+export function getSeverityId(config: CrashPointConfig, count: number): string | undefined {
+  if (count >= 50) return config.ZOHO_BUG_SEVERITY_SHOWSTOPPER;
+  if (count >= 20) return config.ZOHO_BUG_SEVERITY_CRITICAL;
+  if (count >= 5) return config.ZOHO_BUG_SEVERITY_MAJOR;
+  if (count >= 2) return config.ZOHO_BUG_SEVERITY_MINOR;
+  return config.ZOHO_BUG_SEVERITY_NONE;
+}
+
+/** Clean files with given extensions from a directory. Returns deleted file paths. */
+export function cleanFilesFromDir(dir: string, extensions: string[], dryRun: boolean): string[] {
+  if (!fs.existsSync(dir)) return [];
+  const deleted: string[] = [];
+  const files = fs.readdirSync(dir).filter((f) => extensions.some((ext) => f.endsWith(ext)));
+  for (const f of files) {
+    const fullPath = path.join(dir, f);
+    deleted.push(fullPath);
+    if (!dryRun) fs.unlinkSync(fullPath);
+  }
+  return deleted;
 }

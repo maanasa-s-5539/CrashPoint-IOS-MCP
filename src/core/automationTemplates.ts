@@ -10,46 +10,40 @@ export interface FullCrashPointConfig {
   MASTER_BRANCH_PATH?: string;
   DEV_BRANCH_PATH?: string;
   CRASH_VERSIONS?: string;
+  CRASH_NUM_DAYS?: string;
   CRASH_DATE_OFFSET?: string;
+  CRASH_INPUT_DIR?: string;
   APP_DISPLAY_NAME?: string;
   APPTICS_MCP_NAME?: string;
+  APPTICS_PORTAL_ID?: string;
+  APPTICS_PROJECT_ID?: string;
+  APPTICS_APP_NAME?: string;
   ZOHO_CLIQ_WEBHOOK_URL?: string;
   ZOHO_PROJECTS_PORTAL_ID?: string;
   ZOHO_PROJECTS_PROJECT_ID?: string;
   ZOHO_BUG_STATUS_OPEN?: string;
+  ZOHO_BUG_STATUS_FIXED?: string;
+  ZOHO_BUG_SEVERITY_SHOWSTOPPER?: string;
+  ZOHO_BUG_SEVERITY_CRITICAL?: string;
+  ZOHO_BUG_SEVERITY_MAJOR?: string;
+  ZOHO_BUG_SEVERITY_MINOR?: string;
+  ZOHO_BUG_SEVERITY_NONE?: string;
   ZOHO_BUG_APP_VERSION?: string;
   ZOHO_BUG_NUM_OF_OCCURRENCES?: string;
   SCHEDULED_RUN_TIME?: string;
 }
 
 export function generateMcpJson(config: FullCrashPointConfig): string {
-  const getConfigValue = (k: keyof FullCrashPointConfig): string => (config[k] as string | undefined) ?? "";
+  // Only CRASH_ANALYSIS_PARENT is needed as an env var — it bootstraps config
+  // loading by pointing the server to crashpoint.config.json. All other values
+  // are read from that config file at runtime.
   const json = {
     mcpServers: {
       "crashpoint-ios": {
         command: "npx",
         args: ["-p", "github:maanasa-s-5539/CrashPoint-IOS-MCP", "crashpoint-ios-core"],
         env: {
-          CRASH_ANALYSIS_PARENT: getConfigValue("CRASH_ANALYSIS_PARENT"),
-          DSYM_PATH: getConfigValue("DSYM_PATH"),
-          APP_PATH: getConfigValue("APP_PATH"),
-          APP_NAME: getConfigValue("APP_NAME"),
-          MASTER_BRANCH_PATH: getConfigValue("MASTER_BRANCH_PATH"),
-          DEV_BRANCH_PATH: getConfigValue("DEV_BRANCH_PATH"),
-        },
-      },
-      "crashpoint-integrations": {
-        command: "npx",
-        args: ["-p", "github:maanasa-s-5539/CrashPoint-Integrations-MCP", "crashpoint-integrations"],
-        env: {
-          CRASH_ANALYSIS_PARENT: getConfigValue("CRASH_ANALYSIS_PARENT"),
-          ZOHO_CLIQ_WEBHOOK_URL: getConfigValue("ZOHO_CLIQ_WEBHOOK_URL"),
-          ZOHO_PROJECTS_PORTAL_ID: getConfigValue("ZOHO_PROJECTS_PORTAL_ID"),
-          ZOHO_PROJECTS_PROJECT_ID: getConfigValue("ZOHO_PROJECTS_PROJECT_ID"),
-          ZOHO_BUG_STATUS_OPEN: getConfigValue("ZOHO_BUG_STATUS_OPEN"),
-          ZOHO_BUG_APP_VERSION: getConfigValue("ZOHO_BUG_APP_VERSION"),
-          ZOHO_BUG_NUM_OF_OCCURRENCES: getConfigValue("ZOHO_BUG_NUM_OF_OCCURRENCES"),
-          CRASH_VERSIONS: getConfigValue("CRASH_VERSIONS"),
+          CRASH_ANALYSIS_PARENT: config.CRASH_ANALYSIS_PARENT,
         },
       },
     },

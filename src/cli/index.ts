@@ -10,6 +10,7 @@ export { cmdClean } from "./cmdClean.js";
 export { cmdCleanReports } from "./cmdCleanReports.js";
 export { cmdVerifyDsym } from "./cmdVerifyDsym.js";
 export { cmdFixStatus } from "./cmdFixStatus.js";
+export { cmdCleanupAll } from "./cmdCleanupAll.js";
 
 import { parseFlags } from "./parseFlags.js";
 import { cmdExport } from "./cmdExport.js";
@@ -21,6 +22,7 @@ import { cmdClean } from "./cmdClean.js";
 import { cmdCleanReports } from "./cmdCleanReports.js";
 import { cmdVerifyDsym } from "./cmdVerifyDsym.js";
 import { cmdFixStatus } from "./cmdFixStatus.js";
+import { cmdCleanupAll } from "./cmdCleanupAll.js";
 
 const [, , command, ...args] = process.argv;
 
@@ -36,11 +38,12 @@ Commands:
                         using Xcode's symbolicatecrash tool
     --file <path>       Symbolicate only this single .crash file instead of batch processing all directories
   analyze               Group and deduplicate crashes into a report (auto-saves JSON + CSV to AnalyzedReportsFolder)
-  setup                 Create full folder structure + symlinks
+  setup                 Create full folder structure + symlinks + automation files
     --master-branch     Path to master/live branch checkout
     --dev-branch        Path to development branch checkout
     --dsym              Path to .dSYM bundle
     --app               Path to .app bundle
+    --force             Overwrite existing automation files with latest version
   pipeline              Full export → symbolicate → analyze
     --versions v1,v2    Comma-separated version filter
     --num-days <n>      Number of days to process (1–180, default: CRASH_NUM_DAYS from config or 1)
@@ -60,6 +63,10 @@ Commands:
     --crash <path>      Path to a single .crash or .ips file (must be within MainCrashLogsFolder) to compare UUIDs against
     --crash-dir <dir>   Directory of crash files within MainCrashLogsFolder to compare UUIDs against
   fix-status            Manage crash fix statuses (unified command)
+  cleanup               Remove all crash files and reports in one go
+    --dry-run           Preview what would be deleted without actually deleting
+    --keep-reports      Preserve report files in AnalyzedReportsFolder
+    --keep-manifests    Preserve processed manifests in StateMaintenance
     --action <set|unset|list>  Action to perform (required)
     --signature <sig>   Crash signature (required for set/unset)
     --note <text>       Optional note (for set action)
@@ -99,6 +106,9 @@ Environment variables: see .env.example
         break;
       case "fix-status":
         cmdFixStatus(flags);
+        break;
+      case "cleanup":
+        cmdCleanupAll(flags);
         break;
       default:
         printUsage();
