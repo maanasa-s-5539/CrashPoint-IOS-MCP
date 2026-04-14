@@ -1,1 +1,1 @@
-{"version":3,"file":"cmdCleanupAll.d.ts","sourceRoot":"","sources":["../../src/cli/cmdCleanupAll.ts"],"names":[],"mappings":"AAWA,wBAAgB,aAAa,CAAC,KAAK,EAAE,MAAM,CAAC,MAAM,EAAE,MAAM,GAAG,OAAO,CAAC,GAAG,IAAI,CAsC3E"}
+{"version":3,"file":"cmdCleanupAll.d.ts","sourceRoot":"","sources":["../../src/cli/cmdCleanupAll.ts"],"names":[],"mappings":"AAEA,wBAAgB,aAAa,CAAC,KAAK,EAAE,MAAM,CAAC,MAAM,EAAE,MAAM,GAAG,OAAO,CAAC,GAAG,IAAI,CAO3E"}

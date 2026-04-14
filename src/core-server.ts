@@ -30,6 +30,7 @@ import { exportReportToCsv } from "./core/csvExporter.js";
 import { ProcessedManifest, extractIncidentId } from "./state/processedManifest.js";
 import { validateDateInput, computeDateRange } from "./dateValidation.js";
 import { setupWorkspace } from "./core/setup.js";
+import { cleanupAll } from "./core/cleanup.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -66,6 +67,9 @@ server.registerTool(
       dsymPath: input.dsymPath,
       appPath: input.appPath,
       force: input.force,
+      // __dirname is injected by esbuild banner (points to dist/ directory)
+      // Package root is one level up from dist/
+      packageRoot: path.resolve(__dirname, ".."),
     });
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
@@ -1358,37 +1362,6 @@ server.registerTool(
   }
 );
 
-// ── Tool: setup_automation_files ──────────────────────────────────────────────
-server.registerTool(
-  "setup_automation_files",
-  {
-    description:
-      "Scaffold the automation pipeline scripts (run_crash_pipeline.sh, daily_crash_pipeline_prompt_phase1.md, and daily_crash_pipeline_prompt_phase2.md) into the Automation/ folder of your ParentHolderFolder. Use force=true to update existing files to the latest version.",
-    inputSchema: z.object({
-      force: z.boolean().optional().describe("When true, overwrite existing automation files with the latest version. Default false (skip existing files)."),
-    }),
-    outputSchema: z.object({
-      automationDir: z.string(),
-      scaffolded: z.array(z.string()),
-      skipped: z.array(z.string()),
-      force: z.boolean(),
-    }),
-  },
-  async (input) => {
-    const { setupAutomationFiles: scaffoldFiles } = await import("./core/setupAutomation.js");
-    const config = getConfig();
-    const parentDir = config.CRASH_ANALYSIS_PARENT;
-    // __dirname is injected by esbuild banner (points to dist/ directory)
-    // Package root is one level up from dist/
-    const packageRoot = path.resolve(__dirname, "..");
-    const result = scaffoldFiles({ force: input.force ?? false, packageRoot, parentDir });
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-      structuredContent: result as unknown as Record<string, unknown>,
-    };
-  }
-);
-
 // ── Tool: cleanup_all ─────────────────────────────────────────────────────────
 server.registerTool(
   "cleanup_all",
@@ -1415,41 +1388,11 @@ server.registerTool(
     }),
   },
   async (input) => {
-    const config = getConfig();
-    const dryRun = input.dryRun ?? false;
-    const keepReports = input.keepReports ?? false;
-    const keepManifests = input.keepManifests ?? false;
-
-    const counts = {
-      xcodeCrashLogs: 0,
-      appticsCrashLogs: 0,
-      otherCrashLogs: 0,
-      symbolicatedCrashLogs: 0,
-      analyzedReports: 0,
-      stateManifests: 0,
-    };
-    const deletedFiles: string[] = [];
-
-    function accumulate(files: string[], countKey: keyof typeof counts): void {
-      deletedFiles.push(...files);
-      counts[countKey] += files.length;
-    }
-
-    accumulate(cleanFilesFromDir(getXcodeCrashesDir(config), [".crash", ".ips"], dryRun), "xcodeCrashLogs");
-    accumulate(cleanFilesFromDir(getAppticsCrashesDir(config), [".crash", ".ips"], dryRun), "appticsCrashLogs");
-    accumulate(cleanFilesFromDir(getOtherCrashesDir(config), [".crash", ".ips"], dryRun), "otherCrashLogs");
-    accumulate(cleanFilesFromDir(getSymbolicatedDir(config), [".crash", ".ips"], dryRun), "symbolicatedCrashLogs");
-
-    if (!keepReports) {
-      accumulate(cleanFilesFromDir(getAnalyzedReportsDir(config), [".json", ".csv"], dryRun), "analyzedReports");
-    }
-
-    if (!keepManifests) {
-      accumulate(cleanFilesFromDir(getStateMaintenanceDir(config), [".json"], dryRun), "stateManifests");
-    }
-
-    const totalDeleted = Object.values(counts).reduce((s, n) => s + n, 0);
-    const result = { dryRun, deleted: counts, totalDeleted, files: deletedFiles };
+    const result = cleanupAll({
+      dryRun: input.dryRun,
+      keepReports: input.keepReports,
+      keepManifests: input.keepManifests,
+    });
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
       structuredContent: result as unknown as Record<string, unknown>,
