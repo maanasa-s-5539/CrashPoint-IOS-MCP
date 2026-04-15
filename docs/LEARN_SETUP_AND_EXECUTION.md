@@ -75,26 +75,7 @@ Open Cliq → channel → **Integrations** → **Incoming Webhooks** → **Add w
 
 ---
 
-## 4. Run `setup_folders`
-
-**You do not need to run `setup_folders` manually.** The workspace is automatically initialised on the first run of the `run_crash_pipeline.sh` bash script or when you invoke the `run_full_pipeline` or `run_basic_pipeline` MCP tools. Auto-setup creates the full folder structure, `.mcp.json`, the launchd plist, automation scripts, and prompt templates using paths from `crashpoint.config.json`.
-
-**Exception — symlinks:** Auto-setup does **not** create symlinks to your dSYM, app, or branch directories. If you need those symlinks (`dSYM_File`, `app_File`, `CurrentMasterLiveBranch`, `CurrentDevelopmentBranch`), run `setup_folders` explicitly via the MCP tool or the CLI:
-
-```bash
-CRASH_ANALYSIS_PARENT=/path/to/ParentHolderFolder \
-  node dist/cli.js setup \
-  --master-branch /path/to/master \
-  --dev-branch /path/to/dev \
-  --dsym /path/to/MyApp.app.dSYM \
-  --app /path/to/MyApp.app
-```
-
-> **Note:** Re-running `setup_folders` is safe — it never overwrites existing files. To update automation files to the latest version, run `setup_folders` with `force=true`.
-
----
-
-## 5. Register the MCP Server with Your AI Client
+## 4. Register the MCP Server with Your AI Client
 
 **Claude Desktop (macOS)** — edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
@@ -118,7 +99,7 @@ CRASH_ANALYSIS_PARENT=/path/to/ParentHolderFolder \
 
 ---
 
-## 6. Run the Bash Pipeline Script
+## 5. Run the Bash Pipeline Script
 
 The automated pipeline script lives at `ParentHolderFolder/Automation/run_crash_pipeline.sh`. It:
 
@@ -126,6 +107,21 @@ The automated pipeline script lives at `ParentHolderFolder/Automation/run_crash_
 2. Runs the full pipeline: export → symbolicate → analyze.
 3. Sends a Zoho Cliq notification and creates/updates Zoho Projects bugs.
 4. Reads the analysis report and source code to produce a `LatestFixPlan.md` with fix suggestions.
+
+> **First run — automatic workspace setup:** On the first run, the bash pipeline script (or the `run_full_pipeline` MCP tool) automatically initializes the workspace — creating the required folder structure under `ParentHolderFolder`. No manual `setup_folders` step is needed.
+>
+> **Exception — symlinks:** Auto-setup does **not** create symlinks to your dSYM, app, or branch directories. If you need those symlinks (`dSYM_File`, `app_File`, `CurrentMasterLiveBranch`, `CurrentDevBranch`), run `setup_folders` manually with the relevant flags:
+>
+> ```bash
+> CRASH_ANALYSIS_PARENT=/path/to/ParentHolderFolder \
+>   node dist/cli.js setup \
+>   --master-branch /path/to/master \
+>   --dev-branch /path/to/dev \
+>   --dsym /path/to/MyApp.app.dSYM \
+>   --app /path/to/MyApp.app
+> ```
+>
+> Re-running `setup_folders` is safe — it never overwrites existing files. To update automation files to the latest version, run `setup_folders` with `force=true`.
 
 **Run it manually from Terminal:**
 
@@ -145,7 +141,7 @@ Each run saves a timestamped log at `Automation/ScheduledRunLogs/pipeline_YYYY-M
 
 ---
 
-## 7. Scheduled Automation with macOS launchd
+## 6. Scheduled Automation with macOS launchd
 
 `setup_folders` generates a launchd plist at `~/Library/LaunchAgents/com.crashpipeline.daily_mcp.plist` that runs the script daily at the time set by `SCHEDULED_RUN_TIME`.
 
@@ -173,7 +169,7 @@ launchd stdout/stderr go to `/tmp/crashpipeline_stdout.log` and `/tmp/crashpipel
 
 ---
 
-## 8. Claude CLI Setup (CRITICAL)
+## 7. Claude CLI Setup (CRITICAL)
 
 The automated bash pipeline calls the `claude` CLI in non-interactive mode (`claude -p`). Without proper CLI setup, Claude will either fail to find the MCP servers or pause waiting for permission confirmation that never arrives, hanging the pipeline.
 
@@ -258,7 +254,7 @@ Restart any running Claude CLI sessions after saving this file.
 
 ---
 
-## 9. Verify the Pipeline
+## 8. Verify the Pipeline
 
 1. After the first pipeline run, confirm the folder structure exists under `ParentHolderFolder`. The workspace is auto-created on that first run — by `run_crash_pipeline.sh`, `run_full_pipeline`, or `run_basic_pipeline` — so no manual `setup_folders` call is needed.
 2. Check `Automation/run_crash_pipeline.sh` — the `PARENT_HOLDER_FOLDER` line should show your real path, not `<REPLACE_WITH_...>`.
@@ -277,7 +273,7 @@ Restart any running Claude CLI sessions after saving this file.
 
 ---
 
-## 10. Troubleshooting
+## 9. Troubleshooting
 
 | Problem | Fix |
 |---|---|
@@ -285,14 +281,14 @@ Restart any running Claude CLI sessions after saving this file.
 | `symbolicatecrash not found` | Run `xcode-select --install`. If multiple Xcodes exist, set the active one: `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer` |
 | dSYM UUID mismatch | The `.dSYM` doesn't match the crashing build. Run `node dist/cli.js verify-dsym` to compare UUIDs. Use the `.dSYM` from the same archive as the build. |
 | `jq is required but not found` | `brew install jq` |
-| Claude CLI hangs during automation | Missing entries in `~/.claude/settings.json`. Verify `allowedPaths` includes `ParentHolderFolder`, `MASTER_BRANCH_PATH`, and `DEV_BRANCH_PATH`, and that both MCP server names appear in `allowedTools` and `permissions.allow`. See Section 8. |
+| Claude CLI hangs during automation | Missing entries in `~/.claude/settings.json`. Verify `allowedPaths` includes `ParentHolderFolder`, `MASTER_BRANCH_PATH`, and `DEV_BRANCH_PATH`, and that both MCP server names appear in `allowedTools` and `permissions.allow`. See Section 7. |
 | Phase 1 fails, Phase 2 skipped | Check the log file. Common causes: wrong Apptics credentials, network unavailable, or missing config values. |
 | launchd job doesn't run | Check `launchctl list \| grep crashpipeline`. If not loaded, run the `launchctl load` command. Check `/tmp/crashpipeline_stdout.log` and `/tmp/crashpipeline_stderr.log`. |
 | Invalid JSON in config | Validate: `node -e "JSON.parse(require('fs').readFileSync('/path/to/crashpoint.config.json','utf8'))"` |
 
 ---
 
-## 11. Key File Locations
+## 10. Key File Locations
 
 | File | Location |
 |---|---|
