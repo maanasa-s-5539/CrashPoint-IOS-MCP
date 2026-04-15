@@ -57,11 +57,7 @@ When the MCP server starts, it loads configuration in this exact order:
 
 2. **Read `crashpoint.config.json`** — the server reads `<CRASH_ANALYSIS_PARENT>/crashpoint.config.json` and loads all keys from it into memory.
 
-3. **Merge with environment variables** — the server then runs:
-   ```typescript
-   cachedConfig = envSchema.parse({ ...fileCfg, ...process.env });
-   ```
-   Because `process.env` is spread *after* `fileCfg`, **environment variables always win**. If the same key appears in the JSON file and as an env var, the env var value is used.
+3. **Merge with environment variables** — **environment variables always win**. If the same key appears in the JSON file and as an env var, the env var value is used.
 
 ### What this means in practice
 
