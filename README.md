@@ -163,9 +163,28 @@ Environment variables can still override any key from `crashpoint.config.json` (
 
 ---
 
-## Quick Start: First Pipeline Run from Terminal
+## Quick Start
 
-If you want to run the bash pipeline (`run_crash_pipeline.sh`) from the terminal for the first time, follow these four steps:
+There are **two ways** to run the CrashPoint pipeline. Choose the path that fits your workflow:
+
+---
+
+### Path A: Claude Desktop / Cursor (zero manual setup)
+
+The MCP tools automatically create the entire workspace on the **very first run** — no `setup` command needed beforehand.
+
+1. **Clone & build the repo** (or install via npx — see [Installation](#installation) above).
+2. **Create your ParentHolderFolder** and place a filled-in `crashpoint.config.json` inside it (see [Configuration](#configuration) above).
+3. **Configure your MCP client** with `CRASH_ANALYSIS_PARENT` pointing to your ParentHolderFolder (see the Cursor / Claude Desktop block in [Configuration](#configuration) above).
+4. **Ask Claude to call `run_full_pipeline`** — on the very first call, the MCP server detects that the workspace doesn't exist yet and automatically runs setup (creating all folders, copying prompt templates, generating `run_crash_pipeline.sh` with your real paths, and writing `.mcp.json`). No prior setup step is needed.
+
+> **That's it.** After the first `run_full_pipeline` (or `run_basic_pipeline`) call, the full workspace is ready and every subsequent call works without any additional configuration.
+
+---
+
+### Path B: Terminal bash script (one-time setup required first)
+
+The bash script at `ParentHolderFolder/Automation/run_crash_pipeline.sh` **does not exist** until a setup command generates it. The repo contains only a template (`automation/run_crash_pipeline.sh`) with `<REPLACE_WITH_...>` placeholders. The setup command replaces those placeholders with your real paths automatically — you never need to edit them manually.
 
 ```bash
 # 1. Clone and build the repo
@@ -179,15 +198,15 @@ mkdir -p /path/to/ParentHolderFolder
 cp crashpoint.config.example.json /path/to/ParentHolderFolder/crashpoint.config.json
 # Edit /path/to/ParentHolderFolder/crashpoint.config.json with your real values
 
-# 3. Run the setup command — this creates the folder structure AND generates
+# 3. Run the setup command once — creates the folder structure AND generates
 #    run_crash_pipeline.sh with your real paths automatically filled in
 CRASH_ANALYSIS_PARENT=/path/to/ParentHolderFolder node dist/cli.js setup
 
-# 4. Now run the generated script (placeholders are already replaced — no manual editing needed)
+# 4. Run the generated script (placeholders already replaced — no manual editing needed)
 bash /path/to/ParentHolderFolder/Automation/run_crash_pipeline.sh
 ```
 
-> **Important:** The bash script at `ParentHolderFolder/Automation/run_crash_pipeline.sh` does **not exist** until `node dist/cli.js setup` runs. The setup command reads the template from the repo's `automation/` directory, replaces the `<REPLACE_WITH_PATH_TO_PARENT_HOLDER_FOLDER>` and `<REPLACE_WITH_CRASHPOINT_PACKAGE_ROOT>` placeholders with your real paths, and writes the result to `ParentHolderFolder/Automation/run_crash_pipeline.sh`. You never need to manually edit any placeholders.
+> **Note:** The auto-setup block inside the generated bash script (which calls `node dist/cli.js setup` if folders are missing) is a **safety net for subsequent runs** — for example if folders were accidentally deleted. It is not the mechanism for the initial bootstrap. Step 3 above is the required first-time step.
 
 ---
 
@@ -213,7 +232,9 @@ ParentHolderFolder/                   ← CRASH_ANALYSIS_PARENT
     └── ScheduledRunLogs/
 ```
 
-Run `setup_folders` (MCP tool) or `node dist/cli.js setup` to create this structure and generate `Automation/run_crash_pipeline.sh` with your real paths. `run_full_pipeline` and `run_basic_pipeline` will also auto-create the folder structure on first run (but they do not generate the bash script — use `setup` or `setup_folders` for that).
+**Using Claude Desktop / Cursor (MCP path):** The folder structure is created automatically on the first call to `run_full_pipeline` or `run_basic_pipeline` — no manual setup step needed. The MCP server also generates `Automation/run_crash_pipeline.sh` with your real paths filled in as part of this auto-setup.
+
+**Using the terminal bash script:** Run `CRASH_ANALYSIS_PARENT=/path/to/ParentHolderFolder node dist/cli.js setup` once to create the folder structure and generate `Automation/run_crash_pipeline.sh` with your real paths. After that, run `bash /path/to/ParentHolderFolder/Automation/run_crash_pipeline.sh`. You can also run `setup_folders` in Claude Desktop / Cursor to do the same thing interactively.
 
 ---
 
