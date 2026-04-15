@@ -1406,7 +1406,15 @@ server.registerTool(
       totalGroups: groups.length,
       bugs,
       projectConfig,
-      instructions: "For each bug: 1) Call list_bugs with portal_id and project_id to check for existing bugs with matching searchPrefix in the title. 2) If found, call update_bug to increment occurrences and append the crash date. 3) If not found, call create_bug with all fields (title, description, severity_id, status_id, and custom fields for appVersion and occurrences).",
+      instructions: `For each bug:
+1) Call list_bugs with portal_id="${projectConfig.portalId}" and project_id="${projectConfig.projectId}" to search for existing bugs with the same searchPrefix in the title.
+2) If no existing bug is found, call create_bug with:
+   - title: bug.title
+   - description: bug.description
+   - severity_id: bug.severityId
+   - status_id: bug.statusId
+   - custom_fields: { "${projectConfig.appVersionField}": bug.appVersion, "${projectConfig.occurrencesField}": bug.occurrences }
+3) If an existing bug is found, call update_bug and add bug.occurrences to the existing value in the "${projectConfig.occurrencesField}" field.`,
     };
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
