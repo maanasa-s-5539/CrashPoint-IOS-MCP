@@ -159,10 +159,6 @@ All other values (paths, app name, etc.) are read automatically from `crashpoint
 
 Only `CRASH_ANALYSIS_PARENT` is required as an environment variable — it tells the server where to find `crashpoint.config.json`. All other settings live in that config file.
 
-| Variable | Required | Description |
-|---|---|---|
-| `CRASH_ANALYSIS_PARENT` | **Yes** | Path to your ParentHolderFolder (where `crashpoint.config.json` lives) |
-
 Environment variables can still override any key from `crashpoint.config.json` (env always wins) if you need per-client overrides via MCP client `env` blocks.
 
 ---
