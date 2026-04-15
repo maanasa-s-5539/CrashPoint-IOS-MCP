@@ -83,6 +83,7 @@ export function formatCrashFile(detail: AppticsCrashDetail, entry: AppticsCrashE
 
   // Additional metadata
   lines.push("--- Apptics Metadata ---");
+  lines.push("Warning: This crash file contains only Apptics metadata — no full crash report was available.");
   lines.push(`Source:          Apptics`);
   lines.push(`UniqueMessageID: ${entry.UniqueMessageID}`);
   lines.push(`CrashCount:      ${entry.CrashCount}`);

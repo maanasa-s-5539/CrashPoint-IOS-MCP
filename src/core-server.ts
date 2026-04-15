@@ -985,6 +985,9 @@ server.registerTool(
       saved: z.number(),
       outputDir: z.string(),
       files: z.array(z.string()),
+      savedWithMessage: z.number(),
+      savedWithoutMessage: z.number(),
+      warning: z.string().optional(),
     }),
   },
   async (input) => {
@@ -1009,12 +1012,15 @@ server.registerTool(
     }
 
     const savedFiles: string[] = [];
+    let savedWithMessage = 0;
+    let savedWithoutMessage = 0;
     for (const crash of input.crashes) {
       if (existingIDs.has(crash.UniqueMessageID)) continue;
 
       let content: string;
       if (crash.Message) {
         content = crash.Message;
+        savedWithMessage++;
       } else {
         const entry: AppticsCrashEntry = {
           UniqueMessageID: crash.UniqueMessageID,
@@ -1043,6 +1049,7 @@ server.registerTool(
           OS: crash.OS,
         };
         content = formatCrashFile(detail, entry);
+        savedWithoutMessage++;
       }
 
       const fileName = `AppticsCrash_${crash.UniqueMessageID}.crash`;
@@ -1051,7 +1058,11 @@ server.registerTool(
       savedFiles.push(fileName);
     }
 
-    const result = { saved: savedFiles.length, outputDir, files: savedFiles };
+    const warning = savedWithoutMessage > 0
+      ? `${savedWithoutMessage} crash file(s) were saved without a Message field and contain only metadata stubs. These files lack stack traces and Binary Images sections — symbolication will likely fail. Ensure full crash details are retrieved via getCrashSummaryWithUniqueMessageId for each crash before calling save_apptics_crashes.`
+      : undefined;
+
+    const result = { saved: savedFiles.length, outputDir, files: savedFiles, savedWithMessage, savedWithoutMessage, ...(warning ? { warning } : {}) };
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result) }],
       structuredContent: result as unknown as Record<string, unknown>,
@@ -1142,6 +1153,25 @@ server.registerTool(
       if (input.expectedCrashCount !== undefined && crashFileCount !== input.expectedCrashCount) {
         (summary.appticsDownload as Record<string, unknown>).warning =
           `Expected ${input.expectedCrashCount} crash files but found ${crashFileCount}. Some crash files may have been lost during save.`;
+      }
+
+      // Inspect a sample of files to detect metadata-only stubs (no real crash content)
+      if (hasAppticsFiles && crashFileCount > 0) {
+        const crashFiles = fs.readdirSync(appticsDir).filter((f) => f.endsWith(".crash"));
+        const sampleSize = Math.min(5, crashFiles.length);
+        const sample = crashFiles.slice(0, sampleSize);
+        const stubIndicator = "Warning: This crash file contains only Apptics metadata";
+        const realContentMarkers = ["Binary Images:", "Thread 0"];
+        let stubCount = 0;
+        for (const file of sample) {
+          const content = fs.readFileSync(path.join(appticsDir, file), "utf-8");
+          const isStub = content.includes(stubIndicator) || !realContentMarkers.some((marker) => content.includes(marker));
+          if (isStub) stubCount++;
+        }
+        if (stubCount === sampleSize) {
+          (summary.appticsDownload as Record<string, unknown>).contentWarning =
+            "Apptics crash files appear to contain only metadata (no Message/stack trace content). The getCrashSummaryWithUniqueMessageId step may have been skipped. Symbolication will likely fail.";
+        }
       }
     }
 
