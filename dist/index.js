@@ -983,6 +983,7 @@ function setupAutomationFiles({
   if (force || !fs7.existsSync(shDestPath)) {
     let shContent = fs7.readFileSync(shTemplatePath, "utf-8");
     shContent = shContent.replace(/<REPLACE_WITH_PATH_TO_PARENT_HOLDER_FOLDER>/g, parentDir);
+    shContent = shContent.replace(/<REPLACE_WITH_CRASHPOINT_PACKAGE_ROOT>/g, packageRoot);
     fs7.writeFileSync(shDestPath, shContent, "utf-8");
     fs7.chmodSync(shDestPath, 493);
     scaffolded.push("run_crash_pipeline.sh");
