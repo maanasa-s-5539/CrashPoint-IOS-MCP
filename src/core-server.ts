@@ -8,7 +8,7 @@ import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 
-import { getConfig, getXcodeCrashesDir, getMainCrashLogsDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir, getAnalyzedReportsDir, getStateMaintenanceDir, hasCrashFiles, getSeverityId, cleanFilesFromDir } from "./config.js";
+import { getConfig, getXcodeCrashesDir, getMainCrashLogsDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir, getAnalyzedReportsDir, getStateMaintenanceDir, getAutomationDir, hasCrashFiles, getSeverityId, cleanFilesFromDir } from "./config.js";
 import type { CrashReport, CrashGroup } from "./core/crashAnalyzer.js";
 import { filterUnfixedGroups } from "./core/crashAnalyzer.js";
 import { formatCrashFile } from "./core/appticsFormatter.js";
@@ -29,7 +29,7 @@ import { assertPathUnderBase, assertNoTraversal } from "./pathSafety.js";
 import { exportReportToCsv } from "./core/csvExporter.js";
 import { ProcessedManifest, extractIncidentId } from "./state/processedManifest.js";
 import { validateDateInput, computeDateRange } from "./dateValidation.js";
-import { setupWorkspace } from "./core/setup.js";
+import { setupWorkspace, SetupResult } from "./core/setup.js";
 import { cleanupAll } from "./core/cleanup.js";
 
 const execFileAsync = promisify(execFile);
@@ -605,7 +605,7 @@ server.registerTool(
   "run_basic_pipeline",
   {
     description:
-      "Run the basic crash analysis pipeline: export → symbolicate → analyze. All paths (dSYM, app, directories) are auto-configured from environment variables — no path input is required.",
+      "Run the basic crash analysis pipeline: export → symbolicate → analyze. All paths (dSYM, app, directories) are auto-configured from environment variables — no path input is required. Automatically runs setup_folders on the first invocation if the workspace hasn't been initialized yet.",
     inputSchema: z.object({
       versions: z.string().optional().describe("Comma-separated version filter for export"),
       numDays: z.number().optional().describe("Number of days to process (1–180). End date = today minus CRASH_DATE_OFFSET (default 4 from config), start date = end date minus numDays + 1. Overrides CRASH_NUM_DAYS in config. Default: 1."),
@@ -615,12 +615,28 @@ server.registerTool(
       export_result: z.any(),
       symbolication_result: z.any(),
       analysis_report: z.any(),
+      setup: z.any().optional(),
     }),
   },
   async (input) => {
     const config = getConfig();
     const inputDir = config.CRASH_INPUT_DIR ?? config.CRASH_ANALYSIS_PARENT;
     const basicDir = getXcodeCrashesDir(config);
+
+    // ── Auto-setup on first run ─────────────────────────────────────────
+    const stateDir = getStateMaintenanceDir(config);
+    const automationDir = getAutomationDir(config);
+    const needsSetup = !fs.existsSync(stateDir) || !fs.existsSync(automationDir);
+
+    let autoSetupResult: SetupResult | undefined;
+    if (needsSetup) {
+      autoSetupResult = setupWorkspace({
+        force: false,
+        // __dirname is injected by esbuild banner (points to dist/ directory)
+        packageRoot: path.resolve(__dirname, ".."),
+      });
+    }
+
     const symbolicatedDir = getSymbolicatedDir(config);
     const dsymPath = config.DSYM_PATH;
     const versions =
@@ -711,11 +727,22 @@ server.registerTool(
       reportPath: reportFile,
     });
 
-    const result = {
+    const result: Record<string, unknown> = {
       export_result: exportResult,
       symbolication_result: symbolicationResult,
       analysis_report: analysisReport,
     };
+
+    if (autoSetupResult) {
+      result.setup = {
+        firstRun: true,
+        created: autoSetupResult.created,
+        symlinks: autoSetupResult.symlinks,
+        scaffoldedFiles: autoSetupResult.scaffoldedFiles,
+        warnings: autoSetupResult.warnings,
+      };
+    }
+
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
       structuredContent: result as unknown as Record<string, unknown>,
@@ -1037,7 +1064,7 @@ server.registerTool(
   "run_full_pipeline",
   {
     description:
-      "Run the full CrashPoint pipeline: export crash logs → symbolicate → analyze. Returns analysis results plus a nextSteps object indicating required follow-up actions (notifyCliq, reportToProjects). After this tool completes, follow nextSteps: call notify_cliq if notifyCliq is true; call prepare_project_bugs and then use the Apptics MCP's Zoho Projects tools if reportToProjects is true. Dates are computed automatically from CRASH_DATE_OFFSET and numDays config.",
+      "Run the full CrashPoint pipeline: export crash logs → symbolicate → analyze. Returns analysis results plus a nextSteps object indicating required follow-up actions (notifyCliq, reportToProjects). After this tool completes, follow nextSteps: call notify_cliq if notifyCliq is true; call prepare_project_bugs and then use the Apptics MCP's Zoho Projects tools if reportToProjects is true. Dates are computed automatically from CRASH_DATE_OFFSET and numDays config. Automatically runs setup_folders on the first invocation if the workspace hasn't been initialized yet.",
     inputSchema: z.object({
       notifyCliq: z.boolean().optional().describe("When true, send a notification to Zoho Cliq after analysis. Default false."),
       reportToProjects: z.boolean().optional().describe("When true, create/update Zoho Projects bugs after analysis. Default false."),
@@ -1056,11 +1083,27 @@ server.registerTool(
       analyze: z.any().optional(),
       csv: z.any().optional(),
       nextSteps: z.any().optional(),
+      setup: z.any().optional(),
     }),
   },
   async (input) => {
     const config = getConfig();
     const parentDir = config.CRASH_ANALYSIS_PARENT;
+
+    // ── Auto-setup on first run ─────────────────────────────────────────
+    const stateDir = getStateMaintenanceDir(config);
+    const automationDir = getAutomationDir(config);
+    const needsSetup = !fs.existsSync(stateDir) || !fs.existsSync(automationDir);
+
+    let autoSetupResult: SetupResult | undefined;
+    if (needsSetup) {
+      autoSetupResult = setupWorkspace({
+        force: false,
+        // __dirname is injected by esbuild banner (points to dist/ directory)
+        packageRoot: path.resolve(__dirname, ".."),
+      });
+    }
+
     const dsymPath = config.DSYM_PATH;
     const analyzedDir = getAnalyzedReportsDir(config);
     fs.mkdirSync(analyzedDir, { recursive: true });
@@ -1194,6 +1237,16 @@ server.registerTool(
         appName: config.APPTICS_APP_NAME ?? config.APP_DISPLAY_NAME,
       },
     };
+
+    if (autoSetupResult) {
+      summary.setup = {
+        firstRun: true,
+        created: autoSetupResult.created,
+        symlinks: autoSetupResult.symlinks,
+        scaffoldedFiles: autoSetupResult.scaffoldedFiles,
+        warnings: autoSetupResult.warnings,
+      };
+    }
 
     return {
       content: [{ type: "text" as const, text: JSON.stringify(summary, null, 2) }],

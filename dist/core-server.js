@@ -1905,7 +1905,7 @@ server.registerTool(
 server.registerTool(
   "run_basic_pipeline",
   {
-    description: "Run the basic crash analysis pipeline: export \u2192 symbolicate \u2192 analyze. All paths (dSYM, app, directories) are auto-configured from environment variables \u2014 no path input is required.",
+    description: "Run the basic crash analysis pipeline: export \u2192 symbolicate \u2192 analyze. All paths (dSYM, app, directories) are auto-configured from environment variables \u2014 no path input is required. Automatically runs setup_folders on the first invocation if the workspace hasn't been initialized yet.",
     inputSchema: z2.object({
       versions: z2.string().optional().describe("Comma-separated version filter for export"),
       numDays: z2.number().optional().describe("Number of days to process (1\u2013180). End date = today minus CRASH_DATE_OFFSET (default 4 from config), start date = end date minus numDays + 1. Overrides CRASH_NUM_DAYS in config. Default: 1."),
@@ -1914,13 +1914,25 @@ server.registerTool(
     outputSchema: z2.object({
       export_result: z2.any(),
       symbolication_result: z2.any(),
-      analysis_report: z2.any()
+      analysis_report: z2.any(),
+      setup: z2.any().optional()
     })
   },
   async (input) => {
     const config = getConfig();
     const inputDir = config.CRASH_INPUT_DIR ?? config.CRASH_ANALYSIS_PARENT;
     const basicDir = getXcodeCrashesDir(config);
+    const stateDir = getStateMaintenanceDir(config);
+    const automationDir = getAutomationDir(config);
+    const needsSetup = !fs11.existsSync(stateDir) || !fs11.existsSync(automationDir);
+    let autoSetupResult;
+    if (needsSetup) {
+      autoSetupResult = setupWorkspace({
+        force: false,
+        // __dirname is injected by esbuild banner (points to dist/ directory)
+        packageRoot: path13.resolve(__dirname, "..")
+      });
+    }
     const symbolicatedDir = getSymbolicatedDir(config);
     const dsymPath = config.DSYM_PATH;
     const versions = input.versions?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
@@ -1994,6 +2006,15 @@ server.registerTool(
       symbolication_result: symbolicationResult,
       analysis_report: analysisReport
     };
+    if (autoSetupResult) {
+      result.setup = {
+        firstRun: true,
+        created: autoSetupResult.created,
+        symlinks: autoSetupResult.symlinks,
+        scaffoldedFiles: autoSetupResult.scaffoldedFiles,
+        warnings: autoSetupResult.warnings
+      };
+    }
     return {
       content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       structuredContent: result
@@ -2266,7 +2287,7 @@ server.registerTool(
 server.registerTool(
   "run_full_pipeline",
   {
-    description: "Run the full CrashPoint pipeline: export crash logs \u2192 symbolicate \u2192 analyze. Returns analysis results plus a nextSteps object indicating required follow-up actions (notifyCliq, reportToProjects). After this tool completes, follow nextSteps: call notify_cliq if notifyCliq is true; call prepare_project_bugs and then use the Apptics MCP's Zoho Projects tools if reportToProjects is true. Dates are computed automatically from CRASH_DATE_OFFSET and numDays config.",
+    description: "Run the full CrashPoint pipeline: export crash logs \u2192 symbolicate \u2192 analyze. Returns analysis results plus a nextSteps object indicating required follow-up actions (notifyCliq, reportToProjects). After this tool completes, follow nextSteps: call notify_cliq if notifyCliq is true; call prepare_project_bugs and then use the Apptics MCP's Zoho Projects tools if reportToProjects is true. Dates are computed automatically from CRASH_DATE_OFFSET and numDays config. Automatically runs setup_folders on the first invocation if the workspace hasn't been initialized yet.",
     inputSchema: z2.object({
       notifyCliq: z2.boolean().optional().describe("When true, send a notification to Zoho Cliq after analysis. Default false."),
       reportToProjects: z2.boolean().optional().describe("When true, create/update Zoho Projects bugs after analysis. Default false."),
@@ -2284,12 +2305,24 @@ server.registerTool(
       symbolicate: z2.any().optional(),
       analyze: z2.any().optional(),
       csv: z2.any().optional(),
-      nextSteps: z2.any().optional()
+      nextSteps: z2.any().optional(),
+      setup: z2.any().optional()
     })
   },
   async (input) => {
     const config = getConfig();
     const parentDir = config.CRASH_ANALYSIS_PARENT;
+    const stateDir = getStateMaintenanceDir(config);
+    const automationDir = getAutomationDir(config);
+    const needsSetup = !fs11.existsSync(stateDir) || !fs11.existsSync(automationDir);
+    let autoSetupResult;
+    if (needsSetup) {
+      autoSetupResult = setupWorkspace({
+        force: false,
+        // __dirname is injected by esbuild banner (points to dist/ directory)
+        packageRoot: path13.resolve(__dirname, "..")
+      });
+    }
     const dsymPath = config.DSYM_PATH;
     const analyzedDir = getAnalyzedReportsDir(config);
     fs11.mkdirSync(analyzedDir, { recursive: true });
@@ -2401,6 +2434,15 @@ server.registerTool(
         appName: config.APPTICS_APP_NAME ?? config.APP_DISPLAY_NAME
       }
     };
+    if (autoSetupResult) {
+      summary.setup = {
+        firstRun: true,
+        created: autoSetupResult.created,
+        symlinks: autoSetupResult.symlinks,
+        scaffoldedFiles: autoSetupResult.scaffoldedFiles,
+        warnings: autoSetupResult.warnings
+      };
+    }
     return {
       content: [{ type: "text", text: JSON.stringify(summary, null, 2) }],
       structuredContent: summary
