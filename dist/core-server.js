@@ -2091,7 +2091,7 @@ function findLatestReport(analyzedDir) {
 }
 function buildBugTitle(group) {
   const sigSnippet = (group.signature ?? "unknown").slice(0, 30);
-  return `[CrashPoint] ${group.exception_type} \u2014 ${sigSnippet}`;
+  return `${group.exception_type} \u2014 ${sigSnippet}`;
 }
 function buildBugDescription(group, occurrences, crashDates) {
   const devicesSummary = Object.entries(group.devices ?? {}).map(([k, v]) => `${k}(${v})`).join(", ");
@@ -2527,7 +2527,7 @@ server.registerTool(
         statusId: config.ZOHO_BUG_STATUS_OPEN,
         appVersion,
         occurrences: group.count ?? 1,
-        searchPrefix: `[CrashPoint] ${group.exception_type}`
+        searchPrefix: `${group.exception_type}`
       };
     });
     const result = {

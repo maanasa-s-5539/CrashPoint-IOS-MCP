@@ -834,7 +834,7 @@ function findLatestReport(analyzedDir: string): string {
 
 function buildBugTitle(group: CrashGroup): string {
   const sigSnippet = (group.signature ?? "unknown").slice(0, 30);
-  return `[CrashPoint] ${group.exception_type} — ${sigSnippet}`;
+  return `${group.exception_type} — ${sigSnippet}`;
 }
 
 function buildBugDescription(group: CrashGroup, occurrences: number, crashDates: string[]): string {
@@ -1343,7 +1343,7 @@ server.registerTool(
         statusId: config.ZOHO_BUG_STATUS_OPEN,
         appVersion,
         occurrences: group.count ?? 1,
-        searchPrefix: `[CrashPoint] ${group.exception_type}`,
+        searchPrefix: `${group.exception_type}`,
       };
     });
 
