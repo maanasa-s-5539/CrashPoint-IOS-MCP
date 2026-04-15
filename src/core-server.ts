@@ -1059,6 +1059,209 @@ server.registerTool(
   }
 );
 
+// ── Helper: simple concurrency limiter (no external deps) ────────────────────
+function makeConcurrencyLimiter(concurrency: number) {
+  let active = 0;
+  const queue: Array<() => void> = [];
+
+  return async function limit<T>(fn: () => Promise<T>): Promise<T> {
+    if (active >= concurrency) {
+      await new Promise<void>((resolve) => queue.push(resolve));
+    }
+    active++;
+    try {
+      return await fn();
+    } finally {
+      active--;
+      const next = queue.shift();
+      if (next) next();
+    }
+  };
+}
+
+// ── Tool: fetch_and_save_apptics_crashes ──────────────────────────────────────
+server.registerTool(
+  "fetch_and_save_apptics_crashes",
+  {
+    description:
+      "Fetch crash details from the Apptics API in parallel (up to 10 at a time) and write each .crash file sequentially on the server side. " +
+      "This replaces the slow pattern of calling ZohoApptics_getCrashSummaryWithUniqueMessageId + save_apptics_crashes one-by-one through the MCP client. " +
+      "Pass the crash list from ZohoApptics_getCrashList together with Apptics credentials and the date range. " +
+      "No MCP client token truncation is possible because fetching and writing happen entirely server-side.",
+    inputSchema: z.object({
+      crashes: z.array(z.object({
+        UniqueMessageID: z.string().describe("Unique crash identifier from Apptics"),
+        Exception: z.string().optional().describe("Exception type string"),
+        CrashCount: z.string().optional().describe("Number of crash occurrences"),
+        DevicesCount: z.string().optional().describe("Number of affected devices"),
+        UsersCount: z.string().optional().describe("Number of affected users"),
+        AppVersion: z.string().optional().describe("App version string"),
+        OS: z.string().optional().describe("Operating system name"),
+        IssueName: z.string().optional().describe("Apptics issue name"),
+        Model: z.string().optional().describe("Device model"),
+        OSVersion: z.string().optional().describe("OS version string"),
+        date: z.string().optional().describe("Date/time of the crash"),
+        CrashDesc: z.string().optional().describe("Crash description"),
+        AppReleaseVersion: z.string().optional().describe("App release/build version"),
+        DeviceID: z.string().optional().describe("Device identifier"),
+        NetworkStatus: z.string().optional().describe("Network status at crash time"),
+        BatteryStatus: z.string().optional().describe("Battery status at crash time"),
+        Edge: z.string().optional().describe("Edge/connectivity info"),
+        Orientation: z.string().optional().describe("Device orientation"),
+      })).describe("Array of crash entries from ZohoApptics_getCrashList"),
+      appticsBaseUrl: z.string().describe("Base URL for the Apptics API (e.g. https://apptics.zoho.com)"),
+      appticsPortalId: z.string().describe("Apptics portal ID (sent as zsoid header)"),
+      appticsProjectId: z.string().describe("Apptics project ID (sent as projectid header)"),
+      startDate: z.string().describe("Start date in DD-MM-YYYY format"),
+      endDate: z.string().describe("End date in DD-MM-YYYY format"),
+      concurrency: z.number().optional().describe("Max parallel fetches (default 10, capped at 10)"),
+      clearExisting: z.boolean().optional().describe("When true (default), clear existing .crash files before saving"),
+      accessToken: z.string().optional().describe("OAuth access token for Apptics API. Sent as Authorization: Zoho-oauthtoken <token> if provided."),
+    }),
+    outputSchema: z.object({
+      saved: z.number(),
+      failed: z.number(),
+      total: z.number(),
+      outputDir: z.string(),
+      files: z.array(z.string()),
+      errors: z.array(z.object({ UniqueMessageID: z.string(), error: z.string() })),
+    }),
+  },
+  async (input) => {
+    const config = getConfig();
+    const outputDir = getAppticsCrashesDir(config);
+    const clearExisting = input.clearExisting ?? true;
+    const maxConcurrency = Math.min(input.concurrency ?? 10, 10);
+    const baseUrl = input.appticsBaseUrl.replace(/\/$/, "");
+
+    fs.mkdirSync(outputDir, { recursive: true });
+
+    if (clearExisting) {
+      const existing = fs.readdirSync(outputDir).filter((f) => f.endsWith(".crash"));
+      for (const f of existing) fs.unlinkSync(path.join(outputDir, f));
+    }
+
+    // Collect existing IDs for idempotency when clearExisting=false
+    const existingIDs = new Set<string>();
+    if (!clearExisting) {
+      for (const f of fs.readdirSync(outputDir).filter((f) => f.endsWith(".crash"))) {
+        const match = f.match(/^AppticsCrash_(.+)\.crash$/);
+        if (match) existingIDs.add(match[1]);
+      }
+    }
+
+    type FetchResult = { UniqueMessageID: string; status: "saved" | "skipped" | "failed"; fileName?: string; error?: string };
+
+    async function fetchAndSave(crash: typeof input.crashes[0]): Promise<FetchResult> {
+      const id = crash.UniqueMessageID;
+
+      if (existingIDs.has(id)) {
+        return { UniqueMessageID: id, status: "skipped", fileName: `AppticsCrash_${id}.crash` };
+      }
+
+      const url = `${baseUrl}/api/v3/crash/detail/${id}?startdate=${input.startDate}&enddate=${input.endDate}&mode=1`;
+      const headers: Record<string, string> = {
+        zsoid: input.appticsPortalId,
+        projectid: input.appticsProjectId,
+      };
+      if (input.accessToken) {
+        headers["Authorization"] = `Zoho-oauthtoken ${input.accessToken}`;
+      }
+
+      const response = await fetch(url, { headers });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json() as Record<string, unknown>;
+      const message = (data?.Message ?? data?.message ?? "") as string;
+
+      let content: string;
+      if (message) {
+        content = message;
+      } else {
+        const entry: AppticsCrashEntry = {
+          UniqueMessageID: id,
+          Exception: crash.Exception ?? "",
+          CrashCount: crash.CrashCount ?? "",
+          DevicesCount: crash.DevicesCount ?? "",
+          UsersCount: crash.UsersCount ?? "",
+          AppVersion: crash.AppVersion ?? "",
+          OS: crash.OS ?? "",
+          Status: 0,
+          PID: 0,
+          AppVersionID: 0,
+        };
+        const detail: AppticsCrashDetail = {
+          UniqueMessageID: id,
+          IssueName: crash.IssueName,
+          Model: crash.Model,
+          OSVersion: crash.OSVersion,
+          date: crash.date,
+          AppReleaseVersion: crash.AppReleaseVersion,
+          DeviceID: crash.DeviceID,
+          NetworkStatus: crash.NetworkStatus,
+          BatteryStatus: crash.BatteryStatus,
+          Edge: crash.Edge,
+          AppVersion: crash.AppVersion,
+          OS: crash.OS,
+        };
+        content = formatCrashFile(detail, entry);
+      }
+
+      const fileName = `AppticsCrash_${id}.crash`;
+      fs.writeFileSync(path.join(outputDir, fileName), content, "utf-8");
+      return { UniqueMessageID: id, status: "saved", fileName };
+    }
+
+    // ── Phase 1: parallel fetch with concurrency limit ──────────────────────
+    const limit = makeConcurrencyLimiter(maxConcurrency);
+    const phase1Results = await Promise.allSettled(
+      input.crashes.map((crash) => limit(() => fetchAndSave(crash)))
+    );
+
+    // ── Phase 2: retry failures once, sequentially ──────────────────────────
+    const savedFiles: string[] = [];
+    const errors: Array<{ UniqueMessageID: string; error: string }> = [];
+
+    const failedCrashes: typeof input.crashes = [];
+    for (let i = 0; i < phase1Results.length; i++) {
+      const r = phase1Results[i];
+      if (r.status === "fulfilled") {
+        if (r.value.status === "saved" || r.value.status === "skipped") {
+          if (r.value.fileName) savedFiles.push(r.value.fileName);
+        } else {
+          failedCrashes.push(input.crashes[i]);
+        }
+      } else {
+        failedCrashes.push(input.crashes[i]);
+      }
+    }
+
+    for (const crash of failedCrashes) {
+      try {
+        const r = await fetchAndSave(crash);
+        if (r.fileName) savedFiles.push(r.fileName);
+      } catch (err) {
+        errors.push({ UniqueMessageID: crash.UniqueMessageID, error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+
+    const result = {
+      saved: savedFiles.length,
+      failed: errors.length,
+      total: input.crashes.length,
+      outputDir,
+      files: savedFiles,
+      errors,
+    };
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      structuredContent: result as unknown as Record<string, unknown>,
+    };
+  }
+);
+
 // ── Tool: run_full_pipeline ───────────────────────────────────────────────────
 server.registerTool(
   "run_full_pipeline",
