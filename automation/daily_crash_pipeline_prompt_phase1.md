@@ -10,7 +10,7 @@ You are running an automated daily crash analysis pipeline (Phase 1: Data Collec
 
 ## Step 1 & 2: Download Crashes from Apptics and Save Locally
 
-> ⚠️ **WARNING — READ BEFORE PROCEEDING:**
+> **WARNING — READ BEFORE PROCEEDING:**
 > **NEVER call `save_apptics_crashes` with crash entries directly from `getCrashList`.**
 > The crash list only contains metadata (Exception, CrashCount, AppVersion, etc.) but does **NOT** include the `Message` field with the full stack trace.
 > You **MUST** first call `getCrashSummaryWithUniqueMessageId` for each individual crash to retrieve the `Message` field, then save.
@@ -32,7 +32,6 @@ Use the {{APPTICS_MCP_NAME}} MCP server to fetch crash data, and the crashpoint-
       - `clearExisting`: `false` (the directory was already cleared in step 4)
    c. After confirming the file was saved, move to the next crash. Do NOT accumulate multiple crash Messages — each crash is fetched, saved to disk server-side, and discarded before processing the next one.
    d. **VALIDATION:** Before calling `save_apptics_crashes`, verify that the crash object you are passing contains a non-empty `Message` field. If it does not, you have a bug — go back to step 5a and fetch the crash detail. The tool will reject saves without `Message` when `clearExisting` is false.
-   This one-at-a-time pattern keeps token usage constant regardless of crash count — only one crash report is in context at any time. Writing happens server-side via `fs.writeFileSync`, so no content truncation is possible.
 6. After all crashes are processed, verify: the total number of saved crashes should equal the total from step 3. If any saves failed, log a warning but continue.
 
 ## Step 3: Run Local Pipeline (Export + Symbolicate + Analyze)
