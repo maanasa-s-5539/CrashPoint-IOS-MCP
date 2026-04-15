@@ -899,6 +899,19 @@ function stripBuildNumber(version: string): string {
   return version.replace(/\s*\(.*?\)/, "").trim();
 }
 
+function getPrimaryAppVersion(group: CrashGroup, fallbackVersions?: string): string | undefined {
+  const versions = group.app_versions;
+  if (versions && Object.keys(versions).length > 0) {
+    const sorted = Object.entries(versions).sort((a, b) => b[1] - a[1]);
+    return stripBuildNumber(sorted[0][0]);
+  }
+  if (fallbackVersions) {
+    const first = fallbackVersions.split(",")[0]?.trim();
+    return first ? stripBuildNumber(first) : undefined;
+  }
+  return undefined;
+}
+
 function buildCliqMessage(report: CrashReport, groups: CrashGroup[]): object {
   const date = report.report_date
     ? formatDateDDMMYYYY(new Date(report.report_date))
@@ -1444,6 +1457,8 @@ server.registerTool(
         signature: group.signature,
         title: buildBugTitle(group),
         severityId: getSeverityId(config, group.count ?? 1),
+        appVersion: getPrimaryAppVersion(group, config.CRASH_VERSIONS),
+        occurrences: group.count ?? 1,
       }));
       const result = { reportDate, reportPath: resolvedPath, totalGroups: groups.length, dryRun: true, bugs, projectConfig };
       return {
@@ -1456,7 +1471,7 @@ server.registerTool(
       const title = buildBugTitle(group);
       const description = buildBugDescription(group, group.count ?? 1, [reportDate]);
       const severityId = getSeverityId(config, group.count ?? 1);
-      const appVersion = config.CRASH_VERSIONS ? stripBuildNumber(config.CRASH_VERSIONS) : undefined;
+      const appVersion = getPrimaryAppVersion(group, config.CRASH_VERSIONS);
       return {
         signature: group.signature,
         title,

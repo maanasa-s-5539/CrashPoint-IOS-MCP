@@ -2147,6 +2147,18 @@ function formatDateDDMMYYYY(d) {
 function stripBuildNumber(version) {
   return version.replace(/\s*\(.*?\)/, "").trim();
 }
+function getPrimaryAppVersion(group, fallbackVersions) {
+  const versions = group.app_versions;
+  if (versions && Object.keys(versions).length > 0) {
+    const sorted = Object.entries(versions).sort((a, b) => b[1] - a[1]);
+    return stripBuildNumber(sorted[0][0]);
+  }
+  if (fallbackVersions) {
+    const first = fallbackVersions.split(",")[0]?.trim();
+    return first ? stripBuildNumber(first) : void 0;
+  }
+  return void 0;
+}
 function buildCliqMessage(report, groups) {
   const date = report.report_date ? formatDateDDMMYYYY(new Date(report.report_date)) : formatDateDDMMYYYY(/* @__PURE__ */ new Date());
   const totalCrashes = groups.reduce((sum, g) => sum + (g.count ?? 0), 0);
@@ -2599,7 +2611,9 @@ server.registerTool(
       const bugs2 = groups.map((group) => ({
         signature: group.signature,
         title: buildBugTitle(group),
-        severityId: getSeverityId(config, group.count ?? 1)
+        severityId: getSeverityId(config, group.count ?? 1),
+        appVersion: getPrimaryAppVersion(group, config.CRASH_VERSIONS),
+        occurrences: group.count ?? 1
       }));
       const result2 = { reportDate, reportPath: resolvedPath, totalGroups: groups.length, dryRun: true, bugs: bugs2, projectConfig };
       return {
@@ -2611,7 +2625,7 @@ server.registerTool(
       const title = buildBugTitle(group);
       const description = buildBugDescription(group, group.count ?? 1, [reportDate]);
       const severityId = getSeverityId(config, group.count ?? 1);
-      const appVersion = config.CRASH_VERSIONS ? stripBuildNumber(config.CRASH_VERSIONS) : void 0;
+      const appVersion = getPrimaryAppVersion(group, config.CRASH_VERSIONS);
       return {
         signature: group.signature,
         title,
