@@ -219,10 +219,9 @@ The `StateMaintenance/` folder holds `processed_manifest.json` (tracks which cra
 | 9 | `run_full_pipeline` | Run the full pipeline with Zoho integration: export → symbolicate → analyze. Returns `nextSteps` flags (`notifyCliq`, `reportToProjects`) for follow-up actions. Automatically initializes the workspace on first run if `setup_folders` hasn't been run yet |
 | 10 | `notify_cliq` | Send crash report summary to a Zoho Cliq channel via incoming webhook |
 | 11 | `prepare_project_bugs` | Prepare structured bug data from crash reports for Zoho Projects submission (titles, descriptions, severity, custom fields) |
-| 12 | `setup_automation_files` | Scaffold automation scripts into `Automation/` folder. Use `force=true` to update to the latest version |
-| 13 | `clean_old_crashes` | Delete `.crash`/`.ips` files older than a given date across all crash directories |
-| 14 | `cleanup_reports` | Delete analyzed report files (`.json`/`.csv`) in `AnalyzedReportsFolder` that are older than a given date |
-| 15 | `cleanup_all` | Remove all crash files and reports in one go. Supports `dryRun`, `keepReports`, and `keepManifests` flags |
+| 12 | `clean_old_crashes` | Delete `.crash`/`.ips` files older than a given date across all crash directories |
+| 13 | `cleanup_reports` | Delete analyzed report files (`.json`/`.csv`) in `AnalyzedReportsFolder` that are older than a given date |
+| 14 | `cleanup_all` | Remove all crash files and reports in one go. Supports `dryRun`, `keepReports`, and `keepManifests` flags |
 
 For detailed parameter documentation, see [Tool Parameters](docs/TOOL_PARAMETERS.md).
 
@@ -233,12 +232,10 @@ For detailed parameter documentation, see [Tool Parameters](docs/TOOL_PARAMETERS
 The CLI lets you run the crash analysis pipeline without an MCP client (useful for scheduled runs):
 
 ```bash
-# Delete crash files older than a given date (dry-run first)
-node dist/cli.js clean --before-date 2026-03-01 --dry-run
+# Delete crash files older than a given date
 node dist/cli.js clean --before-date 2026-03-01
 
-# Delete analyzed report files in AnalyzedReportsFolder older than a given date (dry-run first)
-node dist/cli.js cleanup-reports --before-date 2026-03-01 --dry-run
+# Delete analyzed report files in AnalyzedReportsFolder older than a given date
 node dist/cli.js cleanup-reports --before-date 2026-03-01
 
 # Create folder structure with symlinks
@@ -250,9 +247,6 @@ node dist/cli.js verify-dsym --crash-dir /path/to/MainCrashLogsFolder/XCodeCrash
 
 # Export crash logs from Xcode Organizer
 node dist/cli.js export
-
-# Dry-run export: preview what would be exported without writing files
-node dist/cli.js export --dry-run
 
 # Export crashes filtered by date range
 node dist/cli.js export --start-date 2026-03-01 --end-date 2026-03-20
@@ -275,7 +269,6 @@ node dist/cli.js fix-status --action list
 node dist/cli.js pipeline
 
 # Remove all crash files and reports in one go
-node dist/cli.js cleanup --dry-run       # preview what would be deleted
 node dist/cli.js cleanup                  # delete everything
 node dist/cli.js cleanup --keep-reports   # only delete crash files, preserve reports
 node dist/cli.js cleanup --keep-manifests # preserve processed manifests
