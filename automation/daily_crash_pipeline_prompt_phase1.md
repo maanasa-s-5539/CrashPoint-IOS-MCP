@@ -10,6 +10,13 @@ You are running an automated daily crash analysis pipeline (Phase 1: Data Collec
 
 ## Step 1 & 2: Download Crashes from Apptics and Save Locally
 
+> **WARNING — READ BEFORE PROCEEDING:**
+> **NEVER call `save_apptics_crashes` with crash entries directly from `getCrashList`.**
+> The crash list only contains metadata (Exception, CrashCount, AppVersion, etc.) but does **NOT** include the `Message` field with the full stack trace.
+> You **MUST** first call `getCrashSummaryWithUniqueMessageId` for each individual crash to retrieve the `Message` field, then save.
+> If you call `save_apptics_crashes` with crashes that lack a `Message` field, the tool will **reject** the call and return an error.
+> The `clearExisting: true` call in step 4 must use an **empty array `[]`** — it is ONLY for clearing the directory. NEVER use it to save crash list data.
+
 Use the {{APPTICS_MCP_NAME}} MCP server to fetch crash data, and the crashpoint-ios MCP server to save it.
 
 1. Read `crashpoint.config.json` from the working directory to get CRASH_DATE_OFFSET, CRASH_NUM_DAYS, CRASH_VERSIONS, APPTICS_PORTAL_ID, and APPTICS_PROJECT_ID.
@@ -17,14 +24,14 @@ Use the {{APPTICS_MCP_NAME}} MCP server to fetch crash data, and the crashpoint-
 3. Call `ZohoApptics_getCrashList` with:
    - headers: zsoid = APPTICS_PORTAL_ID, projectid = APPTICS_PROJECT_ID
    - query_params: startdate, enddate (DD-MM-YYYY), platform = "iOS", mode = 1, with app version = CRASH_VERSIONS.
-4. Clear existing Apptics crash files by calling `save_apptics_crashes` on the crashpoint-ios MCP server with `crashes` set to an empty array `[]` and `clearExisting: true`. This ensures a clean slate.
+4. Clear existing Apptics crash files by calling `save_apptics_crashes` on the crashpoint-ios MCP server with `crashes` set to an empty array `[]` and `clearExisting: true`. This ensures a clean slate. **Do NOT pass any crash data here** — the empty array is intentional.
 5. For each crash entry from step 3, process ONE AT A TIME in sequence:
-   a. Call `ZohoApptics_getCrashSummaryWithUniqueMessageId` via the {{APPTICS_MCP_NAME}} MCP server for that single crash's UniqueMessageID to retrieve the full crash detail including the `Message` field (complete crash report text with stack trace).
+   a. **[MANDATORY — do NOT skip]** Call `ZohoApptics_getCrashSummaryWithUniqueMessageId` via the {{APPTICS_MCP_NAME}} MCP server for that single crash's UniqueMessageID to retrieve the full crash detail including the `Message` field (complete crash report text with stack trace). **Step 5a is MANDATORY before 5b — you cannot skip fetching the crash detail.**
    b. Immediately call `save_apptics_crashes` on the crashpoint-ios MCP server with:
       - `crashes`: a single-element array containing the crash entry enriched with the `Message` field from step (a). Pass the **complete, untruncated** Message — do not summarize or shorten it.
       - `clearExisting`: `false` (the directory was already cleared in step 4)
    c. After confirming the file was saved, move to the next crash. Do NOT accumulate multiple crash Messages — each crash is fetched, saved to disk server-side, and discarded before processing the next one.
-   This one-at-a-time pattern keeps token usage constant regardless of crash count — only one crash report is in context at any time. Writing happens server-side via `fs.writeFileSync`, so no content truncation is possible.
+   d. **VALIDATION:** Before calling `save_apptics_crashes`, verify that the crash object you are passing contains a non-empty `Message` field. If it does not, you have a bug — go back to step 5a and fetch the crash detail. The tool will reject saves without `Message` when `clearExisting` is false.
 6. After all crashes are processed, verify: the total number of saved crashes should equal the total from step 3. If any saves failed, log a warning but continue.
 
 ## Step 3: Run Local Pipeline (Export + Symbolicate + Analyze)

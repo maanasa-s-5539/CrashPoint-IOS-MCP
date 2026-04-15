@@ -956,7 +956,11 @@ server.registerTool(
   "save_apptics_crashes",
   {
     description:
-      "Save Apptics crash data as .crash files in MainCrashLogsFolder/AppticsCrashLogs. Call before run_full_pipeline to include Apptics crashes alongside Xcode crashes.",
+      "Save Apptics crash data as .crash files in MainCrashLogsFolder/AppticsCrashLogs. Call before run_full_pipeline to include Apptics crashes alongside Xcode crashes. " +
+      "IMPORTANT: Each crash entry MUST include the Message field containing the full crash report text from getCrashSummaryWithUniqueMessageId. " +
+      "Entries without Message will be rejected (skipped) when clearExisting is false. " +
+      "When clearExisting is true with a non-empty crashes array, ALL entries must have a Message field or the entire call is rejected with an error. " +
+      "Use clearExisting:true with an empty crashes array [] ONLY to clear the directory before the per-crash save loop.",
     inputSchema: z.object({
       crashes: z.array(z.object({
         UniqueMessageID: z.string().describe("Unique crash identifier from Apptics"),
@@ -966,7 +970,7 @@ server.registerTool(
         UsersCount: z.string().optional().describe("Number of affected users"),
         AppVersion: z.string().optional().describe("App version string"),
         OS: z.string().optional().describe("Operating system name"),
-        Message: z.string().optional().describe("Full crash report text with stack trace from getCrashSummaryWithUniqueMessageId. Used as primary crash file content when present."),
+        Message: z.string().optional().describe("Full crash report text with stack trace from getCrashSummaryWithUniqueMessageId. REQUIRED for saving — entries without this field are rejected."),
         IssueName: z.string().optional().describe("Apptics issue name"),
         Model: z.string().optional().describe("Device model"),
         OSVersion: z.string().optional().describe("OS version string"),
@@ -978,8 +982,8 @@ server.registerTool(
         BatteryStatus: z.string().optional().describe("Battery status at crash time"),
         Edge: z.string().optional().describe("Edge/connectivity info"),
         Orientation: z.string().optional().describe("Device orientation"),
-      })).describe("Array of crash entries fetched from the Apptics Zoho MCP"),
-      clearExisting: z.boolean().optional().describe("When true (default), remove all existing .crash files from AppticsCrashLogs/ before saving new ones."),
+      })).describe("Array of crash entries fetched from the Apptics Zoho MCP. Each entry MUST include the Message field from getCrashSummaryWithUniqueMessageId."),
+      clearExisting: z.boolean().optional().describe("When true (default), remove all existing .crash files from AppticsCrashLogs/ before saving new ones. Use clearExisting:true with crashes:[] to clear the directory only."),
     }),
     outputSchema: z.object({
       saved: z.number(),
@@ -987,7 +991,9 @@ server.registerTool(
       files: z.array(z.string()),
       savedWithMessage: z.number(),
       savedWithoutMessage: z.number(),
+      skippedNoMessage: z.number(),
       warning: z.string().optional(),
+      error: z.string().optional(),
     }),
   },
   async (input) => {
@@ -996,6 +1002,33 @@ server.registerTool(
     const clearExisting = input.clearExisting ?? true;
 
     fs.mkdirSync(outputDir, { recursive: true });
+
+    // Guard: when clearExisting=true with a non-empty array, reject if any entry lacks Message.
+    // This prevents the anti-pattern of saving raw getCrashList data (which has no stack traces).
+    if (clearExisting && input.crashes.length > 0) {
+      const missingMessage = input.crashes.filter((c) => !c.Message);
+      if (missingMessage.length > 0) {
+        const errorMsg =
+          `REJECTED: ${missingMessage.length} of ${input.crashes.length} crash entries are missing the Message field. ` +
+          `Do NOT call save_apptics_crashes with raw crash list data from getCrashList — that data has no stack traces. ` +
+          `Correct usage: (1) call save_apptics_crashes with crashes:[] and clearExisting:true to clear the directory, ` +
+          `then (2) for each crash, call getCrashSummaryWithUniqueMessageId to get the Message field, ` +
+          `then (3) call save_apptics_crashes with that single crash entry (including Message) and clearExisting:false.`;
+        const result = {
+          saved: 0,
+          outputDir,
+          files: [],
+          savedWithMessage: 0,
+          savedWithoutMessage: 0,
+          skippedNoMessage: missingMessage.length,
+          error: errorMsg,
+        };
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result) }],
+          structuredContent: result as unknown as Record<string, unknown>,
+        };
+      }
+    }
 
     if (clearExisting) {
       const existing = fs.readdirSync(outputDir).filter((f) => f.endsWith(".crash"));
@@ -1014,8 +1047,15 @@ server.registerTool(
     const savedFiles: string[] = [];
     let savedWithMessage = 0;
     let savedWithoutMessage = 0;
+    let skippedNoMessage = 0;
     for (const crash of input.crashes) {
       if (existingIDs.has(crash.UniqueMessageID)) continue;
+
+      // When clearExisting=false (individual detail saves), skip entries without Message.
+      if (!clearExisting && !crash.Message) {
+        skippedNoMessage++;
+        continue;
+      }
 
       let content: string;
       if (crash.Message) {
@@ -1062,7 +1102,7 @@ server.registerTool(
       ? `${savedWithoutMessage} crash file(s) were saved without a Message field and contain only metadata stubs. These files lack stack traces and Binary Images sections — symbolication will likely fail. Ensure full crash details are retrieved via getCrashSummaryWithUniqueMessageId for each crash before calling save_apptics_crashes.`
       : undefined;
 
-    const result = { saved: savedFiles.length, outputDir, files: savedFiles, savedWithMessage, savedWithoutMessage, ...(warning ? { warning } : {}) };
+    const result = { saved: savedFiles.length, outputDir, files: savedFiles, savedWithMessage, savedWithoutMessage, skippedNoMessage, ...(warning ? { warning } : {}) };
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result) }],
       structuredContent: result as unknown as Record<string, unknown>,
