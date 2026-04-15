@@ -77,7 +77,9 @@ Open Cliq → channel → **Integrations** → **Incoming Webhooks** → **Add w
 
 ## 4. Run `setup_folders`
 
-This single command creates the full workspace. Run it via the CLI:
+**You do not need to run `setup_folders` manually.** The workspace is automatically initialised on the first run of the `run_crash_pipeline.sh` bash script or when you invoke the `run_full_pipeline` or `run_basic_pipeline` MCP tools. Auto-setup creates the full folder structure, `.mcp.json`, the launchd plist, automation scripts, and prompt templates using paths from `crashpoint.config.json`.
+
+**Exception — symlinks:** Auto-setup does **not** create symlinks to your dSYM, app, or branch directories. If you need those symlinks (`dSYM_File`, `app_File`, `CurrentMasterLiveBranch`, `CurrentDevelopmentBranch`), run `setup_folders` explicitly via the MCP tool or the CLI:
 
 ```bash
 CRASH_ANALYSIS_PARENT=/path/to/ParentHolderFolder \
@@ -88,17 +90,7 @@ CRASH_ANALYSIS_PARENT=/path/to/ParentHolderFolder \
   --app /path/to/MyApp.app
 ```
 
-This creates:
-- The full folder tree under `ParentHolderFolder`
-- `.mcp.json` — used by the Claude CLI automation
-- `~/Library/LaunchAgents/com.crashpipeline.daily_mcp.plist` — the macOS scheduled job
-- `Automation/run_crash_pipeline.sh` — the main automation script (with your real path substituted in)
-- `Automation/daily_crash_pipeline_prompt_phase1.md` and `phase2.md` — prompt templates
-- Symlinks for `dSYM_File`, `app_File`, `CurrentMasterLiveBranch`, `CurrentDevelopmentBranch`
-
 > **Note:** Re-running `setup_folders` is safe — it never overwrites existing files. To update automation files to the latest version, run `setup_folders` with `force=true`.
-
-> **Tip — Skip this step and go straight to the pipeline:** If you call `run_full_pipeline` or `run_basic_pipeline` without running `setup_folders` first, those tools will automatically initialize the workspace on their first invocation (they check for `StateMaintenance/` and `Automation/` directories; if either is missing, `setupWorkspace()` is called with `force: false`). Auto-setup creates the full directory structure and scaffolds the automation files using paths from `crashpoint.config.json`, but it does **not** interactively prompt for symlink paths. If you need symlinks to your dSYM, app, or branch directories, run `setup_folders` explicitly.
 
 ---
 
@@ -268,7 +260,7 @@ Restart any running Claude CLI sessions after saving this file.
 
 ## 9. Verify the Pipeline
 
-1. Run `setup_folders` and confirm folders exist under `ParentHolderFolder`. Alternatively, you can skip this step and run the pipeline directly — `run_full_pipeline` and `run_basic_pipeline` will auto-create the folder structure on first invocation if it's missing.
+1. After the first pipeline run, confirm the folder structure exists under `ParentHolderFolder`. The workspace is auto-created on that first run — by `run_crash_pipeline.sh`, `run_full_pipeline`, or `run_basic_pipeline` — so no manual `setup_folders` call is needed.
 2. Check `Automation/run_crash_pipeline.sh` — the `PARENT_HOLDER_FOLDER` line should show your real path, not `<REPLACE_WITH_...>`.
 3. Place a test `.crash` file in `MainCrashLogsFolder/OtherCrashLogs/`.
 4. Run the CLI pipeline:
