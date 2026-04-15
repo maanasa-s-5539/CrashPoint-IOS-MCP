@@ -24,15 +24,15 @@ By the end of this guide you will have a working, scheduled, automated crash ana
 
 ### What is MCP?
 
-**MCP** stands for **Model Context Protocol**. It is an open standard that lets an AI assistant (like Claude) call external "tools" that you define on a server. Think of it like a plugin system — instead of Claude being limited to what it knows, MCP lets Claude reach out and use real software tools.
+**MCP** stands for **Model Context Protocol**. It is an open standard that lets an AI assistant (like Claude) call external "tools" that you define on a server. It is like a plugin system — instead of Claude being limited to what it knows, MCP lets Claude reach out and use real software tools.
 
-When the AI client (Claude Desktop, Cursor, or the `claude` CLI) starts up, it spawns the MCP server as a child process. They communicate through **stdio** — the client writes JSON messages to the server's standard input, and the server writes JSON responses back on standard output. No network ports, no HTTP — just two processes talking through their standard streams.
+When the AI client (Claude Desktop, Cursor, or the `claude` CLI) starts up, it spawns the MCP server as a child process. They communicate through **stdio** — the client writes JSON messages to the server's standard input, and the server writes JSON responses back on standard output. It is just two processes talking through their standard streams.
 
 ### Why does CrashPoint iOS MCP use this?
 
-CrashPoint iOS MCP wraps the entire crash analysis pipeline as a set of MCP tools. Each step — exporting crash files, symbolicating them, analyzing and grouping them, sending a Cliq notification, creating Zoho bugs — is exposed as a named tool that Claude can call.
+CrashPoint iOS MCP wraps the entire crash analysis pipeline as a set of MCP tools. Each step — exporting crash files, symbolicating them, analyzing and grouping them, sending a Cliq notification, creating Zoho Projects bugs — is exposed as a named tool that Claude can call.
 
-This means **instead of running ten terminal commands in sequence**, you can describe what you want in plain English and Claude figures out which tools to call, in what order, with what parameters. Claude handles the orchestration; CrashPoint handles the execution.
+This means, you can describe what you want in plain English and Claude figures out which tools to call, in what order, with what parameters. Claude handles the orchestration; CrashPoint handles the execution.
 
 ### The two ways to use it
 
@@ -171,7 +171,7 @@ For example, with `CRASH_DATE_OFFSET=4` and `CRASH_NUM_DAYS=1`, if today is Apri
 These IDs are used when creating or updating bugs in Zoho Projects. To find them:
 
 1. Go to your Zoho Projects portal → **Settings** → **Bug Tracker** → **Status** and **Severity** tabs.
-2. Each status and severity has a unique internal ID. You can extract these by inspecting the Zoho API response when calling the bugs endpoint, or by asking your Zoho Projects administrator.
+2. Each status and severity has a unique internal ID. You can extract these by inspecting the Zoho Projects API response when calling the bugs endpoint, or by asking your Zoho Projects administrator.
 
 | Key | What it maps to |
 |---|---|
@@ -189,9 +189,11 @@ These IDs are used when creating or updating bugs in Zoho Projects. To find them
 
 `ZOHO_CLIQ_WEBHOOK_URL` is the URL for an incoming webhook in a Zoho Cliq channel. To create one:
 
-1. Open Zoho Cliq → go to the channel where you want crash notifications.
-2. Click the channel name → **Integrations** → **Incoming Webhooks** → **Add webhook**.
-3. Give it a name, copy the generated URL, and paste it into the config.
+1. Open Zoho Cliq → create the channel where you want crash notifications.
+2. Click on your display picture → **Bots & Tools** → **Webhook Tokens** → **Create a token**.
+3. Copy the generated token and keep it safe.
+4. Copy the API endpoint of the channel, append &apikey=<copied, generated token>.
+5. Paste the full API endpoint into the config.json.
 
 #### Scheduled run time
 
