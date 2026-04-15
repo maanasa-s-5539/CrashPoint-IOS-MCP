@@ -309,30 +309,6 @@ The `*` wildcard grants access to all tools under that MCP server. If you have A
 
 ### Phase 1 execution — Data collection & reporting
 
-Phase 1 is invoked like this:
-
-```bash
-"$CLAUDE_PATH" -p "$PROMPT_PHASE1" \
-  --model "$PHASE1_MODEL" \
-  --allowedTools "$ALLOWED_TOOLS" \
-  --output-format stream-json \
-  --verbose \
-  --max-turns 50 \
-  2>>"$LOG_FILE" | jq --unbuffered -R -r '
-    try (fromjson | select(.type == "assistant")
-    | .message.content[]
-    | select(.type == "text")
-    | .text) // empty
-  ' | tee -a "$LOG_FILE"
-```
-
-What each flag does:
-- `-p` — "print" mode (non-interactive). Claude reads the prompt, runs tools, and exits.
-- `--output-format stream-json` — Claude emits JSON objects on stdout as it runs, one per line.
-- `--verbose` — includes additional progress events in the JSON stream.
-- `--max-turns 50` — limits Phase 1 to 50 tool-calling turns to prevent infinite loops.
-- The `jq` filter extracts only the assistant's text responses from the JSON stream, so your log file contains readable text rather than raw JSON.
-
 Phase 1 instructs Claude to:
 1. Download crash data from Apptics via the Apptics MCP tools.
 2. Save Apptics crashes as `.crash` files using the `save_apptics_crashes` tool.
@@ -342,12 +318,12 @@ Phase 1 instructs Claude to:
 
 ### Phase 2 execution — Crash cause analysis & fix plan
 
-Phase 2 uses `--max-turns 70` (a higher limit because it needs to read source code files). It instructs Claude to:
+Phase 2 instructs Claude to:
 1. Read the latest crash analysis report from `AnalyzedReportsFolder/latest.json`.
 2. Examine the source code in the master and dev branch directories to understand the crash context.
 3. Produce a `LatestFixPlan.md` document in `Automation/FixPlans/` with root cause analysis and concrete fix suggestions.
 
-> **⚠️ Warning:** Phase 2 requires Claude to read source code files from your branch directories. These paths **must** be pre-authorized in `~/.claude/settings.json`. Without this, Claude will pause and ask for permission on every file read, which breaks the non-interactive automated run. See Section 7 for details.
+> **Warning:** Phase 2 requires Claude to read source code files from your branch directories. These paths **must** be pre-authorized in `~/.claude/settings.json`. Without this, Claude will pause and ask for permission on every file read, which breaks the non-interactive automated run. See Section 7 for details.
 
 ### Logging
 
