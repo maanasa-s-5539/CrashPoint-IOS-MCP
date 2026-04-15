@@ -196,6 +196,8 @@ ParentHolderFolder/                   ← CRASH_ANALYSIS_PARENT
 
 Run `setup_folders` (MCP tool) or `node dist/cli.js setup` to create this structure. `setup_folders` also auto-generates `.mcp.json` (with only the mandatory `CRASH_ANALYSIS_PARENT` env var — all other config is read from `crashpoint.config.json`), the launchd plist at `~/Library/LaunchAgents/com.crashpipeline.daily_mcp.plist`, and the automation pipeline scripts (`run_crash_pipeline.sh`, `daily_crash_pipeline_prompt_phase1.md`, `daily_crash_pipeline_prompt_phase2.md`) — all only if they don't already exist, so your customizations are never overwritten. Pass `force=true` to update automation files to the latest version.
 
+Alternatively, `run_full_pipeline` and `run_basic_pipeline` will automatically create this structure on their first invocation if it doesn't exist yet (they check for `StateMaintenance/` and `Automation/` directories and call `setupWorkspace()` if either is missing). Note that auto-setup does not prompt for symlink paths — it uses values from `crashpoint.config.json`; run `setup_folders` explicitly if you need symlinks to your dSYM, app, or branch directories created interactively.
+
 > **Note:** macOS must be awake for the scheduled launchd job to run. If the Mac is asleep at the scheduled time, the job will run once the next time the Mac wakes up. To guarantee the job runs at the configured time, schedule a system wake event a few minutes before the run using:
 > ```bash
 > sudo pmset repeat wakeorpoweron MTWRFSU HH:MM:00
@@ -210,15 +212,15 @@ The `StateMaintenance/` folder holds `processed_manifest.json` (tracks which cra
 
 | # | Tool | Description |
 |---|---|---|
-| 1 | `setup_folders` | Create the complete folder structure, generate `.mcp.json` + launchd plist, scaffold automation scripts (phase1 + phase2 prompts + shell script), and create symlinks — all in one command |
+| 1 | `setup_folders` | Create the complete folder structure, generate `.mcp.json` + launchd plist, scaffold automation scripts (phase1 + phase2 prompts + shell script), and create symlinks — all in one command. Recommended for full control (symlinks, launchd plist, etc.). Note: `run_basic_pipeline` and `run_full_pipeline` will auto-run setup on first invocation if the workspace hasn't been initialized yet |
 | 2 | `export_crashes` | Export `.crash` files from `.xccrashpoint` packages to `MainCrashLogsFolder/XCodeCrashLogs`. Add `dryRun: true` to preview without writing |
 | 3 | `save_apptics_crashes` | Save crash data fetched from the Apptics Zoho MCP as `.crash` files in `AppticsCrashLogs/`. Uses `UniqueMessageID` in filenames for idempotency |
 | 4 | `symbolicate_batch` | Symbolicate crash files. Pass optional `file` param for a single file, or batch-process all of `MainCrashLogsFolder` (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs) |
 | 5 | `verify_dsym` | Validate a `.dSYM` bundle and check if its UUIDs match those in crash files from `MainCrashLogsFolder` |
 | 6 | `analyze_crashes` | Group & deduplicate crashes by signature; includes fix status. Always auto-generates JSON + CSV reports in `AnalyzedReportsFolder` |
 | 7 | `fix_status` | Unified fix tracking: `action='set'` to mark fixed/unfixed, `action='unset'` to clear, `action='list'` to view all |
-| 8 | `run_basic_pipeline` | Run the basic pipeline: export → symbolicate → analyze |
-| 9 | `run_full_pipeline` | Run the full pipeline with Zoho integration: export → symbolicate → analyze. Returns `nextSteps` flags (`notifyCliq`, `reportToProjects`) for follow-up actions |
+| 8 | `run_basic_pipeline` | Run the basic pipeline: export → symbolicate → analyze. Automatically initializes the workspace on first run if `setup_folders` hasn't been run yet |
+| 9 | `run_full_pipeline` | Run the full pipeline with Zoho integration: export → symbolicate → analyze. Returns `nextSteps` flags (`notifyCliq`, `reportToProjects`) for follow-up actions. Automatically initializes the workspace on first run if `setup_folders` hasn't been run yet |
 | 10 | `notify_cliq` | Send crash report summary to a Zoho Cliq channel via incoming webhook |
 | 11 | `prepare_project_bugs` | Prepare structured bug data from crash reports for Zoho Projects submission (titles, descriptions, severity, custom fields) |
 | 12 | `setup_automation_files` | Scaffold automation scripts into `Automation/` folder. Use `force=true` to update to the latest version |
