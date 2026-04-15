@@ -96,7 +96,7 @@ This creates:
 - `Automation/daily_crash_pipeline_prompt_phase1.md` and `phase2.md` — prompt templates
 - Symlinks for `dSYM_File`, `app_File`, `CurrentMasterLiveBranch`, `CurrentDevelopmentBranch`
 
-> **Note:** Re-running `setup_folders` is safe — it never overwrites existing files. To update automation files to the latest version, run `setup_automation_files` with `force=true`.
+> **Note:** Re-running `setup_folders` is safe — it never overwrites existing files. To update automation files to the latest version, run `setup_folders` with `force=true`.
 
 > **Tip — Skip this step and go straight to the pipeline:** If you call `run_full_pipeline` or `run_basic_pipeline` without running `setup_folders` first, those tools will automatically initialize the workspace on their first invocation (they check for `StateMaintenance/` and `Automation/` directories; if either is missing, `setupWorkspace()` is called with `force: false`). Auto-setup creates the full directory structure and scaffolds the automation files using paths from `crashpoint.config.json`, but it does **not** interactively prompt for symlink paths. If you need symlinks to your dSYM, app, or branch directories, run `setup_folders` explicitly.
 
