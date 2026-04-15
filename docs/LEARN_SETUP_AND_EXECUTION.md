@@ -98,6 +98,8 @@ This creates:
 
 > **Note:** Re-running `setup_folders` is safe — it never overwrites existing files. To update automation files to the latest version, run `setup_automation_files` with `force=true`.
 
+> **Tip — Skip this step and go straight to the pipeline:** If you call `run_full_pipeline` or `run_basic_pipeline` without running `setup_folders` first, those tools will automatically initialize the workspace on their first invocation (they check for `StateMaintenance/` and `Automation/` directories; if either is missing, `setupWorkspace()` is called with `force: false`). Auto-setup creates the full directory structure and scaffolds the automation files using paths from `crashpoint.config.json`, but it does **not** interactively prompt for symlink paths. If you need symlinks to your dSYM, app, or branch directories, run `setup_folders` explicitly.
+
 ---
 
 ## 5. Register the MCP Server with Your AI Client
@@ -266,7 +268,7 @@ Restart any running Claude CLI sessions after saving this file.
 
 ## 9. Verify the Pipeline
 
-1. Run `setup_folders` and confirm folders exist under `ParentHolderFolder`.
+1. Run `setup_folders` and confirm folders exist under `ParentHolderFolder`. Alternatively, you can skip this step and run the pipeline directly — `run_full_pipeline` and `run_basic_pipeline` will auto-create the folder structure on first invocation if it's missing.
 2. Check `Automation/run_crash_pipeline.sh` — the `PARENT_HOLDER_FOLDER` line should show your real path, not `<REPLACE_WITH_...>`.
 3. Place a test `.crash` file in `MainCrashLogsFolder/OtherCrashLogs/`.
 4. Run the CLI pipeline:
