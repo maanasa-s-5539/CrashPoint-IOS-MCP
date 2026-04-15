@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd ""$(dirname "$0")" && pwd)"
 LOG_DIR="$SCRIPT_DIR/ScheduledRunLogs"
 mkdir -p "$LOG_DIR"
 
@@ -15,7 +15,7 @@ if ! node -e "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'))" "
   echo "ERROR: Config file contains invalid JSON"; exit 1
 fi
 
-# ─── AUTO-SETUP ────────────────────────────────────────────────────────────────
+# ─── AUTO-SETUP ──────────────────────────────────────────────────────────────
 # Mirror the same check used in run_full_pipeline / run_basic_pipeline MCP tools:
 # if StateMaintenance/ or Automation/ are missing, bootstrap via the CLI setup command.
 CRASHPOINT_PACKAGE_ROOT="<REPLACE_WITH_CRASHPOINT_PACKAGE_ROOT>"
@@ -139,9 +139,9 @@ LOG_FILE="$LOG_DIR/pipeline_${TIMESTAMP}.log"
 
 cd "$PARENT_HOLDER_FOLDER"
 
-# ═══════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 1: Steps 1–5 (download, save, pipeline, cliq, bugs)
-# ═══════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
 echo "" | tee -a "$LOG_FILE"
 echo "=== PHASE 1: Data Collection & Reporting (${PHASE1_MODEL}, effort=${PHASE1_EFFORT}) ===" | tee -a "$LOG_FILE"
 
@@ -151,7 +151,7 @@ set +e
   --allowedTools "$ALLOWED_TOOLS" \
   --output-format stream-json \
   --verbose \
-  --max-turns 50 \
+  --max-turns 200 \
   2>>"$LOG_FILE" | jq --unbuffered -R -r '
     try (fromjson | select(.type == "assistant")
     | .message.content[]
@@ -159,7 +159,7 @@ set +e
     | .text) // empty
   ' | tee -a "$LOG_FILE"
 
-PIPE_STATUSES=("${PIPESTATUS[@]}")
+PIPE_STATUSES=("${PIPESTATUS[@]")
 set -e
 
 # Cleanup: remove any stray .jq or .sh files Claude may have created in ParentHolderFolder
@@ -180,9 +180,9 @@ fi
 echo "" | tee -a "$LOG_FILE"
 echo "=== Phase 1 Complete ===" | tee -a "$LOG_FILE"
 
-# ═══════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 2: Step 6 (crash cause analysis + FixPlan.md)
-# ═══════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
 echo "" | tee -a "$LOG_FILE"
 echo "=== PHASE 2: Crash Cause Analysis & Fix Plan (${PHASE2_MODEL}, effort=${PHASE2_EFFORT}) ===" | tee -a "$LOG_FILE"
 
@@ -202,7 +202,7 @@ set +e
     | .text) // empty
   ' | tee -a "$LOG_FILE"
 
-PIPE_STATUSES=("${PIPESTATUS[@]}")
+PIPE_STATUSES=("${PIPESTATUS[@]")
 set -e
 
 # Cleanup: remove any stray .jq or .sh files Claude may have created in ParentHolderFolder
