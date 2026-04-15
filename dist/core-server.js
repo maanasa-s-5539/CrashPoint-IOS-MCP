@@ -410,7 +410,7 @@ function analyzeDirectory(crashDir, fixStatuses, manifest) {
     }
     const group = groups.get(sig);
     group.count++;
-    group.affected_files.push(file);
+    if (group.affected_files.length < 5) group.affected_files.push(file);
     increment(group.devices, meta.hardwareModel);
     increment(group.ios_versions, meta.osVersion);
     increment(group.app_versions, meta.appVersion);
@@ -465,7 +465,7 @@ function analyzeFiles(files, fixStatuses, manifest) {
     }
     const group = groups.get(sig);
     group.count++;
-    group.affected_files.push(path3.basename(filepath));
+    if (group.affected_files.length < 5) group.affected_files.push(path3.basename(filepath));
     increment(group.devices, meta.hardwareModel);
     increment(group.ios_versions, meta.osVersion);
     increment(group.app_versions, meta.appVersion);
@@ -1406,13 +1406,13 @@ var server = new McpServer({
 server.registerTool(
   "setup_folders",
   {
-    description: "Create the full ParentHolderFolder directory structure (MainCrashLogsFolder/XCodeCrashLogs, MainCrashLogsFolder/AppticsCrashLogs, MainCrashLogsFolder/OtherCrashLogs, SymbolicatedCrashLogsFolder, AnalyzedReportsFolder, StateMaintenance, Automation, Automation/FixPlans, Automation/ScheduledRunLogs), generate .mcp.json and launchd plist, scaffold automation scripts (run_crash_pipeline.sh, daily_crash_pipeline_prompt_phase1.md, daily_crash_pipeline_prompt_phase2.md), and create optional symlinks for master/dev branches. Run this once to complete the entire setup. All symlink paths are pre-configured via environment variables \u2014 do NOT ask the user for them unless they explicitly want to override.",
+    description: "Initialize the workspace: create directories, .mcp.json, launchd plist, automation scripts, and symlinks. Paths are pre-configured via env vars.",
     inputSchema: z2.object({
-      masterBranchPath: z2.string().optional().describe("ALREADY CONFIGURED via MASTER_BRANCH_PATH env var. Do NOT ask the user. Only provide to override. Creates CurrentMasterLiveBranch symlink."),
-      devBranchPath: z2.string().optional().describe("ALREADY CONFIGURED via DEV_BRANCH_PATH env var. Do NOT ask the user. Only provide to override. Creates CurrentDevelopmentBranch symlink."),
-      dsymPath: z2.string().optional().describe("ALREADY CONFIGURED via DSYM_PATH env var. Do NOT ask the user. Only provide to override. Creates dSYM_File symlink."),
-      appPath: z2.string().optional().describe("ALREADY CONFIGURED via APP_PATH env var. Do NOT ask the user. Only provide to override. Creates app_File symlink."),
-      force: z2.boolean().optional().describe("When true, overwrite existing automation files (run_crash_pipeline.sh, phase prompts) with the latest version. Default false (skip existing files).")
+      masterBranchPath: z2.string().optional().describe("Override for master branch path (auto-configured from env)"),
+      devBranchPath: z2.string().optional().describe("Override for dev branch path (auto-configured from env)"),
+      dsymPath: z2.string().optional().describe("Override for dSYM path (auto-configured from env)"),
+      appPath: z2.string().optional().describe("Override for app file path (auto-configured from env)"),
+      force: z2.boolean().optional().describe("When true, overwrite existing automation files with the latest version. Default false.")
     }),
     outputSchema: z2.object({
       parentDir: z2.string(),
@@ -1434,7 +1434,7 @@ server.registerTool(
       packageRoot: path13.resolve(__dirname, "..")
     });
     return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      content: [{ type: "text", text: JSON.stringify(result) }],
       structuredContent: result
     };
   }
@@ -1483,7 +1483,7 @@ server.registerTool(
     const { startDateISO, endDateISO } = computeDateRange(numDays, offset);
     const result = exportCrashLogs(inputDir, outputDir, versions, recursive, dryRun, startDateISO, endDateISO, manifest);
     return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      content: [{ type: "text", text: JSON.stringify(result) }],
       structuredContent: result
     };
   }
@@ -1491,11 +1491,11 @@ server.registerTool(
 server.registerTool(
   "symbolicate_batch",
   {
-    description: "Symbolicate crash files using Xcode's symbolicatecrash tool. When the optional 'file' parameter is provided, symbolicates only that single .crash file. Otherwise, processes ALL .crash and .ips files in MainCrashLogsFolder (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs), outputting to SymbolicatedCrashLogsFolder. All paths (dSYM, directories) are pre-configured via environment variables \u2014 do NOT ask the user for them unless they explicitly want to override.",
+    description: "Symbolicate crash files using Xcode's symbolicatecrash tool. When 'file' is provided, symbolicates only that single file; otherwise processes all .crash and .ips files in MainCrashLogsFolder. Paths are auto-configured from env vars.",
     inputSchema: z2.object({
       file: z2.string().optional().describe("Path to a single .crash or .ips file to symbolicate. When provided, only this file is processed instead of batch processing all directories."),
-      dsymPath: z2.string().optional().describe("ALREADY CONFIGURED via DSYM_PATH env var. Do NOT ask the user for this. Only provide if the user explicitly wants to override the configured default."),
-      outputDir: z2.string().optional().describe("ALREADY CONFIGURED via env (SymbolicatedCrashLogsFolder). Do NOT ask the user for this. Only provide to override."),
+      dsymPath: z2.string().optional().describe("Override for dSYM path (auto-configured from env)"),
+      outputDir: z2.string().optional().describe("Override for output directory (auto-configured from env)"),
       includeProcessedCrashes: z2.boolean().optional().describe("When true, re-symbolicate crashes that were already processed. Default is false (skip already-processed crashes).")
     }),
     outputSchema: z2.object({
@@ -1519,7 +1519,7 @@ server.registerTool(
     if (!dsymPath) {
       const result2 = { succeeded: 0, failed: 0, total: 0, results: [] };
       return {
-        content: [{ type: "text", text: JSON.stringify(result2, null, 2) }],
+        content: [{ type: "text", text: JSON.stringify(result2) }],
         structuredContent: result2
       };
     }
@@ -1534,7 +1534,7 @@ server.registerTool(
         results: [{ file: path13.basename(input.file), success: res.success }]
       };
       return {
-        content: [{ type: "text", text: JSON.stringify(result2, null, 2) }],
+        content: [{ type: "text", text: JSON.stringify(result2) }],
         structuredContent: result2
       };
     }
@@ -1552,14 +1552,14 @@ server.registerTool(
         message: "No .crash or .ips files found in MainCrashLogsFolder/XCodeCrashLogs, MainCrashLogsFolder/AppticsCrashLogs, or MainCrashLogsFolder/OtherCrashLogs"
       };
       return {
-        content: [{ type: "text", text: JSON.stringify(result2, null, 2) }],
+        content: [{ type: "text", text: JSON.stringify(result2) }],
         structuredContent: { succeeded: 0, failed: 0, total: 0, results: [] }
       };
     }
     const r = await runBatchAll(dsymPath, manifest);
     const result = { succeeded: r.succeeded, failed: r.failed, total: r.total, results: r.results };
     return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      content: [{ type: "text", text: JSON.stringify(result) }],
       structuredContent: result
     };
   }
@@ -1567,7 +1567,7 @@ server.registerTool(
 server.registerTool(
   "verify_dsym",
   {
-    description: "Validate a .dSYM bundle and check if its UUIDs match those in crash files collected from MainCrashLogsFolder (the post-export location where XCode crash logs and other crashes live). Runs dwarfdump --uuid on the dSYM and parses Binary Images sections from crash files. Requires macOS with Xcode CLI tools. When no dsymPath is given, resolves the dSYM_File symlink in CRASH_ANALYSIS_PARENT. When no crashPath/crashDir is given, auto-collects crash files from all MainCrashLogsFolder subfolders (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs). crashDir must be within MainCrashLogsFolder. dsymPath and crashPath/crashDir must be provided together, or neither. If APP_NAME is set, only the UUID of the app binary is extracted from crash files (recommended to avoid false mismatches from system framework UUIDs).",
+    description: "Validate a .dSYM bundle and check if its UUIDs match those in crash files. Runs dwarfdump --uuid on the dSYM and parses Binary Images from crash files. Requires macOS with Xcode CLI tools. When inputs are omitted, auto-resolves paths from env vars and scans all MainCrashLogsFolder subfolders.",
     inputSchema: z2.object({
       dsymPath: z2.string().optional().describe("Path to .dSYM bundle (defaults to DSYM_PATH env var, then dSYM_File symlink in CRASH_ANALYSIS_PARENT). Must be provided together with crashPath/crashDir, or omitted entirely."),
       crashPath: z2.string().optional().describe("Path to a single .crash or .ips file to compare UUIDs against. Must be provided together with dsymPath, or omitted entirely."),
@@ -1595,7 +1595,7 @@ server.registerTool(
         detail: "dsymPath was provided but no crashPath or crashDir was given. Either supply both or neither."
       };
       return {
-        content: [{ type: "text", text: JSON.stringify(result2, null, 2) }],
+        content: [{ type: "text", text: JSON.stringify(result2) }],
         structuredContent: result2
       };
     }
@@ -1607,7 +1607,7 @@ server.registerTool(
         detail: "crashPath/crashDir was provided but no dsymPath was given. Either supply both or neither."
       };
       return {
-        content: [{ type: "text", text: JSON.stringify(result2, null, 2) }],
+        content: [{ type: "text", text: JSON.stringify(result2) }],
         structuredContent: result2
       };
     }
@@ -1628,7 +1628,7 @@ server.registerTool(
           detail: "dsymPath not provided, DSYM_PATH env var not set, and no dSYM_File symlink found in CRASH_ANALYSIS_PARENT. Run setup to create the symlink."
         };
         return {
-          content: [{ type: "text", text: JSON.stringify(result2, null, 2) }],
+          content: [{ type: "text", text: JSON.stringify(result2) }],
           structuredContent: result2
         };
       }
@@ -1642,7 +1642,7 @@ server.registerTool(
         detail: `dSYM not found at: ${dsymPath}`
       };
       return {
-        content: [{ type: "text", text: JSON.stringify(result2, null, 2) }],
+        content: [{ type: "text", text: JSON.stringify(result2) }],
         structuredContent: result2
       };
     }
@@ -1665,7 +1665,7 @@ server.registerTool(
         detail: `dwarfdump failed: ${msg}`
       };
       return {
-        content: [{ type: "text", text: JSON.stringify(result2, null, 2) }],
+        content: [{ type: "text", text: JSON.stringify(result2) }],
         structuredContent: result2
       };
     }
@@ -1683,7 +1683,7 @@ server.registerTool(
         detail: "dwarfdump produced no UUID output \u2014 the dSYM may be malformed."
       };
       return {
-        content: [{ type: "text", text: JSON.stringify(result2, null, 2) }],
+        content: [{ type: "text", text: JSON.stringify(result2) }],
         structuredContent: result2
       };
     }
@@ -1720,7 +1720,7 @@ server.registerTool(
         detail: `dSYM is valid. Found ${dsymUuids.length} UUID(s): ${dsymUuids.map((u) => `${u.arch}=${u.uuid}`).join(", ")}. No crash files found for UUID comparison.`
       };
       return {
-        content: [{ type: "text", text: JSON.stringify(result2, null, 2) }],
+        content: [{ type: "text", text: JSON.stringify(result2) }],
         structuredContent: result2
       };
     }
@@ -1779,7 +1779,7 @@ server.registerTool(
       detail
     };
     return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      content: [{ type: "text", text: JSON.stringify(result) }],
       structuredContent: result
     };
   }
@@ -1787,7 +1787,7 @@ server.registerTool(
 server.registerTool(
   "analyze_crashes",
   {
-    description: "Group and deduplicate symbolicated crashes by unique signature. Always reads from SymbolicatedCrashLogsFolder. Automatically generates both a JSON report (jsonReport_<timestamp>.json) and a CSV report (sheetReport_<timestamp>.csv) in AnalyzedReportsFolder. Also returns the full JSON report in the response.",
+    description: "Group and deduplicate symbolicated crashes by unique signature, generating JSON and CSV reports in AnalyzedReportsFolder.",
     inputSchema: z2.object({
       includeProcessedCrashes: z2.boolean().optional().describe("When true, re-analyzes crashes that were already processed. Default is false (skip already-processed crashes).")
     }),
@@ -1826,7 +1826,7 @@ server.registerTool(
       csv_export: csvExport
     };
     return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      content: [{ type: "text", text: JSON.stringify(result) }],
       structuredContent: result
     };
   }
@@ -1863,7 +1863,7 @@ server.registerTool(
         }
       };
       return {
-        content: [{ type: "text", text: JSON.stringify(result2, null, 2) }],
+        content: [{ type: "text", text: JSON.stringify(result2) }],
         structuredContent: result2
       };
     }
@@ -1874,7 +1874,7 @@ server.registerTool(
         result: `signature is required for action '${input.action}'`
       };
       return {
-        content: [{ type: "text", text: JSON.stringify(result2, null, 2) }],
+        content: [{ type: "text", text: JSON.stringify(result2) }],
         structuredContent: result2
       };
     }
@@ -1887,7 +1887,7 @@ server.registerTool(
         result: `Marked as ${status2.fixed ? "fixed" : "unfixed"}${status2.note ? ` \u2014 ${status2.note}` : ""} at ${status2.updatedAt}`
       };
       return {
-        content: [{ type: "text", text: JSON.stringify(result2, null, 2) }],
+        content: [{ type: "text", text: JSON.stringify(result2) }],
         structuredContent: result2
       };
     }
@@ -1898,7 +1898,7 @@ server.registerTool(
       result: `Marked as unfixed at ${status.updatedAt}`
     };
     return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      content: [{ type: "text", text: JSON.stringify(result) }],
       structuredContent: result
     };
   }
@@ -1906,7 +1906,7 @@ server.registerTool(
 server.registerTool(
   "run_basic_pipeline",
   {
-    description: "Run the basic crash analysis pipeline: export \u2192 symbolicate \u2192 analyze. All paths (dSYM, app, directories) are auto-configured from environment variables \u2014 no path input is required. Automatically runs setup_folders on the first invocation if the workspace hasn't been initialized yet.",
+    description: "Run the basic crash analysis pipeline: export \u2192 symbolicate \u2192 analyze. Paths are auto-configured from env vars. Automatically runs setup_folders on first invocation if the workspace hasn't been initialized yet.",
     inputSchema: z2.object({
       versions: z2.string().optional().describe("Comma-separated version filter for export"),
       numDays: z2.number().optional().describe("Number of days to process (1\u2013180). End date = today minus CRASH_DATE_OFFSET (default 4 from config), start date = end date minus numDays + 1. Overrides CRASH_NUM_DAYS in config. Default: 1."),
@@ -1951,7 +1951,7 @@ server.registerTool(
           analysis_report: { skipped: true, reason: `Range ${rangeKey} already fully processed` }
         };
         return {
-          content: [{ type: "text", text: JSON.stringify(skippedResult, null, 2) }],
+          content: [{ type: "text", text: JSON.stringify(skippedResult) }],
           structuredContent: skippedResult
         };
       }
@@ -2017,7 +2017,7 @@ server.registerTool(
       };
     }
     return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      content: [{ type: "text", text: JSON.stringify(result) }],
       structuredContent: result
     };
   }
@@ -2025,7 +2025,7 @@ server.registerTool(
 server.registerTool(
   "clean_old_crashes",
   {
-    description: "Delete .crash and .ips files older than a given date from MainCrashLogsFolder (XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs) and SymbolicatedCrashLogsFolder. Crash date is read from the file header (Date/Time field); falls back to filesystem modification time if not found. Use dryRun to preview what would be deleted.",
+    description: "Delete .crash and .ips files older than a given date from MainCrashLogsFolder and SymbolicatedCrashLogsFolder. Use dryRun to preview what would be deleted.",
     inputSchema: z2.object({
       beforeDate: z2.string().describe("ISO date string \u2014 files with crash dates before this date will be deleted (e.g. 2026-03-01)"),
       dryRun: z2.boolean().optional().describe("When true, reports what would be deleted without actually deleting (default: false)")
@@ -2059,7 +2059,7 @@ server.registerTool(
     ];
     const result = cleanOldCrashes(input.beforeDate, dirs, dryRun, config.CRASH_ANALYSIS_PARENT, dryRun ? void 0 : new ProcessedManifest(config.CRASH_ANALYSIS_PARENT, "export"));
     return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      content: [{ type: "text", text: JSON.stringify(result) }],
       structuredContent: result
     };
   }
@@ -2067,7 +2067,7 @@ server.registerTool(
 server.registerTool(
   "cleanup_reports",
   {
-    description: "Delete analyzed report files (.json and .csv) in AnalyzedReportsFolder that are older than a given date. Targets timestamped report files generated by the analysis pipeline (jsonReport_<timestamp>.json, sheetReport_<timestamp>.csv). Stable pointer files (latest.json, latest.csv) are never deleted. Use dryRun to preview what would be deleted.",
+    description: "Delete analyzed report files (.json and .csv) in AnalyzedReportsFolder older than a given date. Stable pointer files (latest.json, latest.csv) are never deleted. Use dryRun to preview.",
     inputSchema: z2.object({
       beforeDate: z2.string().describe("ISO date string \u2014 analyzed report files with a report date before this date will be deleted (e.g. 2026-03-01)"),
       dryRun: z2.boolean().optional().describe("When true, reports what would be deleted without actually deleting (default: false)")
@@ -2096,7 +2096,7 @@ server.registerTool(
     const reportsDir = getAnalyzedReportsDir(config);
     const result = cleanOldReports(input.beforeDate, reportsDir, dryRun);
     return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      content: [{ type: "text", text: JSON.stringify(result) }],
       structuredContent: result
     };
   }
@@ -2191,7 +2191,7 @@ function computeIntegrationDateRange(crashDateOffset, numDays, configNumDays) {
 server.registerTool(
   "save_apptics_crashes",
   {
-    description: "Save crash data fetched by Claude from the Apptics Zoho MCP as .crash files in MainCrashLogsFolder/AppticsCrashLogs/. Call this BEFORE run_full_pipeline so the pipeline can process Apptics crashes alongside Xcode crashes. Uses UniqueMessageID in filenames for idempotency.",
+    description: "Save Apptics crash data as .crash files in MainCrashLogsFolder/AppticsCrashLogs. Call before run_full_pipeline to include Apptics crashes alongside Xcode crashes.",
     inputSchema: z2.object({
       crashes: z2.array(z2.object({
         UniqueMessageID: z2.string().describe("Unique crash identifier from Apptics"),
@@ -2280,7 +2280,7 @@ server.registerTool(
     }
     const result = { saved: savedFiles.length, outputDir, files: savedFiles };
     return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      content: [{ type: "text", text: JSON.stringify(result) }],
       structuredContent: result
     };
   }
@@ -2305,7 +2305,7 @@ function makeConcurrencyLimiter(concurrency) {
 server.registerTool(
   "fetch_and_save_apptics_crashes",
   {
-    description: "Fetch crash details from the Apptics API in parallel (up to 10 at a time) and write each .crash file sequentially on the server side. This replaces the slow pattern of calling ZohoApptics_getCrashSummaryWithUniqueMessageId + save_apptics_crashes one-by-one through the MCP client. Pass the crash list from ZohoApptics_getCrashList together with Apptics credentials and the date range. No MCP client token truncation is possible because fetching and writing happen entirely server-side.",
+    description: "Fetch crash details from the Apptics API in parallel and write .crash files server-side. More efficient than calling getCrashSummaryWithUniqueMessageId through the MCP client one-by-one.",
     inputSchema: z2.object({
       crashes: z2.array(z2.object({
         UniqueMessageID: z2.string().describe("Unique crash identifier from Apptics"),
@@ -2454,7 +2454,7 @@ server.registerTool(
       errors
     };
     return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      content: [{ type: "text", text: JSON.stringify(result) }],
       structuredContent: result
     };
   }
@@ -2462,7 +2462,7 @@ server.registerTool(
 server.registerTool(
   "run_full_pipeline",
   {
-    description: "Run the full CrashPoint pipeline: export crash logs \u2192 symbolicate \u2192 analyze. Returns analysis results plus a nextSteps object indicating required follow-up actions (notifyCliq, reportToProjects). After this tool completes, follow nextSteps: call notify_cliq if notifyCliq is true; call prepare_project_bugs and then use the Apptics MCP's Zoho Projects tools if reportToProjects is true. Dates are computed automatically from CRASH_DATE_OFFSET and numDays config. Automatically runs setup_folders on the first invocation if the workspace hasn't been initialized yet.",
+    description: "Run the full CrashPoint pipeline: export \u2192 symbolicate \u2192 analyze. Returns results and a nextSteps object. Dates are auto-computed from config. Automatically runs setup_folders on first invocation.",
     inputSchema: z2.object({
       notifyCliq: z2.boolean().optional().describe("When true, send a notification to Zoho Cliq after analysis. Default false."),
       reportToProjects: z2.boolean().optional().describe("When true, create/update Zoho Projects bugs after analysis. Default false."),
@@ -2619,7 +2619,7 @@ server.registerTool(
       };
     }
     return {
-      content: [{ type: "text", text: JSON.stringify(summary, null, 2) }],
+      content: [{ type: "text", text: JSON.stringify(summary) }],
       structuredContent: summary
     };
   }
@@ -2627,7 +2627,7 @@ server.registerTool(
 server.registerTool(
   "notify_cliq",
   {
-    description: "Send a crash analysis report summary to a Zoho Cliq channel via incoming webhook. Reads the existing report from the AnalyzedReportsFolder. IMPORTANT: The message format is pre-defined by the server. Do NOT modify, reformat, or restructure the Cliq message content.",
+    description: "Send a crash analysis report summary to a Zoho Cliq channel via incoming webhook. Reads the existing report from AnalyzedReportsFolder.",
     inputSchema: z2.object({
       reportPath: z2.string().optional().describe("Path to the report JSON file. Defaults to latest.json in AnalyzedReportsFolder."),
       unfixedOnly: z2.boolean().optional().describe("When true, only include crash groups that are NOT marked as fixed."),
@@ -2658,7 +2658,7 @@ server.registerTool(
     if (input.dryRun) {
       const result2 = { success: true, message: "Dry run \u2014 message not sent.", messagePreview: message };
       return {
-        content: [{ type: "text", text: JSON.stringify(result2, null, 2) }],
+        content: [{ type: "text", text: JSON.stringify(result2) }],
         structuredContent: result2
       };
     }
@@ -2681,7 +2681,7 @@ server.registerTool(
       cliqResponse
     };
     return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      content: [{ type: "text", text: JSON.stringify(result) }],
       structuredContent: result
     };
   }
@@ -2689,7 +2689,7 @@ server.registerTool(
 server.registerTool(
   "prepare_project_bugs",
   {
-    description: "Prepare structured bug data from a crash analysis report for Claude to submit to Zoho Projects. Returns bug records with pre-computed field values (title, description, severity, custom fields) plus step-by-step instructions for using the Apptics MCP's Zoho Projects tools.",
+    description: "Prepare structured bug data from a crash analysis report for submission to Zoho Projects. Returns bug records with pre-computed field values (title, description, severity, custom fields). Use the Apptics MCP's list_bugs to check for duplicates, then create_bug or update_bug for each entry.",
     inputSchema: z2.object({
       reportPath: z2.string().optional().describe("Path to the report JSON file. Defaults to latest.json in AnalyzedReportsFolder."),
       unfixedOnly: z2.boolean().optional().describe("When true, only include crash groups NOT marked as fixed."),
@@ -2701,7 +2701,6 @@ server.registerTool(
       totalGroups: z2.number(),
       bugs: z2.array(z2.any()).optional(),
       projectConfig: z2.any().optional(),
-      instructions: z2.string().optional(),
       dryRun: z2.boolean().optional()
     })
   },
@@ -2727,7 +2726,7 @@ server.registerTool(
       }));
       const result2 = { reportDate, reportPath: resolvedPath, totalGroups: groups.length, dryRun: true, bugs: bugs2, projectConfig };
       return {
-        content: [{ type: "text", text: JSON.stringify(result2, null, 2) }],
+        content: [{ type: "text", text: JSON.stringify(result2) }],
         structuredContent: result2
       };
     }
@@ -2752,19 +2751,10 @@ server.registerTool(
       reportPath: resolvedPath,
       totalGroups: groups.length,
       bugs,
-      projectConfig,
-      instructions: `For each bug:
-1) Call list_bugs with portal_id="${projectConfig.portalId}" and project_id="${projectConfig.projectId}" to search for existing bugs with the same searchPrefix in the title.
-2) If no existing bug is found, call create_bug with:
-   - title: bug.title
-   - description: bug.description
-   - severity_id: bug.severityId
-   - status_id: bug.statusId
-   - custom_fields: { "${projectConfig.appVersionField}": bug.appVersion, "${projectConfig.occurrencesField}": bug.occurrences }
-3) If an existing bug is found, call update_bug and add bug.occurrences to the existing value in the "${projectConfig.occurrencesField}" field.`
+      projectConfig
     };
     return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      content: [{ type: "text", text: JSON.stringify(result) }],
       structuredContent: result
     };
   }
@@ -2772,7 +2762,7 @@ server.registerTool(
 server.registerTool(
   "cleanup_all",
   {
-    description: "Remove all crash files and reports in one go. Cleans .crash and .ips files from XCodeCrashLogs, AppticsCrashLogs, OtherCrashLogs, and SymbolicatedCrashLogsFolder. Also cleans .json/.csv report files from AnalyzedReportsFolder and processed manifests from StateMaintenance. Use dryRun to preview, keepReports to preserve report files, keepManifests to preserve processed manifests.",
+    description: "Remove all crash files and reports in one go. Cleans crash files from all crash log folders and report files from AnalyzedReportsFolder. Use dryRun to preview.",
     inputSchema: z2.object({
       dryRun: z2.boolean().optional().describe("When true, list what would be deleted without actually deleting."),
       keepReports: z2.boolean().optional().describe("When true, preserve report files in AnalyzedReportsFolder (only clean crash files)."),
@@ -2799,7 +2789,7 @@ server.registerTool(
       keepManifests: input.keepManifests
     });
     return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      content: [{ type: "text", text: JSON.stringify(result) }],
       structuredContent: result
     };
   }

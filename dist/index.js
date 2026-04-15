@@ -395,7 +395,7 @@ function analyzeDirectory(crashDir, fixStatuses, manifest) {
     }
     const group = groups.get(sig);
     group.count++;
-    group.affected_files.push(file);
+    if (group.affected_files.length < 5) group.affected_files.push(file);
     increment(group.devices, meta.hardwareModel);
     increment(group.ios_versions, meta.osVersion);
     increment(group.app_versions, meta.appVersion);
