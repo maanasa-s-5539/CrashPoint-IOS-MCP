@@ -151,7 +151,7 @@ set +e
   --allowedTools "$ALLOWED_TOOLS" \
   --output-format stream-json \
   --verbose \
-  --max-turns 50 \
+  --max-turns 200 \
   2>>"$LOG_FILE" | jq --unbuffered -R -r '
     try (fromjson | select(.type == "assistant")
     | .message.content[]
