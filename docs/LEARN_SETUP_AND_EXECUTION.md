@@ -6,11 +6,10 @@
 
 ## 1. Who Is This For & What You'll Learn
 
-This guide is for **Developers** and **QA engineers** who need to:
+This guide is for **Developers** and **QA** who need to:
 
 - Understand what the CrashPoint iOS MCP server actually does when it runs.
 - Set up the workspace from scratch for the first time.
-- Understand how the configuration layers work and how to override individual values.
 - Run the automated bash pipeline from the Terminal and know what each step is doing.
 - Configure Claude CLI permissions so the fully automated (non-interactive) pipeline does not pause and hang waiting for human input.
 - Verify that the full end-to-end flow is working correctly.
