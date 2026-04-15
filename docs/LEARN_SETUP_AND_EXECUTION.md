@@ -110,17 +110,6 @@ The automated pipeline script lives at `ParentHolderFolder/Automation/run_crash_
 
 > **First run — automatic workspace setup:** On the first run, the bash pipeline script (or the `run_full_pipeline` MCP tool) automatically initializes the workspace — creating the required folder structure under `ParentHolderFolder`. No manual `setup_folders` step is needed.
 >
-> **Exception — symlinks:** Auto-setup does **not** create symlinks to your dSYM, app, or branch directories. If you need those symlinks (`dSYM_File`, `app_File`, `CurrentMasterLiveBranch`, `CurrentDevBranch`), run `setup_folders` manually with the relevant flags:
->
-> ```bash
-> CRASH_ANALYSIS_PARENT=/path/to/ParentHolderFolder \
->   node dist/cli.js setup \
->   --master-branch /path/to/master \
->   --dev-branch /path/to/dev \
->   --dsym /path/to/MyApp.app.dSYM \
->   --app /path/to/MyApp.app
-> ```
->
 > Re-running `setup_folders` is safe — it never overwrites existing files. To update automation files to the latest version, run `setup_folders` with `force=true`.
 
 **Run it manually from Terminal:**
@@ -137,7 +126,7 @@ tail -f /path/to/ParentHolderFolder/Automation/ScheduledRunLogs/pipeline_*.log
 
 Each run saves a timestamped log at `Automation/ScheduledRunLogs/pipeline_YYYY-MM-DD_HH-MM-SS.log`.
 
-> **⚠️ Warning:** If Phase 1 fails, Phase 2 is skipped entirely. Check the log for the specific error.
+> **Warning:** If Phase 1 fails, Phase 2 is skipped entirely. Check the log for the specific error.
 
 ---
 
@@ -161,7 +150,7 @@ launchctl list | grep crashpipeline
 
 launchd stdout/stderr go to `/tmp/crashpipeline_stdout.log` and `/tmp/crashpipeline_stderr.log`.
 
-> **⚠️ Warning:** If the Mac is asleep at the scheduled time, the job runs when the Mac next wakes. To guarantee on-time execution:
+> **Warning:** If the Mac is asleep at the scheduled time, the job runs when the Mac next wakes. To guarantee on-time execution:
 > ```bash
 > sudo pmset repeat wakeorpoweron MTWRFSU HH:MM:00
 > ```
