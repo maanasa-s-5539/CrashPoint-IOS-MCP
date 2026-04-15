@@ -36,6 +36,7 @@ export function setupAutomationFiles({
   if (force || !fs.existsSync(shDestPath)) {
     let shContent = fs.readFileSync(shTemplatePath, "utf-8");
     shContent = shContent.replace(/<REPLACE_WITH_PATH_TO_PARENT_HOLDER_FOLDER>/g, parentDir);
+    shContent = shContent.replace(/<REPLACE_WITH_CRASHPOINT_PACKAGE_ROOT>/g, packageRoot);
     fs.writeFileSync(shDestPath, shContent, "utf-8");
     fs.chmodSync(shDestPath, 0o755);
     scaffolded.push("run_crash_pipeline.sh");

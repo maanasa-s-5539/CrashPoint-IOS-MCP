@@ -15,6 +15,22 @@ if ! node -e "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'))" "
   echo "ERROR: Config file contains invalid JSON"; exit 1
 fi
 
+# ─── AUTO-SETUP ────────────────────────────────────────────────────────────────
+# Mirror the same check used in run_full_pipeline / run_basic_pipeline MCP tools:
+# if StateMaintenance/ or Automation/ are missing, bootstrap via the CLI setup command.
+CRASHPOINT_PACKAGE_ROOT="<REPLACE_WITH_CRASHPOINT_PACKAGE_ROOT>"
+STATE_DIR="$PARENT_HOLDER_FOLDER/StateMaintenance"
+AUTO_DIR="$PARENT_HOLDER_FOLDER/Automation"
+if [ ! -d "$STATE_DIR" ] || [ ! -d "$AUTO_DIR" ]; then
+  echo "Auto-setup: workspace not fully initialized — running setup..."
+  if CRASH_ANALYSIS_PARENT="$PARENT_HOLDER_FOLDER" \
+      node "$CRASHPOINT_PACKAGE_ROOT/dist/cli.js" setup; then
+    echo "Auto-setup complete."
+  else
+    echo "ERROR: Auto-setup failed — run 'node $CRASHPOINT_PACKAGE_ROOT/dist/cli.js setup' manually to diagnose."; exit 1
+  fi
+fi
+
 # Read config values
 APP_DISPLAY_NAME=$(node -e "console.log(require(process.argv[1]).APP_DISPLAY_NAME || '')" "$CONFIG_JSON")
 APPTICS_MCP_NAME=$(node -e "console.log(require(process.argv[1]).APPTICS_MCP_NAME || '')" "$CONFIG_JSON")
