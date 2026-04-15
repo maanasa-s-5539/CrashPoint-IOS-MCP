@@ -42,7 +42,7 @@ If the pipeline result shows crash groups were found (check analyze.crashGroups 
 
 ## Step 5: Create/Update Bugs in Zoho Projects
 If the pipeline result has nextSteps.reportToProjects=true, use the crashpoint-ios MCP server to call `prepare_project_bugs` to get structured bug data. Then use the {{APPTICS_MCP_NAME}} MCP server's Zoho Projects tools to create or update bugs:
-- If an issue with the same crash signature and app version number does not exist already, create a new issue, setting the App Version and Number of Occurrences field values.
-- If an issue with the same crash signature exists already, update the existing crash's number of occurrences. Take the existing value in the number of occurrences field, add the new number of occurrences from this run, and set the total as the new value.
+- If an issue with the same crash signature and app version number does not exist already, create a new issue. When calling `create_bug`, pass the custom fields using the field names from `projectConfig`: set the field named `projectConfig.appVersionField` to the bug's `appVersion` value (from the `prepare_project_bugs` result), and set the field named `projectConfig.occurrencesField` to the bug's `occurrences` value (from the `prepare_project_bugs` result).
+- If an issue with the same crash signature exists already, update the existing crash's number of occurrences. Take the existing value in the field named `projectConfig.occurrencesField`, add the new number of occurrences from the `prepare_project_bugs` result (`bugs[].occurrences`), and set the total as the new value.
 
 After completing all steps, output a summary of what was processed including the reportPath from the pipeline result. Phase 2 (crash cause analysis) will continue in a separate invocation.
