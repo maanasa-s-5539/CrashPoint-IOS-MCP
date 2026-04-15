@@ -10,20 +10,24 @@ You are running an automated daily crash analysis pipeline (Phase 1: Data Collec
 
 ## Step 1 & 2: Download Crashes from Apptics and Save Locally
 
-Use the {{APPTICS_MCP_NAME}} MCP server to fetch crash data.
+Use the {{APPTICS_MCP_NAME}} MCP server to fetch crash data, and the crashpoint-ios MCP server to download and save it.
 
 1. Read `crashpoint.config.json` from the working directory to get CRASH_DATE_OFFSET, CRASH_NUM_DAYS, CRASH_VERSIONS, APPTICS_PORTAL_ID, and APPTICS_PROJECT_ID.
 2. Compute the date range using values from the config: endDate = today minus CRASH_DATE_OFFSET days (default 4 if not set), startDate = endDate minus CRASH_NUM_DAYS + 1 (default 1 if not set). Format dates as DD-MM-YYYY for the Apptics API.
 3. Call `ZohoApptics_getCrashList` with:
    - headers: zsoid = APPTICS_PORTAL_ID, projectid = APPTICS_PROJECT_ID
    - query_params: startdate, enddate (DD-MM-YYYY), platform = "iOS", mode = 1, with app version = CRASH_VERSIONS.
-4. For each crash entry returned, one at a time:
-   a. Call `ZohoApptics_getCrashSummaryWithUniqueMessageId` with:
-      - headers: zsoid = APPTICS_PORTAL_ID, projectid = APPTICS_PROJECT_ID
-      - path_variables: uniqueMessageID = the crash's UniqueMessageID
-      - query_params: startdate, enddate (DD-MM-YYYY), mode = 1
-   b. **Immediately** call `save_apptics_crashes` with `clearExisting=false` (except for the first crash, where `clearExisting=true`) passing ONLY this single crash entry, with the full Message field intact. Do NOT accumulate crash entries — save each one right after fetching to avoid truncation.
-5. The Message field from getCrashSummaryWithUniqueMessageId contains the complete Apple-style crash log with stack traces. It is CRITICAL that this field is passed to save_apptics_crashes in its entirety — do NOT summarize, truncate, or omit any part of it.
+4. Call `fetch_and_save_apptics_crashes` from the crashpoint-ios MCP server ONCE, passing:
+   - crashes: the full crash list array from step 3
+   - appticsBaseUrl: the base URL of the Apptics MCP server (from config or default "https://apptics.zoho.com")
+   - appticsPortalId: APPTICS_PORTAL_ID from config
+   - appticsProjectId: APPTICS_PROJECT_ID from config
+   - startDate, endDate: the computed date range in DD-MM-YYYY format
+   - concurrency: 10
+   - clearExisting: true
+   - accessToken: the OAuth access token if available from the Apptics MCP server authentication
+   This fetches all crash details in parallel (up to 10 at a time) and writes each .crash file sequentially on the server side. No content truncation is possible since writing happens entirely server-side.
+5. Verify the result: check that `saved` equals the total number of crashes from step 3. If `failed` > 0, log a warning but continue.
 
 ## Step 3: Run Local Pipeline (Export + Symbolicate + Analyze)
 Use the crashpoint-ios MCP server. Call `run_full_pipeline` with notifyCliq=true and reportToProjects=true, and pass `expectedCrashCount` set to the total number of crash entries returned by `getCrashList` (so the pipeline can warn if any crash files were lost during save). The pipeline will export local crash logs (including Xcode crashes), symbolicate them, and analyze all crash files including the Apptics crashes saved in the previous step.
