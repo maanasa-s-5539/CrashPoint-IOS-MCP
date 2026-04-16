@@ -99,6 +99,6 @@
   },
   "homepage": "https://github.com/maanasa-s-5539/CrashPoint-IOS-MCP#readme",
   "overrides": {
-    "hono": ">=4.12.12"
+    "hono": ">=4.12.14"
   }
 }
