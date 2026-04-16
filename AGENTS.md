@@ -98,7 +98,7 @@ npm run build       # Must produce dist/ without errors
 
 ---
 
-## 10. Apptics MCP (External — Zoho)
+##  Apptics MCP (External — Zoho)
 
 The Zoho Apptics MCP server provides crash-reporting tools (`getCrashList`, `getCrashSummaryWithUniqueMessageId`) and Zoho Projects tools (fetch issues, create/update issues). These are **external, read-only dependencies** from this project's perspective:
 
