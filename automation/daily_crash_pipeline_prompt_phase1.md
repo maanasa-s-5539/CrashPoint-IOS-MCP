@@ -23,7 +23,7 @@ Use the {{APPTICS_MCP_NAME}} MCP server to fetch crash data, and the crashpoint-
 2. Compute the date range using values from the config: endDate = today minus CRASH_DATE_OFFSET days (default 4 if not set), startDate = endDate minus CRASH_NUM_DAYS + 1 (default 1 if not set). Format dates as DD-MM-YYYY for the Apptics API.
 3. Call `ZohoApptics_getCrashList` with:
    - headers: zsoid = APPTICS_PORTAL_ID, projectid = APPTICS_PROJECT_ID
-   - query_params: startdate, enddate (DD-MM-YYYY), platform = "iOS", mode = 1, with app version = CRASH_VERSIONS.
+   - query_params: startdate, enddate (DD-MM-YYYY), platform = "iOS", mode = 1.
 4. Clear existing Apptics crash files by calling `save_apptics_crashes` on the crashpoint-ios MCP server with `crashes` set to an empty array `[]` and `clearExisting: true`. This ensures a clean slate. **Do NOT pass any crash data here** — the empty array is intentional.
 5. For each crash entry from step 3, process ONE AT A TIME in sequence:
    a. **[VERSION CHECK — MANDATORY]** Check the crash's `AppVersion` field against the `CRASH_VERSIONS` value read from the config in step 1. If the crash's `AppVersion` does **not** match `CRASH_VERSIONS`, **skip this crash entirely** — do NOT call `getCrashSummaryWithUniqueMessageId` and do NOT save it. Move on to the next crash.
