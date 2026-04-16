@@ -970,6 +970,7 @@ server.registerTool(
   {
     description:
       "Save Apptics crash data as .crash files in MainCrashLogsFolder/AppticsCrashLogs. Call before run_full_pipeline to include Apptics crashes alongside Xcode crashes. " +
+      "VERSION FILTERING: Only save crashes whose AppVersion matches the CRASH_VERSIONS value in the config file. Crashes from other versions must be skipped — do NOT call getCrashSummaryWithUniqueMessageId for them and do NOT pass them here. " +
       "IMPORTANT: Each crash entry MUST include the Message field containing the full crash report text from getCrashSummaryWithUniqueMessageId. " +
       "Entries without Message will be rejected (skipped) when clearExisting is false. " +
       "When clearExisting is true with a non-empty crashes array, ALL entries must have a Message field or the entire call is rejected with an error. " +
@@ -995,7 +996,7 @@ server.registerTool(
         BatteryStatus: z.string().optional().describe("Battery status at crash time"),
         Edge: z.string().optional().describe("Edge/connectivity info"),
         Orientation: z.string().optional().describe("Device orientation"),
-      })).describe("Array of crash entries fetched from the Apptics Zoho MCP. Each entry MUST include the Message field from getCrashSummaryWithUniqueMessageId."),
+      })).describe("Array of version-matched crash entries (AppVersion matches CRASH_VERSIONS config) fetched from the Apptics Zoho MCP. Each entry MUST include the Message field from getCrashSummaryWithUniqueMessageId. Crashes from other versions must not be included."),
       clearExisting: z.boolean().optional().describe("When true (default), remove all existing .crash files from AppticsCrashLogs/ before saving new ones. Use clearExisting:true with crashes:[] to clear the directory only."),
     }),
     outputSchema: z.object({
