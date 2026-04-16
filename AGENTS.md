@@ -95,3 +95,13 @@ npm run build       # Must produce dist/ without errors
 - Do not introduce circular imports between core/, state/, and root src/ modules.
 - Do not add browser-specific APIs -- this is a Node-only project.
 - Do not remove or alter the automation/ shell scripts without understanding their CI role.
+
+---
+
+## 10. Apptics MCP (External — Zoho)
+
+The Zoho Apptics MCP server provides crash-reporting tools (`getCrashList`, `getCrashSummaryWithUniqueMessageId`) and Zoho Projects tools (fetch issues, create/update issues). These are **external, read-only dependencies** from this project's perspective:
+
+- **Connection**: Only accessible via MCP-compatible AI clients (Claude, Cursor, VSCode) through Zoho's own MCP authentication flow.
+- **No direct access from this server**: CrashPoint-IOS-MCP must **never** make HTTP requests or tool calls to the Apptics MCP. No auth token or authorization is available for external invocation.
+- Treat Apptics MCP data as upstream context that a human or AI client may provide, not as a callable service.
