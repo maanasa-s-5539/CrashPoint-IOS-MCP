@@ -2147,15 +2147,38 @@ function formatDateDDMMYYYY(d) {
 function stripBuildNumber(version) {
   return version.replace(/\s*\(.*?\)/, "").trim();
 }
-function getPrimaryAppVersion(group, fallbackVersions) {
-  const versions = group.app_versions;
-  if (versions && Object.keys(versions).length > 0) {
-    const sorted = Object.entries(versions).sort((a, b) => b[1] - a[1]);
-    return stripBuildNumber(sorted[0][0]);
+function getPrimaryAppVersion(group, configuredVersions) {
+  const nonEmptyVersionEntries = Object.entries(group.app_versions ?? {}).filter(
+    ([k]) => k.trim() !== ""
+  );
+  if (configuredVersions) {
+    const candidates = configuredVersions.split(",").map((v) => v.trim()).filter(Boolean);
+    if (candidates.length === 1) {
+      return stripBuildNumber(candidates[0]);
+    }
+    if (candidates.length > 1 && nonEmptyVersionEntries.length > 0) {
+      const crashVersionCounts = {};
+      for (const [rawVer, count] of nonEmptyVersionEntries) {
+        const stripped = stripBuildNumber(rawVer);
+        crashVersionCounts[stripped] = (crashVersionCounts[stripped] ?? 0) + count;
+      }
+      let bestCandidate = candidates[0];
+      let bestCount = 0;
+      for (const candidate of candidates) {
+        const stripped = stripBuildNumber(candidate);
+        const count = crashVersionCounts[stripped] ?? 0;
+        if (count > bestCount) {
+          bestCount = count;
+          bestCandidate = candidate;
+        }
+      }
+      return stripBuildNumber(bestCandidate);
+    }
+    return stripBuildNumber(candidates[0]);
   }
-  if (fallbackVersions) {
-    const first = fallbackVersions.split(",")[0]?.trim();
-    return first ? stripBuildNumber(first) : void 0;
+  if (nonEmptyVersionEntries.length > 0) {
+    const sorted = nonEmptyVersionEntries.sort((a, b) => b[1] - a[1]);
+    return stripBuildNumber(sorted[0][0]);
   }
   return void 0;
 }

@@ -899,16 +899,58 @@ function stripBuildNumber(version: string): string {
   return version.replace(/\s*\(.*?\)/, "").trim();
 }
 
-function getPrimaryAppVersion(group: CrashGroup, fallbackVersions?: string): string | undefined {
-  const versions = group.app_versions;
-  if (versions && Object.keys(versions).length > 0) {
-    const sorted = Object.entries(versions).sort((a, b) => b[1] - a[1]);
+function getPrimaryAppVersion(group: CrashGroup, configuredVersions?: string): string | undefined {
+  // Filter out empty-string keys from crash-file data — these appear when crash
+  // files lack a "Version:" header line and must never influence the result.
+  const nonEmptyVersionEntries = Object.entries(group.app_versions ?? {}).filter(
+    ([k]) => k.trim() !== ""
+  );
+
+  // CRASH_VERSIONS from crashpoint.config.json is the authoritative source.
+  if (configuredVersions) {
+    const candidates = configuredVersions
+      .split(",")
+      .map((v) => v.trim())
+      .filter(Boolean);
+
+    if (candidates.length === 1) {
+      // Only one configured version — use it directly.
+      return stripBuildNumber(candidates[0]);
+    }
+
+    if (candidates.length > 1 && nonEmptyVersionEntries.length > 0) {
+      // Multiple configured versions: pick the one that appears most often in
+      // the crash data to select the most relevant version.
+      const crashVersionCounts: Record<string, number> = {};
+      for (const [rawVer, count] of nonEmptyVersionEntries) {
+        const stripped = stripBuildNumber(rawVer);
+        crashVersionCounts[stripped] = (crashVersionCounts[stripped] ?? 0) + count;
+      }
+
+      let bestCandidate = candidates[0];
+      let bestCount = 0;
+      for (const candidate of candidates) {
+        const stripped = stripBuildNumber(candidate);
+        const count = crashVersionCounts[stripped] ?? 0;
+        if (count > bestCount) {
+          bestCount = count;
+          bestCandidate = candidate;
+        }
+      }
+      return stripBuildNumber(bestCandidate);
+    }
+
+    // Multiple configured versions but no usable crash data to disambiguate —
+    // use the first configured version.
+    return stripBuildNumber(candidates[0]);
+  }
+
+  // No CRASH_VERSIONS configured: derive from the crash files themselves.
+  if (nonEmptyVersionEntries.length > 0) {
+    const sorted = nonEmptyVersionEntries.sort((a, b) => b[1] - a[1]);
     return stripBuildNumber(sorted[0][0]);
   }
-  if (fallbackVersions) {
-    const first = fallbackVersions.split(",")[0]?.trim();
-    return first ? stripBuildNumber(first) : undefined;
-  }
+
   return undefined;
 }
 
