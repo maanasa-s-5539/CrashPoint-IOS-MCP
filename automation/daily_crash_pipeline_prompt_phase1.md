@@ -5,6 +5,19 @@ effort: medium
 
 You are running an automated daily crash analysis pipeline (Phase 1: Data Collection & Reporting). Execute these steps in order, stopping if any step fails:
 
+## Why This Server Cannot Fetch Apptics Crashes Itself
+
+The `crashpoint-ios` MCP server has **no Apptics credentials** and is explicitly **forbidden from calling the Apptics MCP directly** (see `AGENTS.md` — "No direct access from this server: CrashPoint-IOS-MCP must **never** make HTTP requests or tool calls to the Apptics MCP"). That is why this prompt orchestrates the Apptics fetch on the client side:
+
+```
+Apptics MCP: getCrashList
+  → (filter by CRASH_VERSIONS, for each match) Apptics MCP: getCrashSummaryWithUniqueMessageId
+  → crashpoint-ios MCP: save_apptics_crashes (with enriched crashes including Message field)
+  → crashpoint-ios MCP: run_full_pipeline / run_basic_pipeline
+```
+
+This same pattern must be followed in **any** interactive client (Claude Desktop, Cursor, VSCode, etc.) when a user asks to "run the full pipeline" — the client must always perform the Apptics fetch and call `save_apptics_crashes` before invoking `run_full_pipeline` or `run_basic_pipeline`. Skipping the fetch steps will result in zero Apptics crashes being processed even though the pipeline reports success.
+
 ## Rules
 - **Do NOT create any files** in the working directory or ParentHolderFolder — no temporary files, no `.jq` files, no `.sh` scripts, no helper files of any kind. Only use the MCP tools provided; do not write files directly to disk unless an MCP tool does it for you.
 
