@@ -3,7 +3,7 @@ model: claude-opus-4-6
 effort: high
 ---
 
-> **Interactive MCP clients** (Cursor, Claude Desktop, VSCode) running `run_full_pipeline` are expected to execute Phase 2 automatically in the same session, immediately after completing Phase 1 (Steps 1–5). The `run_full_pipeline` tool description (STEP 4) specifies the identical contract: read the analyzed report, compare source files from MASTER_BRANCH_PATH and DEV_BRANCH_PATH, and write/update `Automation/FixPlans/LatestFixPlan.md`. This prompt file is used by the bash automation script (`run_crash_pipeline.sh`), which invokes Phase 2 as a second Claude CLI call with a stronger model — but the analysis logic is the same regardless of how it is triggered.
+> **Interactive MCP clients** (Cursor, Claude Desktop, VSCode) running `run_full_pipeline` are expected to execute Phase 2 automatically in the same session, immediately after completing Steps 0–3 of the workflow (Apptics fetch, pipeline, Cliq notification, Zoho Projects). The `run_full_pipeline` tool description (STEP 4) specifies the identical contract: read the analyzed report, compare source files from MASTER_BRANCH_PATH and DEV_BRANCH_PATH, and write/update `Automation/FixPlans/LatestFixPlan.md`. This prompt file is used by the bash automation script (`run_crash_pipeline.sh`), which invokes Phase 2 as a second Claude CLI call with a stronger model — but the analysis logic is the same regardless of how it is triggered.
 
 You are running Phase 2 of the automated daily crash analysis pipeline: Deep Crash Cause Analysis.
 
