@@ -605,7 +605,7 @@ server.registerTool(
   "run_basic_pipeline",
   {
     description:
-      "Run the basic crash analysis pipeline: export → symbolicate → analyze. Paths are auto-configured from env vars. Automatically runs setup_folders on first invocation if the workspace hasn't been initialized yet.\n\n",
+      "Run the basic crash analysis pipeline: export → symbolicate → analyze. Paths are auto-configured from env vars. Automatically runs setup_folders on first invocation if the workspace hasn't been initialized yet.",
     inputSchema: z.object({
       versions: z.string().optional().describe("Comma-separated version filter for export"),
       numDays: z.number().optional().describe("Number of days to process (1–180). End date = today minus CRASH_DATE_OFFSET (default 4 from config), start date = end date minus numDays + 1. Overrides CRASH_NUM_DAYS in config. Default: 1."),
