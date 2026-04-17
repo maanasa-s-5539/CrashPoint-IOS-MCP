@@ -605,7 +605,17 @@ server.registerTool(
   "run_basic_pipeline",
   {
     description:
-      "Run the basic crash analysis pipeline: export → symbolicate → analyze. Paths are auto-configured from env vars. Automatically runs setup_folders on first invocation if the workspace hasn't been initialized yet.",
+      "Run the basic crash analysis pipeline: export → symbolicate → analyze. Paths are auto-configured from env vars. Automatically runs setup_folders on first invocation if the workspace hasn't been initialized yet.\n\n" +
+      "⚠️  APPTICS PREREQUISITE — READ BEFORE CALLING THIS TOOL:\n" +
+      "CrashPoint-IOS-MCP has NO Apptics credentials and is explicitly forbidden from calling the Apptics MCP directly (see AGENTS.md). " +
+      "The MCP CLIENT must orchestrate the Apptics fetch before invoking this tool. Required steps:\n" +
+      "  1. Call the Apptics MCP's getCrashList for the configured portal/project/app and date range.\n" +
+      "  2. Filter entries whose AppVersion matches the CRASH_VERSIONS config value.\n" +
+      "  3. For each matching crash, call Apptics getCrashSummaryWithUniqueMessageId and attach the returned stack-trace text as the Message field.\n" +
+      "  4. Call save_apptics_crashes with clearExisting: true and the enriched crash array.\n" +
+      "  5. Only then call run_basic_pipeline.\n" +
+      "If you skip steps 1–4, the pipeline will succeed but process zero Apptics crashes because AppticsCrashLogs/ will be empty. " +
+      "Note: run_basic_pipeline has no skipDownload flag — if you want Apptics crashes included, you must run save_apptics_crashes first.",
     inputSchema: z.object({
       versions: z.string().optional().describe("Comma-separated version filter for export"),
       numDays: z.number().optional().describe("Number of days to process (1–180). End date = today minus CRASH_DATE_OFFSET (default 4 from config), start date = end date minus numDays + 1. Overrides CRASH_NUM_DAYS in config. Default: 1."),
@@ -1171,7 +1181,17 @@ server.registerTool(
   "run_full_pipeline",
   {
     description:
-      "Run the full CrashPoint pipeline: export → symbolicate → analyze. Returns results and a nextSteps object. Dates are auto-computed from config. Automatically runs setup_folders on first invocation.",
+      "Run the full CrashPoint pipeline: export → symbolicate → analyze. Returns results and a nextSteps object. Dates are auto-computed from config. Automatically runs setup_folders on first invocation.\n\n" +
+      "⚠️  APPTICS PREREQUISITE — READ BEFORE CALLING THIS TOOL:\n" +
+      "CrashPoint-IOS-MCP has NO Apptics credentials and is explicitly forbidden from calling the Apptics MCP directly (see AGENTS.md). " +
+      "The MCP CLIENT must orchestrate the Apptics fetch before invoking this tool. Required steps:\n" +
+      "  1. Call the Apptics MCP's getCrashList for the configured portal/project/app and date range.\n" +
+      "  2. Filter entries whose AppVersion matches the CRASH_VERSIONS config value.\n" +
+      "  3. For each matching crash, call Apptics getCrashSummaryWithUniqueMessageId and attach the returned stack-trace text as the Message field.\n" +
+      "  4. Call save_apptics_crashes with clearExisting: true and the enriched crash array.\n" +
+      "  5. Only then call run_full_pipeline.\n" +
+      "If you skip steps 1–4, the pipeline will succeed but process zero Apptics crashes because AppticsCrashLogs/ will be empty. " +
+      "If you intentionally want to skip the Apptics download (e.g. only process Xcode crashes), pass skipDownload: true — otherwise omitting the save step is a silent error.",
     inputSchema: z.object({
       notifyCliq: z.boolean().optional().describe("When true, send a notification to Zoho Cliq after analysis. Default false."),
       reportToProjects: z.boolean().optional().describe("When true, create/update Zoho Projects bugs after analysis. Default false."),
