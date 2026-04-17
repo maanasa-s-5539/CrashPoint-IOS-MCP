@@ -606,7 +606,7 @@ server.registerTool(
   {
     description:
       "Run the basic crash analysis pipeline: export → symbolicate → analyze. Paths are auto-configured from env vars. Automatically runs setup_folders on first invocation if the workspace hasn't been initialized yet.\n\n" +
-      "⚠️  APPTICS PREREQUISITE — READ BEFORE CALLING THIS TOOL:\n" +
+      "APPTICS PREREQUISITE — READ BEFORE CALLING THIS TOOL:\n" +
       "CrashPoint-IOS-MCP has NO Apptics credentials and is explicitly forbidden from calling the Apptics MCP directly (see AGENTS.md). " +
       "The MCP CLIENT must orchestrate the Apptics fetch before invoking this tool. Required steps:\n" +
       "  1. Call the Apptics MCP's getCrashList for the configured portal/project/app and date range.\n" +
