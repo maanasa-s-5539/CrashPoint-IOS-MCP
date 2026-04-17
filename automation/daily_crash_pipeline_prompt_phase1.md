@@ -13,10 +13,10 @@ The `crashpoint-ios` MCP server has **no Apptics credentials** and is explicitly
 Apptics MCP: getCrashList
   → (filter by CRASH_VERSIONS, for each match) Apptics MCP: getCrashSummaryWithUniqueMessageId
   → crashpoint-ios MCP: save_apptics_crashes (with enriched crashes including Message field)
-  → crashpoint-ios MCP: run_full_pipeline / run_basic_pipeline
+  → crashpoint-ios MCP: run_full_pipeline
 ```
 
-This same pattern must be followed in **any** interactive client (Claude Desktop, Cursor, VSCode, etc.) when a user asks to "run the full pipeline" — the client must always perform the Apptics fetch and call `save_apptics_crashes` before invoking `run_full_pipeline` or `run_basic_pipeline`. Skipping the fetch steps will result in zero Apptics crashes being processed even though the pipeline reports success.
+This same pattern must be followed in **any** interactive client (Claude Desktop, Cursor, VSCode, etc.) when a user asks to "run the full pipeline" — the client must always perform the Apptics fetch and call `save_apptics_crashes` before invoking `run_full_pipeline`. Skipping the fetch steps will result in zero Apptics crashes being processed even though the pipeline reports success.
 
 ## Rules
 - **Do NOT create any files** in the working directory or ParentHolderFolder — no temporary files, no `.jq` files, no `.sh` scripts, no helper files of any kind. Only use the MCP tools provided; do not write files directly to disk unless an MCP tool does it for you.
@@ -59,4 +59,4 @@ If the pipeline result has nextSteps.reportToProjects=true, use the crashpoint-i
 - If an issue with the same crash signature and app version number does not exist already, create a new issue. When calling `create_bug`, pass the custom fields using the field names from `projectConfig`: set the field named `projectConfig.appVersionField` to the bug's `appVersion` value (from the `prepare_project_bugs` result), and set the field named `projectConfig.occurrencesField` to the bug's `occurrences` value (from the `prepare_project_bugs` result).
 - If an issue with the same crash signature exists already, update the existing crash's number of occurrences. Take the existing value in the field named `projectConfig.occurrencesField`, add the new number of occurrences from the `prepare_project_bugs` result (`bugs[].occurrences`), and set the total as the new value.
 
-After completing all steps, output a summary of what was processed including the reportPath from the pipeline result. Phase 2 (crash cause analysis) will continue in a separate invocation.
+After completing all steps, output a summary of what was processed including the reportPath from the pipeline result. Phase 2 (crash cause analysis) continues in the same session — interactive MCP clients running `run_full_pipeline` will proceed with Phase 2 automatically as described in the tool description.
