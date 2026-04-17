@@ -129,17 +129,24 @@ When both the JSON config file and environment variables provide the same key, *
 | `ZOHO_BUG_APP_VERSION` | Custom field name for app version on bug items |
 | `ZOHO_BUG_NUM_OF_OCCURRENCES` | Custom field name for occurrence count on bug items |
 
-### Cursor / Claude Desktop
+### MCP Client Configuration
 
-Add the following configuration to your MCP client:
+All MCP clients use the same JSON block — only the config file path differs.
+
+**Block to add:**
 
 ```json
 {
   "mcpServers": {
     "crashpoint-ios": {
       "command": "npx",
-      "args": ["-p", "github:maanasa-s-5539/CrashPoint-IOS-MCP", "crashpoint-ios-core"],
+      "args": [
+        "-p",
+        "github:maanasa-s-5539/CrashPoint-IOS-MCP",
+        "crashpoint-ios-core"
+      ],
       "env": {
+        "CRASH_INPUT_DIR": "/path/to/Xcode/Products/com.example.myapp/Crashes/Points",
         "CRASH_ANALYSIS_PARENT": "/path/to/ParentHolderFolder"
       }
     }
@@ -147,11 +154,21 @@ Add the following configuration to your MCP client:
 }
 ```
 
+**Where to put it:**
+
+| Client | Config file | Where in the file |
+|---|---|---|
+| Claude Desktop (macOS) | `~/Library/Application Support/Claude/claude_desktop_config.json` | Top-level `mcpServers` object |
+| Claude CLI (Claude Code) | `~/.claude.json` | Top-level `mcpServers` object (not inside `projects`) so it is visible from any folder |
+| Cursor | `.cursor/mcp.json` in your project root | Top-level `mcpServers` object |
+
+If the chosen file already contains an `mcpServers` object, add the `"crashpoint-ios": { ... }` entry inside the existing object instead of duplicating the key.
+
+Replace `/path/to/...` with real absolute paths on your machine. `CRASH_ANALYSIS_PARENT` is required; `CRASH_INPUT_DIR` is optional and only needed when overriding the default Xcode crash input location.
+
 All other values (paths, app name, etc.) are read automatically from `crashpoint.config.json`.
 
-**Config file paths:**
-- **Claude Desktop (macOS):** `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Cursor:** `.cursor/mcp.json` in your project root
+Restart Claude Desktop, Cursor, or start a new `claude` CLI session after saving the file.
 
 ---
 
