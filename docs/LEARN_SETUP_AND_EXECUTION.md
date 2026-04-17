@@ -127,15 +127,22 @@ After the setup command completes, the generated script at `ParentHolderFolder/A
 
 ## 5. Register the MCP Server with Your AI Client
 
-**Claude Desktop (macOS)** — edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
+All clients use the same JSON configuration block — only the target file differs.
+
+**JSON block to add:**
 
 ```json
 {
   "mcpServers": {
     "crashpoint-ios": {
       "command": "npx",
-      "args": ["-p", "github:maanasa-s-5539/CrashPoint-IOS-MCP", "crashpoint-ios-core"],
+      "args": [
+        "-p",
+        "github:maanasa-s-5539/CrashPoint-IOS-MCP",
+        "crashpoint-ios-core"
+      ],
       "env": {
+        "CRASH_INPUT_DIR": "/path/to/Xcode/Products/com.example.myapp/Crashes/Points",
         "CRASH_ANALYSIS_PARENT": "/path/to/ParentHolderFolder"
       }
     }
@@ -143,7 +150,20 @@ After the setup command completes, the generated script at `ParentHolderFolder/A
 }
 ```
 
-**Cursor** — add the same block to `.cursor/mcp.json` in your project root.
+**Target files:**
+
+- **Claude Desktop (macOS):** `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Claude CLI (Claude Code):** `~/.claude.json` — place the `mcpServers` object at the **top level** of the file (same indentation level as other root keys like `projects`). This makes `crashpoint-ios` visible from any working directory. Do NOT nest it inside a path entry under `projects`.
+- **Cursor:** `.cursor/mcp.json` in your project root.
+
+**Merging into existing files:** If the file already contains an `mcpServers` key, add the `"crashpoint-ios": { ... }` entry inside the existing object rather than duplicating the key. Preserve any other servers already registered.
+
+**Path replacements:**
+
+- Replace `/path/to/ParentHolderFolder` with the absolute path to the folder you created in Section 3 (the value of `CRASH_ANALYSIS_PARENT` in your config).
+- Replace `/path/to/Xcode/Products/com.example.myapp/Crashes/Points` with the Xcode Organizer crash input directory for your app, or remove the `CRASH_INPUT_DIR` line entirely if you want the server to use its default.
+
+After saving the file, quit and relaunch Claude Desktop / Cursor, or start a new `claude` CLI session.
 
 > **⚡ MCP path auto-setup:** Once your MCP client is configured, the **very first call** to `run_full_pipeline` or `run_basic_pipeline` will automatically create the entire workspace — all folders, `.mcp.json`, prompt templates, and `run_crash_pipeline.sh` with your real paths filled in. You do **not** need to run `node dist/cli.js setup` or `setup_folders` beforehand when using the MCP path.
 
