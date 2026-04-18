@@ -9,7 +9,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # TypeScript build output
-# dist/
+dist/
 
 # Environment files (contain secrets)
 .env
@@ -33,3 +33,7 @@ fix_status.json
 
 # Real config file (never commit — use crashpoint.config.example.json as template)
 crashpoint.config.json
+
+# Automation runtime artifacts (never commit — runtime-only)
+automation/ScheduledRunLogs/*
+!automation/ScheduledRunLogs/.gitkeep
