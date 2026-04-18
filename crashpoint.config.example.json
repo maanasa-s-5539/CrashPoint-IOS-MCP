@@ -1,6 +1,6 @@
 {
   "CRASH_ANALYSIS_PARENT": "/path/to/ParentHolderFolder",
-  "CLAUDE_CLI_PATH": "/Users/name/.local/bin/claude",
+  "CLAUDE_CLI_PATH": "/path/to/claude",
 
   "DSYM_PATH": "/path/to/MyApp.app.dSYM",
   "APP_PATH": "/path/to/MyApp.app",
@@ -20,7 +20,7 @@
   "APPTICS_PROJECT_ID": "67890",
   "APPTICS_APP_NAME": "MyApp",
 
-  "ZOHO_CLIQ_WEBHOOK_URL": "https://cliq.zoho.in/...",
+  "ZOHO_CLIQ_WEBHOOK_URL": "<your-zoho-cliq-webhook-url>",
   "ZOHO_PROJECTS_PORTAL_ID": "12345",
   "ZOHO_PROJECTS_PROJECT_ID": "67890",
   "ZOHO_BUG_STATUS_OPEN": "status-id-open",

@@ -30,3 +30,6 @@ SymbolicatedCrashLogsFolder/
 *.ips
 crash_report_*.json
 fix_status.json
+
+# Real config file (never commit — use crashpoint.config.example.json as template)
+crashpoint.config.json
