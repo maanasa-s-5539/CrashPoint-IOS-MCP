@@ -341,8 +341,3 @@ Crash fix statuses are stored in `{CRASH_ANALYSIS_PARENT}/StateMaintenance/fix_s
 }
 ```
 
----
-
-## License
-
-MIT
