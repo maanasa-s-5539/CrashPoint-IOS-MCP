@@ -10,7 +10,6 @@ export interface SetupOptions {
   masterBranchPath?: string;
   devBranchPath?: string;
   dsymPath?: string;
-  appPath?: string;
   force?: boolean;
   packageRoot?: string;
 }
@@ -108,7 +107,6 @@ export function setupWorkspace(options: SetupOptions = {}): SetupResult {
     { name: "CurrentMasterLiveBranch", target: options.masterBranchPath ?? config.MASTER_BRANCH_PATH },
     { name: "CurrentDevelopmentBranch", target: options.devBranchPath ?? config.DEV_BRANCH_PATH },
     { name: "dSYM_File", target: options.dsymPath ?? config.DSYM_PATH },
-    { name: "app_File", target: options.appPath ?? config.APP_PATH },
   ];
 
   const symlinks: Array<{ link: string; target: string; status: string }> = [];

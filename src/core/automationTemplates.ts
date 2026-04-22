@@ -5,8 +5,6 @@ export interface FullCrashPointConfig {
   CRASH_ANALYSIS_PARENT: string;
   CLAUDE_CLI_PATH?: string;
   DSYM_PATH?: string;
-  APP_PATH?: string;
-  APP_NAME?: string;
   MASTER_BRANCH_PATH?: string;
   DEV_BRANCH_PATH?: string;
   CRASH_VERSIONS?: string;

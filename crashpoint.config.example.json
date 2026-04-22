@@ -3,8 +3,6 @@
   "CLAUDE_CLI_PATH": "/path/to/claude",
 
   "DSYM_PATH": "/path/to/MyApp.app.dSYM",
-  "APP_PATH": "/path/to/MyApp.app",
-  "APP_NAME": "MyApp",
   "MASTER_BRANCH_PATH": "/path/to/master",
   "DEV_BRANCH_PATH": "/path/to/dev",
 

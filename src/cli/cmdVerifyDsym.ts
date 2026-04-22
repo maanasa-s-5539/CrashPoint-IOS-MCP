@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { getConfig, getXcodeCrashesDir, getAppticsCrashesDir, getOtherCrashesDir, getMainCrashLogsDir } from "../config.js";
+import { getConfig, getXcodeCrashesDir, getAppticsCrashesDir, getOtherCrashesDir, getMainCrashLogsDir, deriveAppNameFromDsym } from "../config.js";
 import { assertNoTraversal, assertPathUnderBase } from "../pathSafety.js";
 
 const execFileAsync = promisify(execFile);
@@ -113,7 +113,7 @@ export async function cmdVerifyDsym(flags: Record<string, string | boolean>): Pr
   }
 
   const binaryImgRe = /^\s*0x[0-9a-fA-F]+\s+-\s+0x[0-9a-fA-F]+\s+(\S+)\s+\S+\s+<([0-9a-f]{32})>/gim;
-  const appName = config.APP_NAME;
+  const appName = deriveAppNameFromDsym(dsymPath);
   const crashFileUuids: Array<{ file: string; uuid: string }> = [];
 
   for (const cf of crashFiles) {
