@@ -62,8 +62,6 @@ Open `crashpoint.config.json` and fill in your values:
 |---|---|
 | `CRASH_ANALYSIS_PARENT` | The absolute path to your ParentHolderFolder |
 | `DSYM_PATH` | In your Xcode archive: right-click archive → "Show in Finder" → `.xcarchive/dSYMs/MyApp.app.dSYM` |
-| `APP_PATH` | Same archive: `.xcarchive/Products/Applications/MyApp.app` |
-| `APP_NAME` | The filename without `.app`, e.g. `MyApp` |
 | `MASTER_BRANCH_PATH` | Wherever you have your master branch checked out locally |
 | `DEV_BRANCH_PATH` | Wherever you have your development branch checked out locally |
 | `CLAUDE_CLI_PATH` | Run `which claude` in Terminal after installing Claude CLI |

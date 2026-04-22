@@ -27,7 +27,6 @@ CrashPoint iOS MCP gives your AI assistant the ability to:
 - **Node.js 18+**
 - **Xcode CLI tools** (`xcode-select --install`)
 - A `.dSYM` bundle for your app
-- A `.app` bundle for your app (optional)
 - Xcode Organizer crash data (`.xccrashpoint` files)
 
 ---
@@ -63,8 +62,6 @@ When both the JSON config file and environment variables provide the same key, *
   "CLAUDE_CLI_PATH": "/Users/name/.local/bin/claude",
 
   "DSYM_PATH": "/path/to/MyApp.app.dSYM",
-  "APP_PATH": "/path/to/MyApp.app",
-  "APP_NAME": "MyApp",
   "MASTER_BRANCH_PATH": "/path/to/master",
   "DEV_BRANCH_PATH": "/path/to/dev",
 
@@ -102,8 +99,6 @@ When both the JSON config file and environment variables provide the same key, *
 | `CRASH_ANALYSIS_PARENT` | Path to your ParentHolderFolder |
 | `CLAUDE_CLI_PATH` | Absolute path to the Claude CLI binary (e.g. `~/.local/bin/claude`) |
 | `DSYM_PATH` | Path to `MyApp.dSYM` bundle — needed for symbolication |
-| `APP_PATH` | Path to `MyApp.app` bundle |
-| `APP_NAME` | App binary name (e.g. `MyApp`) — used to filter frames in reports |
 | `MASTER_BRANCH_PATH` | Path to master/live branch checkout (creates `CurrentMasterLiveBranch` symlink) |
 | `DEV_BRANCH_PATH` | Path to dev branch checkout (creates `CurrentDevelopmentBranch` symlink) |
 | `CRASH_INPUT_DIR` | Override directory searched for `.xccrashpoint` files |
@@ -290,7 +285,7 @@ node dist/cli.js clean --before-date 2026-03-01
 node dist/cli.js cleanup-reports --before-date 2026-03-01
 
 # Create folder structure with symlinks
-node dist/cli.js setup --master-branch /path/to/master --dev-branch /path/to/dev --dsym /path/to/MyApp.dSYM --app /path/to/MyApp.app
+node dist/cli.js setup --master-branch /path/to/master --dev-branch /path/to/dev --dsym /path/to/MyApp.dSYM
 
 # Validate a dSYM bundle and check UUID matches against crashes in MainCrashLogsFolder
 node dist/cli.js verify-dsym

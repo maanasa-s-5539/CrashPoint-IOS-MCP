@@ -66,7 +66,6 @@
 | `masterBranchPath` | Path to master branch checkout → creates `CurrentMasterLiveBranch` symlink |
 | `devBranchPath` | Path to dev branch checkout → creates `CurrentDevelopmentBranch` symlink |
 | `dsymPath` | Path to .dSYM bundle → creates `dSYM_File` symlink |
-| `appPath` | Path to .app bundle → creates `app_File` symlink |
 | `force` | When `true`, overwrite existing automation files (`run_crash_pipeline.sh`, phase prompts) with the latest version. Default `false` (skip existing files) |
 
 ### `run_basic_pipeline` Parameters

@@ -28,8 +28,6 @@ const envSchema = z.object({
   CRASH_ANALYSIS_PARENT: z.string().min(1).describe("Path to ParentHolderFolder"),
   CLAUDE_CLI_PATH: z.string().optional().describe("Absolute path to the Claude CLI binary"),
   DSYM_PATH: z.string().optional().describe("Path to MyApp.dSYM"),
-  APP_PATH: z.string().optional().describe("Path to MyApp.app"),
-  APP_NAME: z.string().optional().describe("App binary name e.g. MyApp"),
   CRASH_INPUT_DIR: z.string().optional().describe("Override .xccrashpoint search dir"),
   CRASH_VERSIONS: z.string().optional().describe("Comma-separated version filter"),
   CRASH_NUM_DAYS: z.string().optional().describe("Number of days to process (1–180, default: 1)"),
@@ -72,6 +70,23 @@ const envSchema = z.object({
 });
 
 export type CrashPointConfig = z.infer<typeof envSchema>;
+
+/**
+ * Derive the app binary name from a dSYM bundle path.
+ *
+ * Examples:
+ *   /path/to/MyApp.app.dSYM   -> "MyApp"
+ *   /path/to/MyApp.dSYM       -> "MyApp"
+ *   /path/to/MyApp            -> "MyApp"
+ *
+ * Returns `undefined` if `dsymPath` is undefined or empty.
+ */
+export function deriveAppNameFromDsym(dsymPath: string | undefined): string | undefined {
+  if (!dsymPath) return undefined;
+  const base = path.basename(dsymPath);
+  const result = base.replace(/\.app\.dSYM$/i, "").replace(/\.dSYM$/i, "");
+  return result || undefined;
+}
 
 let cachedConfig: CrashPointConfig | undefined;
 

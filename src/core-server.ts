@@ -8,7 +8,7 @@ import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 
-import { getConfig, getXcodeCrashesDir, getMainCrashLogsDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir, getAnalyzedReportsDir, getStateMaintenanceDir, getAutomationDir, hasCrashFiles, getSeverityId, cleanFilesFromDir } from "./config.js";
+import { getConfig, getXcodeCrashesDir, getMainCrashLogsDir, getAppticsCrashesDir, getOtherCrashesDir, getSymbolicatedDir, getAnalyzedReportsDir, getStateMaintenanceDir, getAutomationDir, hasCrashFiles, getSeverityId, cleanFilesFromDir, deriveAppNameFromDsym } from "./config.js";
 import type { CrashReport, CrashGroup } from "./core/crashAnalyzer.js";
 import { filterUnfixedGroups } from "./core/crashAnalyzer.js";
 import { formatCrashFile } from "./core/appticsFormatter.js";
@@ -49,7 +49,6 @@ server.registerTool(
       masterBranchPath: z.string().optional().describe("Override for master branch path (auto-configured from env)"),
       devBranchPath: z.string().optional().describe("Override for dev branch path (auto-configured from env)"),
       dsymPath: z.string().optional().describe("Override for dSYM path (auto-configured from env)"),
-      appPath: z.string().optional().describe("Override for app file path (auto-configured from env)"),
       force: z.boolean().optional().describe("When true, overwrite existing automation files with the latest version. Default false."),
     }),
     outputSchema: z.object({
@@ -65,7 +64,6 @@ server.registerTool(
       masterBranchPath: input.masterBranchPath,
       devBranchPath: input.devBranchPath,
       dsymPath: input.dsymPath,
-      appPath: input.appPath,
       force: input.force,
       // __dirname is injected by esbuild banner (points to dist/ directory)
       // Package root is one level up from dist/
@@ -397,7 +395,7 @@ server.registerTool(
     }
 
     const binaryImgRe = /^\s*0x[0-9a-fA-F]+\s+-\s+0x[0-9a-fA-F]+\s+(\S+)\s+\S+\s+<([0-9a-f]{32})>/gim;
-    const appName = config.APP_NAME;
+    const appName = deriveAppNameFromDsym(dsymPath);
     const crashFileUuids: Array<{ file: string; uuid: string }> = [];
 
     for (const crashFile of crashFiles) {
